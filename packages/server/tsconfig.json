@@ -1,0 +1,13 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "outDir": "dist",
+    "noEmit": false,
+    "types": ["node"],
+    "baseUrl": ".",
+    "paths": {
+      "@dnd/shared": ["../shared/src/index.ts"]
+    }
+  },
+  "include": ["src"]
+}

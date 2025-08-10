@@ -1,0 +1,22 @@
+{
+  "name": "dnd-map-maker",
+  "private": true,
+  "type": "module",
+  "version": "0.1.0",
+  "workspaces": ["packages/*"],
+  "scripts": {
+    "dev": "concurrently -n server,client -c yellow,cyan \"npm:server:dev\" \"npm:client:dev\"",
+    "server:dev": "npm run -w @dnd/server dev",
+    "client:dev": "npm run -w @dnd/client dev",
+    "build": "npm run -w @dnd/shared build && npm run -w @dnd/server build && npm run -w @dnd/client build",
+    "format": "prettier -w ."
+  },
+  "devDependencies": {
+    "concurrently": "^9.0.0",
+    "prettier": "^3.3.2",
+    "typescript": "^5.5.4"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
