@@ -1,18 +1,49 @@
 import { createServer } from "node:http";
 import { randomUUID } from "node:crypto";
+import { promises as fs } from "node:fs";
+import path from "node:path";
 import { WebSocketServer } from "ws";
 import type { Server as HTTPServer } from "node:http";
 import type { IncomingMessage } from "node:http";
 import type { ServerResponse } from "node:http";
-import type { ServerToClient, ClientToServer, Location, Level, Token, Vec2, Role, ID, Event, Asset, FloorKind } from "@dnd/shared";
+import type { ServerToClient, ClientToServer, Location, Level, Token, Vec2, Role, ID, Event, Asset, FloorKind, LocationTreeNode, GameSnapshot } from "@dnd/shared";
 
 const PORT = Number(process.env.PORT || 8080);
+const DATA_ROOT = process.env.LOCATIONS_DIR || path.resolve(process.cwd(), "data/locations");
+const LAST_USED_FILE = path.resolve(DATA_ROOT, "last-used.json");
 
 // Simple in-memory state
 interface ClientRec {
   id: ID;
   role: Role;
   socket: import("ws").WebSocket;
+}
+
+function applySnapshot(snap: GameSnapshot) {
+  // replace state
+  state.location = snap.location;
+  state.tokens.clear();
+  for (const t of snap.tokens) state.tokens.set(t.id, t);
+  state.assets.clear();
+  for (const a of snap.assets) state.assets.set(a.id, a);
+  state.fog.clear();
+  // rebuild fog from snapshot events if present
+  if (Array.isArray(snap.events)) {
+    for (const e of snap.events) {
+      if ((e as any).type === "fogRevealed") {
+        const s = getFogSet((e as any).levelId);
+        for (const c of (e as any).cells) s.add(cellKey(c));
+      }
+    }
+  }
+  state.floors.clear();
+  if (Array.isArray(snap.floors)) {
+    for (const f of snap.floors) {
+      let m = state.floors.get(f.levelId);
+      if (!m) { m = new Map(); state.floors.set(f.levelId, m); }
+      m.set(`${f.pos.x},${f.pos.y}`, f.kind);
+    }
+  }
 }
 
 interface GameState {
@@ -50,6 +81,71 @@ const state: GameState = {
   assets: new Map(),
   floors: new Map(),
 };
+
+// ---- Persistence helpers ----
+async function ensureDataRoot() {
+  await fs.mkdir(DATA_ROOT, { recursive: true });
+}
+
+function withinDataRoot(rel: string): string | null {
+  const target = path.resolve(DATA_ROOT, rel);
+  if (!target.startsWith(path.resolve(DATA_ROOT) + path.sep)) return null;
+  return target;
+}
+
+async function readJSON<T = any>(file: string): Promise<T> {
+  const buf = await fs.readFile(file, "utf8");
+  return JSON.parse(buf) as T;
+}
+
+async function writeJSON(file: string, obj: any) {
+  await fs.mkdir(path.dirname(file), { recursive: true });
+  await fs.writeFile(file, JSON.stringify(obj, null, 2), "utf8");
+}
+
+async function tryReadLastUsed(): Promise<string | null> {
+  try {
+    const data = await readJSON<{ path: string }>(LAST_USED_FILE);
+    if (!data?.path) return null;
+    const safe = withinDataRoot(data.path);
+    return safe ? data.path : null;
+  } catch {
+    return null;
+  }
+}
+
+async function writeLastUsed(relPath: string) {
+  await writeJSON(LAST_USED_FILE, { path: relPath });
+}
+
+async function buildLocationsTree(): Promise<LocationTreeNode[]> {
+  async function walk(dirRel: string): Promise<LocationTreeNode[]> {
+    const dirAbs = withinDataRoot(dirRel) ?? DATA_ROOT;
+    const entries = await fs.readdir(dirAbs, { withFileTypes: true }).catch(() => []);
+    const folders: LocationTreeNode[] = [];
+    const files: LocationTreeNode[] = [];
+    for (const ent of entries) {
+      if (ent.name.startsWith(".")) continue;
+      if (ent.isDirectory()) {
+        const children = await walk(path.join(dirRel, ent.name));
+        folders.push({ type: "folder", name: ent.name, path: path.join(dirRel, ent.name) + path.sep, children });
+      } else if (ent.isFile() && ent.name.toLowerCase().endsWith(".json")) {
+        const rel = path.join(dirRel, ent.name);
+        const fileAbs = withinDataRoot(rel)!;
+        let locationName: string | undefined;
+        try {
+          const snap = await readJSON<GameSnapshot>(fileAbs);
+          locationName = snap?.location?.name;
+        } catch {}
+        files.push({ type: "file", name: ent.name.replace(/\.json$/i, ""), path: rel, locationName });
+      }
+    }
+    folders.sort((a, b) => a.name.localeCompare(b.name, "ru"));
+    files.sort((a, b) => a.name.localeCompare(b.name, "ru"));
+    return [...folders, ...files];
+  }
+  return walk("");
+}
 
 function roleFromInvite(inv?: string | null): Role {
   if (!inv) return "PLAYER";
@@ -208,34 +304,55 @@ function onMessage(client: ClientRec, data: any) {
     case "loadSnapshot": {
       if (client.role !== "DM") return;
       const snap = msg.snapshot;
-      // replace state
-      state.location = snap.location;
-      state.tokens.clear();
-      for (const t of snap.tokens) state.tokens.set(t.id, t);
-      state.assets.clear();
-      for (const a of snap.assets) state.assets.set(a.id, a);
-      state.fog.clear();
-      // rebuild fog from snapshot events if present
-      if (Array.isArray(snap.events)) {
-        for (const e of snap.events) {
-          if ((e as any).type === "fogRevealed") {
-            const s = getFogSet((e as any).levelId);
-            for (const c of (e as any).cells) s.add(cellKey(c));
-          }
-        }
-      }
-      state.floors.clear();
-      if (Array.isArray(snap.floors)) {
-        for (const f of snap.floors) {
-          let m = state.floors.get(f.levelId);
-          if (!m) { m = new Map(); state.floors.set(f.levelId, m); }
-          m.set(`${f.pos.x},${f.pos.y}`, f.kind);
-        }
-      }
+      applySnapshot(snap);
       // broadcast reset to all clients
-      for (const c of state.clients.values()) {
-        send(c.socket, { t: "reset", snapshot: snap } as any);
-      }
+      for (const c of state.clients.values()) send(c.socket, { t: "reset", snapshot: snap } as any);
+      break;
+    }
+    case "listLocations": {
+      (async () => {
+        await ensureDataRoot();
+        const tree = await buildLocationsTree();
+        const lastUsedPath = await tryReadLastUsed();
+        send(client.socket, { t: "locationsTree", tree, lastUsedPath } as any);
+      })();
+      break;
+    }
+    case "saveLocation": {
+      if (client.role !== "DM") return;
+      (async () => {
+        await ensureDataRoot();
+        const rel = msg.path.endsWith(".json") ? msg.path : msg.path + ".json";
+        const safe = withinDataRoot(rel);
+        if (!safe) return send(client.socket, { t: "error", message: "Invalid path" });
+        const { snapshot: snap } = snapshot();
+        await writeJSON(safe, snap);
+        await writeLastUsed(rel);
+        send(client.socket, { t: "savedOk", path: rel } as any);
+        // optionally refresh list
+        const tree = await buildLocationsTree();
+        const lastUsedPath = await tryReadLastUsed();
+        send(client.socket, { t: "locationsTree", tree, lastUsedPath } as any);
+      })();
+      break;
+    }
+    case "loadLocation": {
+      if (client.role !== "DM") return;
+      (async () => {
+        await ensureDataRoot();
+        const rel = msg.path;
+        const safe = withinDataRoot(rel);
+        if (!safe) return send(client.socket, { t: "error", message: "Invalid path" });
+        try {
+          const snap = await readJSON<GameSnapshot>(safe);
+          applySnapshot(snap);
+          await writeLastUsed(rel);
+          // broadcast reset
+          for (const c of state.clients.values()) send(c.socket, { t: "reset", snapshot: snap } as any);
+        } catch (e) {
+          send(client.socket, { t: "error", message: "Failed to load location" });
+        }
+      })();
       break;
     }
   }
@@ -368,7 +485,22 @@ function onConnection(ws: import("ws").WebSocket, req: IncomingMessage) {
   });
 }
 
-function start() {
+async function start() {
+  await ensureDataRoot();
+  // Autoload last used location if present
+  try {
+    const rel = await tryReadLastUsed();
+    if (rel) {
+      const safe = withinDataRoot(rel);
+      if (safe) {
+        const snap = await readJSON<GameSnapshot>(safe);
+        applySnapshot(snap);
+        console.log(`[server] autoloaded location: ${rel}`);
+      }
+    }
+  } catch (e) {
+    console.warn("[server] autoload skipped:", e);
+  }
   const server: HTTPServer = createServer((req: IncomingMessage, res: ServerResponse) => {
     res.writeHead(200, { "Content-Type": "text/plain" });
     res.end("DnD Server is running\n");

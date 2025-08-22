@@ -55,7 +55,9 @@ type ServerToClient =
   | { t: "statePatch"; events: any[] }
   | { t: "saveData"; snapshot: { location: Location; tokens: Token[]; assets: Asset[]; floors?: { levelId: ID; pos: Vec2; kind: FloorKind }[]; events?: any[] } }
   | { t: "reset"; snapshot: { location: Location; tokens: Token[]; assets: Asset[]; floors?: { levelId: ID; pos: Vec2; kind: FloorKind }[]; events?: any[] } }
-  | { t: "error"; message: string };
+  | { t: "error"; message: string }
+  | { t: "locationsTree"; tree: LocationTreeNode[]; lastUsedPath?: string }
+  | { t: "savedOk"; path: string };
 
 type ClientToServer =
   | { t: "join"; name?: string; invite?: string }
@@ -66,7 +68,13 @@ type ClientToServer =
   | { t: "removeAssetAt"; levelId: ID; pos: Vec2 }
   | { t: "paintFloor"; levelId: ID; pos: Vec2; kind: FloorKind | null }
   | { t: "requestSave" }
-  | { t: "loadSnapshot"; snapshot: { location: Location; tokens: Token[]; assets: Asset[]; floors?: { levelId: ID; pos: Vec2; kind: FloorKind }[]; events?: any[] } };
+  | { t: "loadSnapshot"; snapshot: { location: Location; tokens: Token[]; assets: Asset[]; floors?: { levelId: ID; pos: Vec2; kind: FloorKind }[]; events?: any[] } }
+  | { t: "listLocations" }
+  | { t: "saveLocation"; path: string }
+  | { t: "loadLocation"; path: string };
+
+// minimal copy of server type for client rendering
+type LocationTreeNode = { type: "folder" | "file"; name: string; path: string; children?: LocationTreeNode[]; locationName?: string };
 
 const CELL = 32;
 let playerId: ID | null = null;
@@ -78,17 +86,18 @@ let currentSeed: string | null = null;
 let myRole: "DM" | "PLAYER" | null = null;
 const revealedByLevel: Map<ID, Set<string>> = new Map();
 const assets = new Map<ID, Asset>();
-let editorMode: "cursor" | "paint" | "erase" | "fog" = "cursor";
+let editorMode: "cursor" | "paint" | "eraseObjects" | "eraseSpace" = "cursor";
 let selectedTokenId: ID | null = null;
 let selectedAssetKind: string | null = null; // when null, floor tools may be used
 let selectedFloorKind: FloorKind | null = null;
 let painting = false;
 let lastPaintKey: string | null = null;
 let brushSize: 1 | 2 | 3 | 4 = 1;
-let fogErase = false; // current fog action while painting (Shift toggles)
-let shiftPressed = false;
-window.addEventListener("keydown", (ev) => { if (ev.key === "Shift") shiftPressed = true; });
-window.addEventListener("keyup", (ev) => { if (ev.key === "Shift") shiftPressed = false; });
+let fogAction: "reveal" | "obscure" | null = null; // controlled via fog panel buttons
+let locationsExpanded = new Set<string>();
+let lastUsedLocationPath: string | undefined;
+// Track whether the last pointerdown actually applied an action (to avoid duplicate pointertap handling)
+let lastPointerDownDidAct = false;
 
 function brushCells(center: Vec2, size: 1 | 2 | 3 | 4): Vec2[] {
   // Centered brush: for even sizes, bias towards top-left
@@ -481,57 +490,66 @@ function drawTokens() {
       g.eventMode = "static";
       g.cursor = "grab";
       g.on("pointerdown", (e: any) => {
-        // If editor tool is active, use click for painting instead of starting a token drag
-        if (myRole === "DM" && (editorMode === "paint" || editorMode === "erase" || editorMode === "fog")) {
+        // If editor tool is active (or fog action selected), use click for painting instead of starting a token drag
+        if (myRole === "DM" && (editorMode === "paint" || editorMode === "eraseObjects" || editorMode === "eraseSpace" || fogAction)) {
           document.body.style.cursor = "crosshair";
           painting = true;
           lastPaintKey = null;
           const p = world.toLocal(e.global);
           const cell = snapToGrid(p.x, p.y);
           const cells = brushCells(cell, brushSize);
-          if (editorMode === "paint") {
-            if (socket && levelId) {
+          if (fogAction && socket && levelId) {
+            const msg: ClientToServer = fogAction === "reveal"
+              ? { t: "revealFog", levelId, cells }
+              : { t: "obscureFog", levelId, cells } as any;
+            socket.send(JSON.stringify(msg));
+          } else if (editorMode === "paint") {
+            if (levelId) {
               let touchedFloor = false;
               for (const c of cells) {
                 if (selectedFloorKind) {
                   // optimistic local update
                   setFloorOverride(levelId, c, selectedFloorKind);
                   touchedFloor = true;
-                  const msg: ClientToServer = { t: "paintFloor", levelId, pos: c, kind: selectedFloorKind };
-                  socket.send(JSON.stringify(msg));
+                  if (socket) {
+                    const msg: ClientToServer = { t: "paintFloor", levelId, pos: c, kind: selectedFloorKind };
+                    socket.send(JSON.stringify(msg));
+                  }
                 } else {
-                  const kind = selectedAssetKind ?? "tree";
-                  const msg: ClientToServer = { t: "placeAsset", levelId, pos: c, kind };
-                  socket.send(JSON.stringify(msg));
+                  // assets are server-authoritative; only send if socket exists
+                  if (socket) {
+                    const kind = selectedAssetKind ?? "tree";
+                    const msg: ClientToServer = { t: "placeAsset", levelId, pos: c, kind };
+                    socket.send(JSON.stringify(msg));
+                  }
                 }
               }
               if (touchedFloor) { drawFloor(); drawGrid(); drawFog(); }
             }
-          } else if (editorMode === "erase") {
+          } else if (editorMode === "eraseObjects") {
             if (socket && levelId) {
+              for (const c of cells) {
+                const msg: ClientToServer = { t: "removeAssetAt", levelId, pos: c };
+                socket.send(JSON.stringify(msg));
+              }
+            }
+          } else if (editorMode === "eraseSpace") {
+            if (levelId) {
               let touchedFloor = false;
               for (const c of cells) {
-                if (selectedFloorKind) {
-                  // optimistic local update
-                  setFloorOverride(levelId, c, null);
-                  touchedFloor = true;
-                  const msg: ClientToServer = { t: "paintFloor", levelId, pos: c, kind: null };
-                  socket.send(JSON.stringify(msg));
-                } else {
-                  const msg: ClientToServer = { t: "removeAssetAt", levelId, pos: c };
-                  socket.send(JSON.stringify(msg));
+                if (socket) {
+                  const rm: ClientToServer = { t: "removeAssetAt", levelId, pos: c };
+                  socket.send(JSON.stringify(rm));
+                }
+                // optimistic local floor removal
+                setFloorOverride(levelId, c, null);
+                touchedFloor = true;
+                if (socket) {
+                  const fl: ClientToServer = { t: "paintFloor", levelId, pos: c, kind: null };
+                  socket.send(JSON.stringify(fl));
                 }
               }
               if (touchedFloor) { drawFloor(); drawGrid(); drawFog(); }
-            }
-          } else if (editorMode === "fog") {
-            if (socket && levelId) {
-              const erase = !!(e?.shiftKey || (e?.originalEvent?.shiftKey));
-              fogErase = erase;
-              const msg: ClientToServer = fogErase
-                ? { t: "revealFog", levelId, cells }
-                : { t: "obscureFog", levelId, cells } as any;
-              socket.send(JSON.stringify(msg));
             }
           }
           lastPaintKey = cellKey(cell);
@@ -548,6 +566,7 @@ function drawTokens() {
         app.stage.on("pointerupoutside", onDragEnd);
         e.stopPropagation?.();
       });
+      // (moved locations panel handlers into connect())
       g.on("pointerup", () => { g.cursor = "grab"; });
       g.on("pointerupoutside", () => { g.cursor = "grab"; });
       g.on("pointertap", () => { selectedTokenId = tok.id; renderCharacterPanel(); });
@@ -608,7 +627,6 @@ function drawAssets() {
   for (const a of assets.values()) {
     if (a.levelId !== levelId) continue;
     if (myRole !== "DM" && !revealed.has(`${a.pos.x},${a.pos.y}`)) continue;
-    if (!isGround(a.pos.x, a.pos.y) && !getFloorOverride(a.pos.x, a.pos.y)) continue;
     const g = new Graphics();
     if (a.kind === "tree") {
       // trunk
@@ -734,7 +752,7 @@ function onAssetDragEnd(e: any) {
   const { sprite, from, kind } = draggingAsset;
   const snapped = snapToGrid(sprite.x, sprite.y);
   // revert if invalid
-  if (!isGround(snapped.x, snapped.y) || !levelId || !socket) {
+  if (!levelId || !socket) {
     sprite.position.set(from.x * CELL + CELL / 2, from.y * CELL + CELL / 2);
   } else {
     // simulate move: remove at old, place at new
@@ -880,6 +898,8 @@ function connect() {
       }
       drawFog();
       renderCharacterPanel();
+      // Ask server for locations list after initial sync
+      try { requestLocationsList(); } catch {}
     } else if ((msg as any).t === "saveData") {
       const data = (msg as any).snapshot;
       const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
@@ -979,6 +999,15 @@ function connect() {
       drawWalls();
       drawFog();
       drawMinimap();
+    } else if (msg.t === "locationsTree") {
+      lastUsedLocationPath = msg.lastUsedPath;
+      renderLocationsTree(msg.tree, lastUsedLocationPath);
+    } else if (msg.t === "savedOk") {
+      // lightweight toast
+      hudToast(`Сохранено: ${msg.path}`);
+    } else if ((msg as any).t === "error") {
+      // show error toast for server-side failures
+      try { hudToast(`Ошибка: ${(msg as any).message || "неизвестная ошибка"}`); } catch {}
     }
   });
   ws.addEventListener("close", () => { statusEl.textContent = "WS: disconnected"; });
@@ -986,8 +1015,10 @@ function connect() {
 
   // Left panel controls
   const btnCursor = document.getElementById("btn-tool-cursor") as HTMLButtonElement | null;
-  const btnFog = document.getElementById("btn-tool-fog") as HTMLButtonElement | null;
-  const btnErase = document.getElementById("btn-tool-erase") as HTMLButtonElement | null;
+  const btnEraseObjects = document.getElementById("btn-tool-erase-objects") as HTMLButtonElement | null;
+  const btnEraseSpace = document.getElementById("btn-tool-erase-space") as HTMLButtonElement | null;
+  const btnFogReveal = document.getElementById("btn-fog-reveal") as HTMLButtonElement | null;
+  const btnFogObscure = document.getElementById("btn-fog-obscure") as HTMLButtonElement | null;
   const btnAssetTree = document.getElementById("asset-tree") as HTMLButtonElement | null;
   const btnAssetRock = document.getElementById("asset-rock") as HTMLButtonElement | null;
   const btnAssetBush = document.getElementById("asset-bush") as HTMLButtonElement | null;
@@ -1000,6 +1031,9 @@ function connect() {
   const btnFloorWood = document.getElementById("floor-wood") as HTMLButtonElement | null;
   const btnFloorWater = document.getElementById("floor-water") as HTMLButtonElement | null;
   const btnFloorSand = document.getElementById("floor-sand") as HTMLButtonElement | null;
+  const btnLocationsRefresh = document.getElementById("btn-locations-refresh") as HTMLButtonElement | null;
+  const btnSaveServer = document.getElementById("btn-save-server") as HTMLButtonElement | null;
+  const locationsTreeEl = document.getElementById("locations-tree") as HTMLDivElement | null;
   const btnBrush1 = document.getElementById("brush-1") as HTMLButtonElement | null;
   const btnBrush2 = document.getElementById("brush-2") as HTMLButtonElement | null;
   const btnBrush3 = document.getElementById("brush-3") as HTMLButtonElement | null;
@@ -1008,8 +1042,10 @@ function connect() {
   function updateEditorUI() {
     const isDM = myRole === "DM";
     if (btnCursor) btnCursor.disabled = false; // cursor is always available
-    if (btnFog) btnFog.disabled = !isDM;
-    if (btnErase) btnErase.disabled = !isDM;
+    if (btnEraseObjects) btnEraseObjects.disabled = !isDM;
+    if (btnEraseSpace) btnEraseSpace.disabled = !isDM;
+    if (btnFogReveal) btnFogReveal.disabled = !isDM;
+    if (btnFogObscure) btnFogObscure.disabled = !isDM;
     if (btnAssetTree) btnAssetTree.disabled = !isDM;
     if (btnAssetRock) btnAssetRock.disabled = !isDM;
     if (btnAssetBush) btnAssetBush.disabled = !isDM;
@@ -1026,10 +1062,14 @@ function connect() {
     if (btnBrush4) btnBrush4.disabled = !isDM;
     if (btnSave) btnSave.disabled = !isDM;
     if (btnLoad) btnLoad.disabled = !isDM;
+    if (btnLocationsRefresh) btnLocationsRefresh.disabled = !isDM;
+    if (btnSaveServer) btnSaveServer.disabled = !isDM;
     // selected states
     btnCursor?.classList.toggle("selected", editorMode === "cursor");
-    btnFog?.classList.toggle("selected", editorMode === "fog");
-    btnErase?.classList.toggle("selected", editorMode === "erase");
+    btnEraseObjects?.classList.toggle("selected", editorMode === "eraseObjects");
+    btnEraseSpace?.classList.toggle("selected", editorMode === "eraseSpace");
+    btnFogReveal?.classList.toggle("selected", fogAction === "reveal");
+    btnFogObscure?.classList.toggle("selected", fogAction === "obscure");
     btnAssetTree?.classList.toggle("selected", selectedAssetKind === "tree");
     btnAssetRock?.classList.toggle("selected", selectedAssetKind === "rock");
     btnAssetBush?.classList.toggle("selected", selectedAssetKind === "bush");
@@ -1047,19 +1087,21 @@ function connect() {
   }
   updateEditorUI();
   // Editor tool buttons
-  btnCursor?.addEventListener("click", () => { editorMode = "cursor"; updateEditorUI(); });
-  btnFog?.addEventListener("click", () => { editorMode = "fog"; updateEditorUI(); });
-  btnErase?.addEventListener("click", () => { editorMode = "erase"; updateEditorUI(); });
-  btnAssetTree?.addEventListener("click", () => { selectedAssetKind = "tree"; selectedFloorKind = null; editorMode = "paint"; updateEditorUI(); });
-  btnAssetRock?.addEventListener("click", () => { selectedAssetKind = "rock"; selectedFloorKind = null; editorMode = "paint"; updateEditorUI(); });
-  btnAssetBush?.addEventListener("click", () => { selectedAssetKind = "bush"; selectedFloorKind = null; editorMode = "paint"; updateEditorUI(); });
-  btnAssetWall?.addEventListener("click", () => { selectedAssetKind = "wall"; selectedFloorKind = null; editorMode = "paint"; updateEditorUI(); });
-  btnAssetWindow?.addEventListener("click", () => { selectedAssetKind = "window"; selectedFloorKind = null; editorMode = "paint"; updateEditorUI(); });
-  btnAssetDoor?.addEventListener("click", () => { selectedAssetKind = "door"; selectedFloorKind = null; editorMode = "paint"; updateEditorUI(); });
-  btnFloorStone?.addEventListener("click", () => { selectedFloorKind = "stone"; selectedAssetKind = null; editorMode = "paint"; updateEditorUI(); });
-  btnFloorWood?.addEventListener("click", () => { selectedFloorKind = "wood"; selectedAssetKind = null; editorMode = "paint"; updateEditorUI(); });
-  btnFloorWater?.addEventListener("click", () => { selectedFloorKind = "water"; selectedAssetKind = null; editorMode = "paint"; updateEditorUI(); });
-  btnFloorSand?.addEventListener("click", () => { selectedFloorKind = "sand"; selectedAssetKind = null; editorMode = "paint"; updateEditorUI(); });
+  btnCursor?.addEventListener("click", () => { editorMode = "cursor"; fogAction = null; updateEditorUI(); });
+  btnEraseObjects?.addEventListener("click", () => { editorMode = "eraseObjects"; fogAction = null; selectedAssetKind = null; selectedFloorKind = null; updateEditorUI(); });
+  btnEraseSpace?.addEventListener("click", () => { editorMode = "eraseSpace"; fogAction = null; selectedAssetKind = null; selectedFloorKind = null; updateEditorUI(); });
+  btnFogReveal?.addEventListener("click", () => { fogAction = fogAction === "reveal" ? null : "reveal"; updateEditorUI(); });
+  btnFogObscure?.addEventListener("click", () => { fogAction = fogAction === "obscure" ? null : "obscure"; updateEditorUI(); });
+  btnAssetTree?.addEventListener("click", () => { selectedAssetKind = "tree"; selectedFloorKind = null; editorMode = "paint"; fogAction = null; updateEditorUI(); });
+  btnAssetRock?.addEventListener("click", () => { selectedAssetKind = "rock"; selectedFloorKind = null; editorMode = "paint"; fogAction = null; updateEditorUI(); });
+  btnAssetBush?.addEventListener("click", () => { selectedAssetKind = "bush"; selectedFloorKind = null; editorMode = "paint"; fogAction = null; updateEditorUI(); });
+  btnAssetWall?.addEventListener("click", () => { selectedAssetKind = "wall"; selectedFloorKind = null; editorMode = "paint"; fogAction = null; updateEditorUI(); });
+  btnAssetWindow?.addEventListener("click", () => { selectedAssetKind = "window"; selectedFloorKind = null; editorMode = "paint"; fogAction = null; updateEditorUI(); });
+  btnAssetDoor?.addEventListener("click", () => { selectedAssetKind = "door"; selectedFloorKind = null; editorMode = "paint"; fogAction = null; updateEditorUI(); });
+  btnFloorStone?.addEventListener("click", () => { selectedFloorKind = "stone"; selectedAssetKind = null; editorMode = "paint"; fogAction = null; updateEditorUI(); });
+  btnFloorWood?.addEventListener("click", () => { selectedFloorKind = "wood"; selectedAssetKind = null; editorMode = "paint"; fogAction = null; updateEditorUI(); });
+  btnFloorWater?.addEventListener("click", () => { selectedFloorKind = "water"; selectedAssetKind = null; editorMode = "paint"; fogAction = null; updateEditorUI(); });
+  btnFloorSand?.addEventListener("click", () => { selectedFloorKind = "sand"; selectedAssetKind = null; editorMode = "paint"; fogAction = null; updateEditorUI(); });
   btnBrush1?.addEventListener("click", () => { brushSize = 1; updateEditorUI(); });
   btnBrush2?.addEventListener("click", () => { brushSize = 2; updateEditorUI(); });
   btnBrush3?.addEventListener("click", () => { brushSize = 3; updateEditorUI(); });
@@ -1086,6 +1128,86 @@ function connect() {
     };
     inp.click();
   });
+  // Locations panel: refresh/list, save-to-server, and tree rendering
+  btnLocationsRefresh?.addEventListener("click", () => requestLocationsList());
+  btnSaveServer?.addEventListener("click", () => {
+    if (!socket || myRole !== "DM") return;
+    const def = (currentLocation?.name || "new-location").toLowerCase().replace(/\s+/g, "-");
+    const rel = prompt("Введите путь для сохранения (относительно корня):", `${def}.json`);
+    if (!rel) return;
+    const msg: ClientToServer = { t: "saveLocation", path: rel } as any;
+    socket.send(JSON.stringify(msg));
+  });
+
+  function requestLocationsList() {
+    if (!socket) return;
+    const msg: ClientToServer = { t: "listLocations" } as any;
+    socket.send(JSON.stringify(msg));
+  }
+
+  function hudToast(text: string) {
+    const hud = document.getElementById("hud");
+    if (!hud) return;
+    const el = document.createElement("div");
+    el.textContent = text;
+    el.style.opacity = "0.95";
+    el.style.transition = "opacity 0.5s ease";
+    hud.appendChild(el);
+    setTimeout(() => { el.style.opacity = "0"; setTimeout(() => el.remove(), 600); }, 1400);
+  }
+
+  function renderLocationsTree(tree: LocationTreeNode[], lastUsed?: string) {
+    if (!locationsTreeEl) return;
+    locationsTreeEl.innerHTML = "";
+    const root = document.createElement("div");
+    root.style.marginLeft = "2px";
+    for (const node of tree) root.appendChild(renderNode(node, 0, lastUsed));
+    locationsTreeEl.appendChild(root);
+  }
+
+  function renderNode(node: LocationTreeNode, depth: number, lastUsed?: string): HTMLElement {
+    const row = document.createElement("div");
+    row.style.display = "flex";
+    row.style.alignItems = "center";
+    row.style.gap = "6px";
+    row.style.marginLeft = `${depth * 12}px`;
+    if (node.type === "folder") {
+      const open = locationsExpanded.has(node.path);
+      const twist = document.createElement("span");
+      twist.textContent = open ? "▾" : "▸";
+      twist.style.cursor = "pointer";
+      const name = document.createElement("span");
+      name.textContent = node.name;
+      name.style.cursor = "pointer";
+      const icon = document.createElement("span"); icon.textContent = "📁";
+      row.appendChild(twist); row.appendChild(icon); row.appendChild(name);
+      const toggle = () => {
+        if (open) locationsExpanded.delete(node.path); else locationsExpanded.add(node.path);
+        requestLocationsList(); // re-fetch to reflect new children
+      };
+      twist.onclick = toggle; name.onclick = toggle;
+      if (open && node.children) {
+        const frag = document.createElement("div");
+        for (const ch of node.children) frag.appendChild(renderNode(ch, depth + 1, lastUsed));
+        row.appendChild(frag);
+      }
+    } else {
+      const icon = document.createElement("span"); icon.textContent = "📄";
+      const title = node.locationName ? `${node.locationName} (${node.name})` : node.name;
+      const btn = document.createElement("button");
+      btn.textContent = title + (node.path === lastUsed ? " ★" : "");
+      btn.title = node.path;
+      btn.style.fontSize = "12px";
+      btn.style.padding = "4px 8px";
+      btn.onclick = () => {
+        if (!socket || myRole !== "DM") return;
+        const msg: ClientToServer = { t: "loadLocation", path: node.path } as any;
+        socket.send(JSON.stringify(msg));
+      };
+      row.appendChild(icon); row.appendChild(btn);
+    }
+    return row;
+  }
   // Update buttons after welcome determines role
   const observer = new MutationObserver(() => updateEditorUI());
   observer.observe(document.body, { subtree: true, childList: true });
@@ -1132,56 +1254,71 @@ app.stage.on("pointerdown", (e: any) => {
   if (typeof e.button === "number" && e.button !== 0) return;
   // ignore clicks over minimap
   if (isOverMinimap(e.global.x, e.global.y)) return;
-  if (myRole === "DM" && (editorMode === "paint" || editorMode === "erase" || editorMode === "fog")) {
+  if (myRole === "DM" && (editorMode === "paint" || editorMode === "eraseObjects" || editorMode === "eraseSpace" || fogAction)) {
     document.body.style.cursor = "crosshair";
     painting = true;
     lastPaintKey = null;
+    // reset action flag for this pointer sequence
+    lastPointerDownDidAct = false;
     const p = world.toLocal(e.global);
     const cell = snapToGrid(p.x, p.y);
     const cells = brushCells(cell, brushSize);
-    if (editorMode === "paint") {
+    if (fogAction) {
       if (socket && levelId) {
+        const msg: ClientToServer = fogAction === "reveal"
+          ? { t: "revealFog", levelId, cells }
+          : { t: "obscureFog", levelId, cells } as any;
+        socket.send(JSON.stringify(msg));
+        lastPointerDownDidAct = true;
+      }
+    } else if (editorMode === "paint") {
+      if (levelId) {
         let touchedFloor = false;
         for (const c of cells) {
           if (selectedFloorKind) {
             // optimistic local update
             setFloorOverride(levelId, c, selectedFloorKind);
             touchedFloor = true;
-            const msg: ClientToServer = { t: "paintFloor", levelId, pos: c, kind: selectedFloorKind };
-            socket.send(JSON.stringify(msg));
+            if (socket) {
+              const msg: ClientToServer = { t: "paintFloor", levelId, pos: c, kind: selectedFloorKind };
+              socket.send(JSON.stringify(msg));
+            }
           } else {
-            const kind = selectedAssetKind ?? "tree";
-            const msg: ClientToServer = { t: "placeAsset", levelId, pos: c, kind };
-            socket.send(JSON.stringify(msg));
+            if (socket) {
+              const kind = selectedAssetKind ?? "tree";
+              const msg: ClientToServer = { t: "placeAsset", levelId, pos: c, kind };
+              socket.send(JSON.stringify(msg));
+              lastPointerDownDidAct = true;
+            }
           }
         }
-        if (touchedFloor) { drawFloor(); drawGrid(); drawFog(); }
+        if (touchedFloor) { drawFloor(); drawGrid(); drawFog(); lastPointerDownDidAct = true; }
       }
-    } else if (editorMode === "erase") {
+    } else if (editorMode === "eraseObjects") {
       if (socket && levelId) {
+        for (const c of cells) {
+          const msg: ClientToServer = { t: "removeAssetAt", levelId, pos: c };
+          socket.send(JSON.stringify(msg));
+        }
+        lastPointerDownDidAct = true;
+      }
+    } else if (editorMode === "eraseSpace") {
+      if (levelId) {
         let touchedFloor = false;
         for (const c of cells) {
-          if (selectedFloorKind) {
-            // optimistic local update
-            setFloorOverride(levelId, c, null);
-            touchedFloor = true;
-            const msg: ClientToServer = { t: "paintFloor", levelId, pos: c, kind: null };
-            socket.send(JSON.stringify(msg));
-          } else {
-            const msg: ClientToServer = { t: "removeAssetAt", levelId, pos: c };
-            socket.send(JSON.stringify(msg));
+          if (socket) {
+            const rm: ClientToServer = { t: "removeAssetAt", levelId, pos: c };
+            socket.send(JSON.stringify(rm));
+          }
+          // optimistic local floor removal
+          setFloorOverride(levelId, c, null);
+          touchedFloor = true;
+          if (socket) {
+            const fl: ClientToServer = { t: "paintFloor", levelId, pos: c, kind: null };
+            socket.send(JSON.stringify(fl));
           }
         }
-        if (touchedFloor) { drawFloor(); drawGrid(); drawFog(); }
-      }
-    } else if (editorMode === "fog") {
-      if (socket && levelId) {
-        const erase = !!(e?.shiftKey || (e?.originalEvent?.shiftKey));
-        fogErase = erase;
-        const msg: ClientToServer = fogErase
-          ? { t: "revealFog", levelId, cells }
-          : { t: "obscureFog", levelId, cells } as any;
-        socket.send(JSON.stringify(msg));
+        if (touchedFloor) { drawFloor(); drawGrid(); drawFog(); lastPointerDownDidAct = true; }
       }
     }
     lastPaintKey = cellKey(cell);
@@ -1191,6 +1328,29 @@ app.stage.on("pointerdown", (e: any) => {
   panning = { startX: e.global.x, startY: e.global.y, worldX: world.position.x, worldY: world.position.y };
   document.body.style.cursor = "grabbing";
 });
+// Fallback for single-click taps to reliably apply 1x1 (and other) brush actions even if pointerdown didn't apply
+app.stage.on("pointertap", (e: any) => {
+  // If a drag was initiated or click is over minimap, ignore
+  if (dragging) return;
+  if (isOverMinimap(e.global.x, e.global.y)) return;
+  if (myRole !== "DM") return;
+  // Only handle paint tool here to avoid duplicating other actions; also avoid duplicates if pointerdown already acted
+  if (editorMode !== "paint" || !selectedFloorKind || lastPointerDownDidAct) return;
+  if (!levelId) return;
+  const p = world.toLocal(e.global);
+  const cell = snapToGrid(p.x, p.y);
+  const cells = brushCells(cell, brushSize);
+  let touchedFloor = false;
+  for (const c of cells) {
+    setFloorOverride(levelId, c, selectedFloorKind);
+    touchedFloor = true;
+    if (socket) {
+      const msg: ClientToServer = { t: "paintFloor", levelId, pos: c, kind: selectedFloorKind };
+      socket.send(JSON.stringify(msg));
+    }
+  }
+  if (touchedFloor) { drawFloor(); drawGrid(); drawFog(); }
+});
 app.stage.on("pointermove", (e: any) => {
   if (painting) {
     const p = world.toLocal(e.global);
@@ -1199,44 +1359,55 @@ app.stage.on("pointermove", (e: any) => {
     if (key !== lastPaintKey) {
       const cells = brushCells(cell, brushSize);
       if (editorMode === "paint" && myRole === "DM") {
-        if (socket && levelId) {
+        if (levelId) {
           let touchedFloor = false;
           for (const c of cells) {
             if (selectedFloorKind) {
               // optimistic local update
               setFloorOverride(levelId, c, selectedFloorKind);
               touchedFloor = true;
-              const msg: ClientToServer = { t: "paintFloor", levelId, pos: c, kind: selectedFloorKind };
-              socket.send(JSON.stringify(msg));
+              if (socket) {
+                const msg: ClientToServer = { t: "paintFloor", levelId, pos: c, kind: selectedFloorKind };
+                socket.send(JSON.stringify(msg));
+              }
             } else {
-              const kind = selectedAssetKind ?? "tree";
-              const msg: ClientToServer = { t: "placeAsset", levelId, pos: c, kind };
-              socket.send(JSON.stringify(msg));
+              if (socket) {
+                const kind = selectedAssetKind ?? "tree";
+                const msg: ClientToServer = { t: "placeAsset", levelId, pos: c, kind };
+                socket.send(JSON.stringify(msg));
+              }
             }
           }
           if (touchedFloor) { drawFloor(); drawGrid(); drawFog(); }
         }
-      } else if (editorMode === "erase" && myRole === "DM") {
+      } else if (editorMode === "eraseObjects" && myRole === "DM") {
         if (socket && levelId) {
+          for (const c of cells) {
+            const msg: ClientToServer = { t: "removeAssetAt", levelId, pos: c };
+            socket.send(JSON.stringify(msg));
+          }
+        }
+      } else if (editorMode === "eraseSpace" && myRole === "DM") {
+        if (levelId) {
           let touchedFloor = false;
           for (const c of cells) {
-            if (selectedFloorKind) {
-              // optimistic local update
-              setFloorOverride(levelId, c, null);
-              touchedFloor = true;
-              const msg: ClientToServer = { t: "paintFloor", levelId, pos: c, kind: null };
-              socket.send(JSON.stringify(msg));
-            } else {
-              const msg: ClientToServer = { t: "removeAssetAt", levelId, pos: c };
-              socket.send(JSON.stringify(msg));
+            if (socket) {
+              const rm: ClientToServer = { t: "removeAssetAt", levelId, pos: c };
+              socket.send(JSON.stringify(rm));
+            }
+            // optimistic local floor removal
+            setFloorOverride(levelId, c, null);
+            touchedFloor = true;
+            if (socket) {
+              const fl: ClientToServer = { t: "paintFloor", levelId, pos: c, kind: null };
+              socket.send(JSON.stringify(fl));
             }
           }
           if (touchedFloor) { drawFloor(); drawGrid(); drawFog(); }
         }
-      } else if (editorMode === "fog" && myRole === "DM") {
+      } else if (fogAction && myRole === "DM") {
         if (socket && levelId) {
-          fogErase = shiftPressed;
-          const msg: ClientToServer = fogErase
+          const msg: ClientToServer = fogAction === "reveal"
             ? { t: "revealFog", levelId, cells }
             : { t: "obscureFog", levelId, cells } as any;
           socket.send(JSON.stringify(msg));

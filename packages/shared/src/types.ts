@@ -61,3 +61,12 @@ export interface GameSnapshot {
   floors?: { levelId: ID; pos: Vec2; kind: FloorKind }[];
   events?: Event[];
 }
+
+export interface LocationTreeNode {
+  type: "folder" | "file";
+  name: string; // display name of folder or file (file name without extension)
+  path: string; // relative path from server locations root, e.g. "dungeons/cave-1.json"
+  children?: LocationTreeNode[]; // for folders
+  // Optional additional display name taken from snapshot.location.name for file nodes
+  locationName?: string;
+}
