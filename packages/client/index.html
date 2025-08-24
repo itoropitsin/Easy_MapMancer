@@ -10,7 +10,7 @@
       /* Left panel */
       #left-panel { position: fixed; top: 12px; bottom: 12px; left: 12px; width: 220px; overflow: auto; background: rgba(0,0,0,0.6); padding: 12px; border-radius: 12px; box-shadow: 0 6px 20px rgba(0,0,0,0.3); backdrop-filter: blur(6px); }
       /* Right panel: character sheet */
-      #right-panel { position: fixed; top: 12px; bottom: 12px; right: 12px; width: 240px; overflow: auto; background: rgba(0,0,0,0.6); padding: 12px; border-radius: 12px; box-shadow: 0 6px 20px rgba(0,0,0,0.3); backdrop-filter: blur(6px); }
+      #right-panel { position: fixed; top: 12px; bottom: 12px; right: 12px; width: 240px; overflow: auto; background: rgba(0,0,0,0.6); padding: 12px; border-radius: 12px; box-shadow: 0 6px 20px rgba(0,0,0,0.3); backdrop-filter: blur(6px); display: grid; align-content: center; }
       #right-panel .title { font-size: 12px; text-transform: uppercase; color: #9aa0a6; margin: 6px 2px 10px; letter-spacing: 0.04em; }
       .panel-group { margin-bottom: 12px; }
       .panel-title { font-size: 12px; text-transform: uppercase; color: #9aa0a6; margin: 6px 2px 6px; letter-spacing: 0.04em; }
@@ -21,6 +21,14 @@
       .selected { outline: 2px solid #8ab4f8; }
       .brush button { flex: 1 0 45%; text-align: center; }
       a { color: #8ab4f8; }
+      /* Locations list */
+      .loc-section-title { font-size: 11px; text-transform: uppercase; color: #9aa0a6; margin: 10px 6px 6px; letter-spacing: 0.04em; }
+      .loc-item { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 10px; cursor: pointer; }
+      .loc-item:hover { background: rgba(255,255,255,0.06); }
+      .loc-item.active { background: rgba(138,180,248,0.16); outline: 1px solid rgba(138,180,248,0.35); }
+      .loc-item .icon { width: 18px; text-align: center; opacity: 0.9; }
+      .loc-item .name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      .twist { width: 16px; text-align: center; opacity: 0.8; margin-right: 2px; }
     </style>
   </head>
   <body>
@@ -34,8 +42,6 @@
         <div class="panel-title">Инструменты</div>
         <div class="row">
           <button id="btn-tool-cursor" title="Курсор (перемещение)">Курсор</button>
-          <button id="btn-tool-erase-objects" title="Ластик объектов (стирает ассеты)">Ластик объектов</button>
-          <button id="btn-tool-erase-space" title="Ластик пространства (удаляет пол и объекты)">Ластик пространства</button>
         </div>
       </div>
       <div class="panel-group brush" id="brush">
@@ -47,45 +53,53 @@
           <button id="brush-4">4x4</button>
         </div>
       </div>
+      <div class="panel-group" id="fog">
+        <div class="panel-title">Туман войны</div>
+        <div class="row">
+          <button id="btn-tool-reveal-fog" title="Открыть туман войны (видимо)">Открыть туман</button>
+          <button id="btn-tool-erase-fog" title="Скрыть туманом (стереть)">Скрыть туманом</button>
+        </div>
+      </div>
+      <div class="panel-group" id="characters">
+        <div class="panel-title">Персонажи</div>
+        <div class="row">
+          <button id="btn-tool-erase-tokens" title="Ластик персонажей (удаляет токены)">🧽 Ластик персонажей</button>
+          <button id="btn-add-player" title="Добавить игрока">🧙 Игрок</button>
+          <button id="btn-add-npc" title="Добавить NPC">🧟 NPC</button>
+        </div>
+      </div>
       <div class="panel-group" id="assets">
         <div class="panel-title">Ассеты</div>
         <div class="row">
+          <button id="btn-tool-erase-objects" title="Ластик ассетов (стирает ассеты)">🧽 Ластик ассетов</button>
           <button class="asset" id="asset-tree" title="Дерево">🌳 Дерево</button>
           <button class="asset" id="asset-rock" title="Камень">🪨 Камень</button>
           <button class="asset" id="asset-bush" title="Куст">🌿 Куст</button>
           <button class="asset" id="asset-wall" title="Стена">🧱 Стена</button>
           <button class="asset" id="asset-window" title="Окно">🪟 Окно</button>
           <button class="asset" id="asset-door" title="Дверь">🚪 Дверь</button>
-        </div>
-      </div>
-      <div class="panel-group" id="fog-panel">
-        <div class="panel-title">Туман войны</div>
-        <div class="row">
-          <button id="btn-fog-reveal" title="Открыть обзор">Показать</button>
-          <button id="btn-fog-obscure" title="Скрыть обзор">Скрыть</button>
+          <button class="asset" id="asset-chest" title="Сундук">📦 Сундук</button>
+          <button class="asset" id="asset-sword" title="Меч">🗡️ Меч</button>
+          <button class="asset" id="asset-bow" title="Лук">🏹 Лук</button>
+          <button class="asset" id="asset-coins" title="Монеты">🪙 Монеты</button>
+          <button class="asset" id="asset-other" title="Другие эмодзи">✨ Другое</button>
         </div>
       </div>
       <div class="panel-group" id="floors">
         <div class="panel-title">Пол</div>
         <div class="row">
+          <button id="btn-tool-erase-space" title="Ластик пола (удаляет пол и объекты)">🧽 Ластик пола</button>
           <button class="asset" id="floor-stone" title="Пол: камень">🧱 Камень</button>
           <button class="asset" id="floor-wood" title="Пол: дерево">🪵 Дерево</button>
           <button class="asset" id="floor-water" title="Пол: вода">💧 Вода</button>
           <button class="asset" id="floor-sand" title="Пол: песок">🏖️ Песок</button>
         </div>
       </div>
-      <div class="panel-group" id="save-load">
-        <div class="panel-title">Сохранение</div>
-        <div class="row">
-          <button id="btn-save" title="Сохранить уровень">💾 Сохранить</button>
-          <button id="btn-load" title="Загрузить уровень">📂 Загрузить</button>
-        </div>
-      </div>
       <div class="panel-group" id="locations-panel">
         <div class="panel-title">Локации (сервер)</div>
         <div class="row" style="margin-bottom:6px;">
-          <button id="btn-locations-refresh" title="Обновить список">🔄 Обновить</button>
-          <button id="btn-save-server" title="Сохранить текущее состояние на сервере">💾 На сервер</button>
+          <button id="btn-new-map" title="Создать новую пустую карту">🗺️ Новая карта</button>
+          <button id="btn-new-folder" title="Создать папку">📁 Новая папка</button>
         </div>
         <div id="locations-tree" style="font-size:13px; line-height:1.5;"></div>
       </div>
@@ -94,6 +108,18 @@
       <div class="title">Лист персонажа</div>
       <div style="opacity:.7">Нет выбранного токена</div>
     </div>
+    <!-- Emoji picker modal -->
+    <div id="emoji-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.55); z-index:1000; align-items:center; justify-content:center;">
+      <div style="background:#111827; border:1px solid #374151; border-radius:12px; padding:12px; width:min(520px, 90vw); max-height:70vh; display:flex; flex-direction:column; gap:8px;">
+        <div style="display:flex; gap:8px; align-items:center;">
+          <input id="emoji-search" placeholder="Поиск эмодзи..." style="flex:1; padding:8px 10px; border-radius:8px; background:#1f2937; color:#e8eaed; border:1px solid #374151;" />
+          <button id="emoji-close">Закрыть</button>
+        </div>
+        <div id="emoji-grid" style="overflow:auto; display:grid; grid-template-columns: repeat(auto-fill, minmax(44px, 1fr)); gap:6px; padding:4px;">
+        </div>
+      </div>
+    </div>
+
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

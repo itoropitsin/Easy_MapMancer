@@ -36,16 +36,32 @@ function drawObjects() {
   return;
 }
 
-import { Application, Graphics, Container } from "pixi.js";
+import { Application, Graphics, Container, Text, Circle } from "pixi.js";
 
 type ID = string;
 
 type Vec2 = { x: number; y: number };
 
-type Token = { id: ID; owner: ID; levelId: ID; pos: Vec2; name?: string };
+type Token = { id: ID; owner: ID; levelId: ID; kind?: "player" | "npc"; pos: Vec2; name?: string; hp?: number; ac?: number; tint?: number; stats?: Record<string, number>; vision?: { radius?: number; angle?: number } };
 
 type Asset = { id: ID; levelId: ID; pos: Vec2; kind: string; rot?: number; scale?: number; tint?: number };
 type FloorKind = "stone" | "wood" | "water" | "sand";
+
+// Small top-level toast helper for reuse outside connect()
+function hudToast(text: string) {
+  const hud = document.getElementById("hud");
+  if (!hud) return;
+  const el = document.createElement("div");
+  el.textContent = text;
+  el.style.opacity = "0.95";
+  el.style.transition = "opacity 0.5s ease";
+  hud.appendChild(el);
+  setTimeout(() => { el.style.opacity = "0"; setTimeout(() => el.remove(), 600); }, 1400);
+}
+
+function uid(prefix: string): string {
+  return `${prefix}-${Math.random().toString(36).slice(2, 8)}-${Date.now().toString(36)}`;
+}
 
 type Level = { id: ID; seed: string; spawnPoint: Vec2; lights: any[] };
 type Location = { id: ID; name: string; levels: Level[] };
@@ -62,15 +78,22 @@ type ServerToClient =
 type ClientToServer =
   | { t: "join"; name?: string; invite?: string }
   | { t: "moveToken"; tokenId: ID; pos: Vec2; levelId: ID }
+  | { t: "spawnToken"; kind: "player" | "npc"; levelId?: ID; pos?: Vec2; owner?: ID }
   | { t: "revealFog"; levelId: ID; cells: Vec2[] }
   | { t: "obscureFog"; levelId: ID; cells: Vec2[] }
   | { t: "placeAsset"; levelId: ID; pos: Vec2; kind: string; rot?: number; scale?: number; tint?: number }
   | { t: "removeAssetAt"; levelId: ID; pos: Vec2 }
+  | { t: "removeTokenAt"; levelId: ID; pos: Vec2 }
   | { t: "paintFloor"; levelId: ID; pos: Vec2; kind: FloorKind | null }
   | { t: "requestSave" }
   | { t: "loadSnapshot"; snapshot: { location: Location; tokens: Token[]; assets: Asset[]; floors?: { levelId: ID; pos: Vec2; kind: FloorKind }[]; events?: any[] } }
   | { t: "listLocations" }
   | { t: "saveLocation"; path: string }
+  | { t: "createFolder"; path: string }
+  | { t: "deleteLocation"; path: string }
+  | { t: "moveLocation"; from: string; toFolder: string }
+  | { t: "renameFolder"; path: string; newName: string }
+  | { t: "updateToken"; tokenId: ID; patch: Partial<{ name: string; hp: number; ac: number; tint: number; stats: Record<string, number>; vision: { radius?: number; angle?: number } }> }
   | { t: "loadLocation"; path: string };
 
 // minimal copy of server type for client rendering
@@ -86,16 +109,25 @@ let currentSeed: string | null = null;
 let myRole: "DM" | "PLAYER" | null = null;
 const revealedByLevel: Map<ID, Set<string>> = new Map();
 const assets = new Map<ID, Asset>();
-let editorMode: "cursor" | "paint" | "eraseObjects" | "eraseSpace" = "cursor";
+let editorMode: "cursor" | "paint" | "eraseObjects" | "eraseSpace" | "revealFog" | "eraseFog" | "eraseTokens" | "spawnToken" = "cursor";
 let selectedTokenId: ID | null = null;
 let selectedAssetKind: string | null = null; // when null, floor tools may be used
 let selectedFloorKind: FloorKind | null = null;
+let selectedTokenKind: "player" | "npc" | null = null;
 let painting = false;
 let lastPaintKey: string | null = null;
 let brushSize: 1 | 2 | 3 | 4 = 1;
-let fogAction: "reveal" | "obscure" | null = null; // controlled via fog panel buttons
 let locationsExpanded = new Set<string>();
 let lastUsedLocationPath: string | undefined;
+// Recent locations (client-side only)
+let recentLocations: string[] = [];
+try { const s = localStorage.getItem("recentLocations"); if (s) recentLocations = JSON.parse(s); } catch {}
+function saveRecents() { try { localStorage.setItem("recentLocations", JSON.stringify(recentLocations.slice(0, 10))); } catch {} }
+function addRecent(path: string | undefined) {
+  if (!path) return;
+  recentLocations = [path, ...recentLocations.filter(p => p !== path)].slice(0, 10);
+  saveRecents();
+}
 // Track whether the last pointerdown actually applied an action (to avoid duplicate pointertap handling)
 let lastPointerDownDidAct = false;
 
@@ -416,7 +448,7 @@ drawWalls();
 drawObjects();
 
 let socket: WebSocket | null = null;
-type DragState = { tokenId: ID; sprite: Graphics; offset: Vec2 } | null;
+type DragState = { tokenId: ID; sprite: Container; offset: Vec2 } | null;
 let dragging: DragState = null;
 
 function canControl(tok: Token): boolean {
@@ -430,6 +462,12 @@ function snapToGrid(x: number, y: number): Vec2 {
 function sendMove(tokenId: ID, pos: Vec2) {
   if (!levelId || !socket) return;
   const msg: ClientToServer = { t: "moveToken", tokenId, pos, levelId };
+  socket.send(JSON.stringify(msg));
+}
+
+function sendUpdateToken(tokenId: ID, patch: Partial<{ name: string; hp: number; ac: number; stats: Record<string, number>; vision: { radius?: number; angle?: number }; tint: number }>) {
+  if (!socket) return;
+  const msg: ClientToServer = { t: "updateToken", tokenId, patch } as any;
   socket.send(JSON.stringify(msg));
 }
 
@@ -449,10 +487,11 @@ function onDragEnd(e: any) {
   sprite.alpha = 1;
   // Snap and send move
   const snapped = snapToGrid(sprite.x, sprite.y);
-  // Prevent placing on non-land (space)
-  if (!isGround(snapped.x, snapped.y)) {
+  // Prevent placing on non-land (space) for players; DM is allowed anywhere
+  if (myRole !== "DM" && !isGround(snapped.x, snapped.y)) {
     const tok = tokens.get(tokenId);
     if (tok) sprite.position.set(tok.pos.x * CELL + CELL / 2, tok.pos.y * CELL + CELL / 2);
+    try { hudToast("Нельзя перемещаться вне пола/земли"); } catch {}
     dragging = null;
     app.stage.off("pointermove", onDragMove);
     app.stage.off("pointerup", onDragEnd);
@@ -460,9 +499,16 @@ function onDragEnd(e: any) {
     return;
   }
   sendMove(tokenId, snapped);
-  // For DM: auto-reveal around the new position
-  if (myRole === "DM" && socket) {
-    sendRevealLOS(socket as WebSocket, snapped, 8);
+  // Auto-reveal around the new position using token vision
+  if (socket) {
+    const tok = tokens.get(tokenId);
+    if (tok) {
+      const movedTok = { ...(tok as any), pos: snapped };
+      const isNPC = (tok as any).kind === "npc";
+      if (!isNPC && (myRole === "DM" || tokenId === myTokenId)) {
+        revealByVisionForToken(socket as WebSocket, movedTok);
+      }
+    }
   }
   dragging = null;
   // Remove stage listeners
@@ -480,100 +526,106 @@ function drawTokens() {
       // hide non-owned tokens in unrevealed cells for player
       continue;
     }
-    const g = new Graphics();
+    const node = new Container();
+    const body = new Graphics();
     const isMine = tok.id === myTokenId;
-    g.circle(0, 0, CELL * 0.4).fill(isMine ? 0x8ab4f8 : 0x9aa0a6).stroke({ color: 0x202124, width: 2 });
-    g.position.set(tok.pos.x * CELL + CELL / 2, tok.pos.y * CELL + CELL / 2);
+    const baseFill = isMine ? 0x8ab4f8 : 0x9aa0a6;
+    const isNPC = (tok as any).kind === "npc";
+    if (!isNPC) {
+      // Player: circle
+      body.circle(0, 0, CELL * 0.4).fill(baseFill).stroke({ color: 0x202124, width: 2 });
+    } else {
+      // NPC: triangle
+      const r = CELL * 0.44;
+      const h = r * Math.sqrt(3);
+      // vertices for upright triangle centered at (0,0)
+      const p1 = { x: 0, y: -h / 3 * 2 / 2 }; // adjust to center mass visually
+      const p2 = { x: -r * 0.86, y: h / 3 };
+      const p3 = { x: r * 0.86, y: h / 3 };
+      body.moveTo(p1.x, p1.y).lineTo(p2.x, p2.y).lineTo(p3.x, p3.y).closePath().fill(baseFill).stroke({ color: 0x202124, width: 2 });
+    }
+    // Apply per-token tint to the shape only
+    if (typeof (tok as any).tint === "number") {
+      (body as any).tint = (tok as any).tint;
+    }
+    // Overlay letter label (initial) as separate sibling so it's not affected by shape tint
+    const letter = ((tok as any).name && (tok as any).name.trim().length > 0
+      ? (tok as any).name.trim()[0]
+      : (isNPC ? "N" : "P")).toUpperCase();
+    const label = new Text({
+      text: letter,
+      style: {
+        fill: 0xffffff,
+        fontFamily: "Inter, system-ui, -apple-system, Segoe UI, Roboto",
+        fontSize: Math.floor(CELL * 0.34),
+        fontWeight: "700",
+        stroke: 0x202124,
+        strokeThickness: 2,
+      }
+    } as any);
+    // @ts-ignore Text has anchor in Pixi v8
+    (label as any).anchor?.set?.(0.5);
+    label.position.set(0, 0);
+    // Don't let the label intercept events; we want the whole token to be draggable
+    // @ts-ignore
+    label.eventMode = "none";
+    // Compose node
+    // @ts-ignore Container accepts children
+    node.addChild(body as any);
+    // @ts-ignore Container accepts children
+    node.addChild(label as any);
+    node.position.set(tok.pos.x * CELL + CELL / 2, tok.pos.y * CELL + CELL / 2);
+    // Enlarge hit area slightly to make grabbing easier
+    try { (body as any).hitArea = new Circle(0, 0, CELL * 0.5); } catch {}
     // Drag & drop
     if (canControl(tok)) {
       // @ts-ignore v8 event model
-      g.eventMode = "static";
-      g.cursor = "grab";
-      g.on("pointerdown", (e: any) => {
-        // If editor tool is active (or fog action selected), use click for painting instead of starting a token drag
-        if (myRole === "DM" && (editorMode === "paint" || editorMode === "eraseObjects" || editorMode === "eraseSpace" || fogAction)) {
+      node.eventMode = "static";
+      (node as any).cursor = "grab";
+      node.on("pointerdown", (e: any) => {
+        // If editor tool is active, do not start token drag
+        if (myRole === "DM" && (editorMode === "paint" || editorMode === "eraseObjects" || editorMode === "eraseSpace" || editorMode === "eraseTokens" || editorMode === "spawnToken")) {
           document.body.style.cursor = "crosshair";
-          painting = true;
-          lastPaintKey = null;
-          const p = world.toLocal(e.global);
-          const cell = snapToGrid(p.x, p.y);
-          const cells = brushCells(cell, brushSize);
-          if (fogAction && socket && levelId) {
-            const msg: ClientToServer = fogAction === "reveal"
-              ? { t: "revealFog", levelId, cells }
-              : { t: "obscureFog", levelId, cells } as any;
-            socket.send(JSON.stringify(msg));
-          } else if (editorMode === "paint") {
-            if (levelId) {
-              let touchedFloor = false;
-              for (const c of cells) {
-                if (selectedFloorKind) {
-                  // optimistic local update
-                  setFloorOverride(levelId, c, selectedFloorKind);
-                  touchedFloor = true;
-                  if (socket) {
-                    const msg: ClientToServer = { t: "paintFloor", levelId, pos: c, kind: selectedFloorKind };
-                    socket.send(JSON.stringify(msg));
-                  }
-                } else {
-                  // assets are server-authoritative; only send if socket exists
-                  if (socket) {
-                    const kind = selectedAssetKind ?? "tree";
-                    const msg: ClientToServer = { t: "placeAsset", levelId, pos: c, kind };
-                    socket.send(JSON.stringify(msg));
-                  }
-                }
-              }
-              if (touchedFloor) { drawFloor(); drawGrid(); drawFog(); }
-            }
-          } else if (editorMode === "eraseObjects") {
-            if (socket && levelId) {
-              for (const c of cells) {
-                const msg: ClientToServer = { t: "removeAssetAt", levelId, pos: c };
-                socket.send(JSON.stringify(msg));
-              }
-            }
-          } else if (editorMode === "eraseSpace") {
-            if (levelId) {
-              let touchedFloor = false;
-              for (const c of cells) {
-                if (socket) {
-                  const rm: ClientToServer = { t: "removeAssetAt", levelId, pos: c };
-                  socket.send(JSON.stringify(rm));
-                }
-                // optimistic local floor removal
-                setFloorOverride(levelId, c, null);
-                touchedFloor = true;
-                if (socket) {
-                  const fl: ClientToServer = { t: "paintFloor", levelId, pos: c, kind: null };
-                  socket.send(JSON.stringify(fl));
-                }
-              }
-              if (touchedFloor) { drawFloor(); drawGrid(); drawFog(); }
-            }
-          }
-          lastPaintKey = cellKey(cell);
           e.stopPropagation?.();
           return;
         }
-        g.cursor = "grabbing";
-        g.alpha = 0.9;
+        (node as any).cursor = "grabbing";
+        node.alpha = 0.9;
         const p0 = world.toLocal(e.global);
-        const off = { x: g.x - p0.x, y: g.y - p0.y };
-        dragging = { tokenId: tok.id, sprite: g, offset: off };
+        const off = { x: node.x - p0.x, y: node.y - p0.y };
+        dragging = { tokenId: tok.id, sprite: node, offset: off };
         app.stage.on("pointermove", onDragMove);
         app.stage.on("pointerup", onDragEnd);
         app.stage.on("pointerupoutside", onDragEnd);
         e.stopPropagation?.();
       });
-      // (moved locations panel handlers into connect())
-      g.on("pointerup", () => { g.cursor = "grab"; });
-      g.on("pointerupoutside", () => { g.cursor = "grab"; });
-      g.on("pointertap", () => { selectedTokenId = tok.id; renderCharacterPanel(); });
-      myTokensLayer.addChild(g);
+      node.on("pointerup", () => { (node as any).cursor = "grab"; });
+      node.on("pointerupoutside", () => { (node as any).cursor = "grab"; });
+      node.on("pointertap", (e: any) => { 
+        e.stopPropagation?.();
+        if (editorMode === "eraseTokens" && myRole === "DM" && socket) {
+          const msg: ClientToServer = { t: "removeTokenAt", levelId: tok.levelId, pos: { x: Math.floor(tok.pos.x), y: Math.floor(tok.pos.y) } } as any;
+          socket.send(JSON.stringify(msg));
+        } else {
+          selectedTokenId = tok.id;
+          renderCharacterPanel();
+        }
+      });
+      myTokensLayer.addChild(node);
     } else {
-      g.on("pointertap", () => { selectedTokenId = tok.id; renderCharacterPanel(); });
-      tokenLayer.addChild(g);
+      // @ts-ignore
+      node.eventMode = "static";
+      node.on("pointertap", (e: any) => { 
+        e.stopPropagation?.();
+        if (editorMode === "eraseTokens" && myRole === "DM" && socket) {
+          const msg: ClientToServer = { t: "removeTokenAt", levelId: tok.levelId, pos: { x: Math.floor(tok.pos.x), y: Math.floor(tok.pos.y) } } as any;
+          socket.send(JSON.stringify(msg));
+        } else {
+          selectedTokenId = tok.id;
+          renderCharacterPanel();
+        }
+      });
+      tokenLayer.addChild(node);
     }
   }
 }
@@ -588,24 +640,72 @@ function renderCharacterPanel() {
     return;
   }
   const anyTok: any = tok as any;
-  const name = tok.name || "Безымянный";
-  const hp = anyTok.hp ?? anyTok.stats?.hp ?? "?";
-  const ac = anyTok.ac ?? anyTok.stats?.ac ?? "?";
   const stats = anyTok.stats || {};
-  const s = (k: string) => (stats?.[k] ?? "-");
+  const vr = Math.max(0, Math.min(20, Number(anyTok.vision?.radius ?? 0) || 0));
+  const editable = canControl(tok);
+  const tintNum: number = (typeof anyTok.tint === "number" ? anyTok.tint : 0x9aa0a6) & 0xffffff;
+  const tintHex = `#${tintNum.toString(16).padStart(6, "0")}`;
   panel.innerHTML = `
-    <div style="font-weight:600; margin-bottom:8px;">${name}</div>
-    <div style="display:grid; grid-template-columns: auto auto; gap:6px; font-size:13px;">
-      <div>HP</div><div><b>${hp}</b></div>
-      <div>AC</div><div><b>${ac}</b></div>
-      <div>STR</div><div>${s('str')}</div>
-      <div>DEX</div><div>${s('dex')}</div>
-      <div>CON</div><div>${s('con')}</div>
-      <div>INT</div><div>${s('int')}</div>
-      <div>WIS</div><div>${s('wis')}</div>
-      <div>CHA</div><div>${s('cha')}</div>
+    <div style="font-weight:600; margin-bottom:8px;">Лист персонажа</div>
+    <div style="display:grid; grid-template-columns: 100px 1fr; gap:6px; font-size:13px; align-items:center;">
+      <div>Имя</div><div><input id="char-name" type="text" value="${tok.name ?? ''}" placeholder="Имя" style="width:100%" /></div>
+      <div>HP</div><div><input id="char-hp" type="number" inputmode="numeric" value="${Number(anyTok.hp ?? '')}" placeholder="0" style="width:100%" /></div>
+      <div>AC</div><div><input id="char-ac" type="number" inputmode="numeric" value="${Number(anyTok.ac ?? '')}" placeholder="0" style="width:100%" /></div>
+      <div>Цвет</div><div><input id="char-tint" type="color" value="${tintHex}" style="width:100%" /></div>
+      <div>STR</div><div><input id="char-str" type="number" inputmode="numeric" value="${Number(stats.str ?? '')}" placeholder="-" style="width:100%" /></div>
+      <div>DEX</div><div><input id="char-dex" type="number" inputmode="numeric" value="${Number(stats.dex ?? '')}" placeholder="-" style="width:100%" /></div>
+      <div>CON</div><div><input id="char-con" type="number" inputmode="numeric" value="${Number(stats.con ?? '')}" placeholder="-" style="width:100%" /></div>
+      <div>INT</div><div><input id="char-int" type="number" inputmode="numeric" value="${Number(stats.int ?? '')}" placeholder="-" style="width:100%" /></div>
+      <div>WIS</div><div><input id="char-wis" type="number" inputmode="numeric" value="${Number(stats.wis ?? '')}" placeholder="-" style="width:100%" /></div>
+      <div>CHA</div><div><input id="char-cha" type="number" inputmode="numeric" value="${Number(stats.cha ?? '')}" placeholder="-" style="width:100%" /></div>
+      <div>Видимость</div><div><input id="char-vision-radius" type="number" inputmode="numeric" min="0" max="20" value="${vr}" style="width:100%" /> <span style="opacity:.7; font-size:12px; margin-left:4px;">радиус (0-20)</span></div>
     </div>
   `;
+  // Enable/disable based on permissions
+  const q = (sel: string) => panel.querySelector(sel) as HTMLInputElement | null;
+  const setDisabled = (el: HTMLInputElement | null) => { if (el) el.disabled = !editable; };
+  ["#char-name", "#char-hp", "#char-ac", "#char-tint", "#char-str", "#char-dex", "#char-con", "#char-int", "#char-wis", "#char-cha", "#char-vision-radius"].forEach(id => setDisabled(q(id)));
+  // Helpers
+  const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
+  const parseNum = (el: HTMLInputElement, lo?: number, hi?: number) => {
+    const n = Number(el.value);
+    if (!Number.isFinite(n)) return undefined;
+    const v = (lo == null || hi == null) ? n : clamp(n, lo!, hi!);
+    el.value = String(v);
+    return v;
+  };
+  // Wire updates
+  const nameEl = q("#char-name");
+  nameEl?.addEventListener("change", () => { if (!editable) return; sendUpdateToken(tok.id, { name: nameEl.value.trim() }); });
+  const hpEl = q("#char-hp");
+  hpEl?.addEventListener("change", () => { if (!editable) return; const v = parseNum(hpEl, 0, 999); if (v != null) sendUpdateToken(tok.id, { hp: v }); });
+  const acEl = q("#char-ac");
+  acEl?.addEventListener("change", () => { if (!editable) return; const v = parseNum(acEl, 0, 99); if (v != null) sendUpdateToken(tok.id, { ac: v }); });
+  const tintEl = q("#char-tint");
+  tintEl?.addEventListener("change", () => {
+    if (!editable) return;
+    const hex = (tintEl.value || "").trim();
+    const n = parseInt(hex.replace(/^#/, ""), 16);
+    if (Number.isFinite(n)) sendUpdateToken(tok.id, { tint: (n & 0xffffff) });
+  });
+  const statIds: Array<[string, string]> = [["str", "#char-str"], ["dex", "#char-dex"], ["con", "#char-con"], ["int", "#char-int"], ["wis", "#char-wis"], ["cha", "#char-cha"]];
+  for (const [k, sel] of statIds) {
+    const el = q(sel);
+    el?.addEventListener("change", () => { if (!editable) return; const v = parseNum(el, -99, 99); if (v != null) sendUpdateToken(tok.id, { stats: { [k]: v } }); });
+  }
+  const vrEl = q("#char-vision-radius");
+  vrEl?.addEventListener("change", () => {
+    if (!editable) return;
+    const v = parseNum(vrEl, 0, 20);
+    if (v != null) {
+      sendUpdateToken(tok.id, { vision: { radius: v } });
+      // provide immediate feedback for DM by revealing with new radius
+      if (myRole === "DM" && socket) {
+        const tmp: any = { ...tok, vision: { ...(anyTok.vision || {}), radius: v } };
+        revealByVisionForToken(socket as WebSocket, tmp);
+      }
+    }
+  });
 }
 
 function drawAssets() {
@@ -821,6 +921,21 @@ function sendRevealLOS(ws: WebSocket, center: Vec2, r: number) {
   ws.send(JSON.stringify(msg));
 }
 
+function getTokenVisionRadius(t: any): number {
+  const r = Number(t?.vision?.radius ?? 0);
+  if (!Number.isFinite(r)) return 0;
+  return Math.max(0, Math.min(20, r));
+}
+
+function revealByVisionForToken(ws: WebSocket, t: any) {
+  if (!t || !levelId) return;
+  if (t.levelId !== levelId) return; // only reveal on current level
+  // Only player tokens should auto-reveal fog; NPCs must not
+  if ((t as any).kind === "npc") return;
+  const r = getTokenVisionRadius(t);
+  if (r > 0) sendRevealLOS(ws, t.pos, r);
+}
+
 function connect() {
   // HUD status
   const hud = document.getElementById("hud");
@@ -828,10 +943,16 @@ function connect() {
   statusEl.id = "status";
   statusEl.textContent = "WS: connecting...";
   hud?.appendChild(statusEl);
+  // Current map info (top-right)
+  const mapInfoEl = document.createElement("div");
+  mapInfoEl.id = "map-info";
+  mapInfoEl.textContent = "Карта: —";
+  hud?.appendChild(mapInfoEl);
 
   const params = new URLSearchParams(location.search);
   const inv = params.get("inv") ?? "pl-local";
-  const wsUrl = `${location.protocol === "https:" ? "wss" : "ws"}://${location.hostname}:8080/ws?inv=${encodeURIComponent(inv)}`;
+  const port = params.get("port") || "8080";
+  const wsUrl = `${location.protocol === "https:" ? "wss" : "ws"}://${location.hostname}:${port}/ws?inv=${encodeURIComponent(inv)}`;
   const ws = new WebSocket(wsUrl);
   socket = ws;
   ws.addEventListener("open", () => {
@@ -846,6 +967,15 @@ function connect() {
       myRole = msg.role;
       // store location/seed
       currentLocation = msg.snapshot.location;
+      // Update HUD map name and URL with location ID
+      try {
+        mapInfoEl.textContent = `Карта: ${currentLocation?.name ?? "—"}`;
+        if (currentLocation?.id) {
+          const url = new URL(window.location.href);
+          url.searchParams.set("loc", currentLocation.id);
+          history.replaceState(null, "", url.toString());
+        }
+      } catch {}
       // pick first token owned by me
       tokens.clear();
       for (const t of msg.snapshot.tokens) {
@@ -892,9 +1022,10 @@ function connect() {
       // update UI state based on role
       try { (updateEditorUI as any)(); } catch {}
       // auto-reveal around DM token on join to make map visible
-      if (myRole === "DM" && myTokenId) {
-        const tok = tokens.get(myTokenId);
-        if (tok) sendRevealLOS(ws, tok.pos, 8);
+      if (myRole === "DM") {
+        for (const t of tokens.values()) {
+          revealByVisionForToken(ws, t as any);
+        }
       }
       drawFog();
       renderCharacterPanel();
@@ -915,6 +1046,15 @@ function connect() {
       playerId = playerId; // unchanged
       myRole = myRole; // unchanged
       currentLocation = snap.location;
+      // Update HUD map name and URL with location ID
+      try {
+        mapInfoEl.textContent = `Карта: ${currentLocation?.name ?? "—"}`;
+        if (currentLocation?.id) {
+          const url = new URL(window.location.href);
+          url.searchParams.set("loc", currentLocation.id);
+          history.replaceState(null, "", url.toString());
+        }
+      } catch {}
       tokens.clear();
       for (const t of snap.tokens) {
         tokens.set(t.id, t);
@@ -956,6 +1096,8 @@ function connect() {
       drawMinimap(); positionMinimap();
       drawFog();
       renderCharacterPanel();
+      // ensure locations list is refreshed after switching/creating maps
+      try { requestLocationsList(); } catch {}
     } else if (msg.t === "statePatch") {
       for (const e of msg.events) {
         if (e.type === "tokenSpawned") {
@@ -963,33 +1105,47 @@ function connect() {
           if (e.token.owner === playerId) {
             myTokenId = e.token.id;
             levelId = e.token.levelId;
-            if (myRole === "DM") {
-              sendRevealLOS(ws, e.token.pos, 8);
-            }
           }
-        }
-        if (e.type === "tokenMoved") {
-          const tok = tokens.get(e.tokenId); if (tok) { tok.pos = e.pos; tok.levelId = e.levelId; }
-        }
-        if (e.type === "fogRevealed") {
+          if (myRole === "DM") {
+            revealByVisionForToken(ws, e.token as any);
+          }
+        } else if (e.type === "tokenRemoved") {
+          tokens.delete(e.tokenId);
+          if (selectedTokenId === e.tokenId) {
+            selectedTokenId = null;
+            renderCharacterPanel();
+          }
+        } else if (e.type === "tokenMoved") {
+          const tok = tokens.get(e.tokenId); if (tok) { tok.pos = e.pos; tok.levelId = e.levelId; if (myRole === "DM") { revealByVisionForToken(ws, tok as any); } }
+        } else if (e.type === "fogRevealed") {
           const set = getRevealed(e.levelId as ID);
           for (const c of e.cells) set.add(cellKey(c));
-        }
-        if ((e as any).type === "fogObscured") {
+        } else if ((e as any).type === "fogObscured") {
           const set = getRevealed((e as any).levelId as ID);
           for (const c of (e as any).cells) set.delete(cellKey(c));
-        }
-        if ((e as any).type === "assetPlaced") {
+        } else if ((e as any).type === "assetPlaced") {
           const a = (e as any).asset as Asset;
           assets.set(a.id, a);
-        }
-        if ((e as any).type === "assetRemoved") {
+        } else if ((e as any).type === "assetRemoved") {
           const id = (e as any).assetId as ID;
           assets.delete(id);
-        }
-        if ((e as any).type === "floorPainted") {
+        } else if ((e as any).type === "floorPainted") {
           const ev = e as any as { levelId: ID; pos: Vec2; kind: FloorKind | null };
           setFloorOverride(ev.levelId, ev.pos, ev.kind ?? null);
+        } else if ((e as any).type === "tokenUpdated") {
+          const anyE: any = e as any;
+          if (anyE.token) {
+            const full: any = anyE.token;
+            tokens.set(full.id, full);
+            if (myRole === "DM") revealByVisionForToken(ws, full as any);
+          } else {
+            const ev = e as any as { type: string; tokenId: ID; patch: any };
+            const t = tokens.get(ev.tokenId);
+            if (t) {
+              Object.assign(t, ev.patch || {});
+              if (myRole === "DM") revealByVisionForToken(ws, t as any);
+            }
+          }
         }
       }
       drawTokens();
@@ -1000,11 +1156,30 @@ function connect() {
       drawFog();
       drawMinimap();
     } else if (msg.t === "locationsTree") {
+      try {
+        const hasDemo = (() => {
+          const exists = (nodes: any[]): boolean => {
+            for (const n of nodes) {
+              if ((n as any).type === "file") {
+                const p = String((n as any).path || "").toLowerCase();
+                if ((n as any).name === "demo-location2" || p === "demo-location2.json" || p.endsWith("/demo-location2.json")) return true;
+              }
+              if ((n as any).children?.length && exists((n as any).children)) return true;
+            }
+            return false;
+          };
+          return exists((msg as any).tree || []);
+        })();
+        console.debug(`[LOC][client] received locationsTree: nodes=${(msg as any).tree?.length ?? 0}, lastUsed=${msg.lastUsedPath ?? ""}, has demo-location2=${hasDemo}`);
+      } catch {}
       lastUsedLocationPath = msg.lastUsedPath;
+      if (lastUsedLocationPath) addRecent(lastUsedLocationPath);
       renderLocationsTree(msg.tree, lastUsedLocationPath);
     } else if (msg.t === "savedOk") {
-      // lightweight toast
+      // lightweight toast and refresh locations list
       hudToast(`Сохранено: ${msg.path}`);
+      addRecent(msg.path);
+      try { requestLocationsList(); } catch {}
     } else if ((msg as any).t === "error") {
       // show error toast for server-side failures
       try { hudToast(`Ошибка: ${(msg as any).message || "неизвестная ошибка"}`); } catch {}
@@ -1015,43 +1190,53 @@ function connect() {
 
   // Left panel controls
   const btnCursor = document.getElementById("btn-tool-cursor") as HTMLButtonElement | null;
+  const btnEraseTokens = document.getElementById("btn-tool-erase-tokens") as HTMLButtonElement | null;
   const btnEraseObjects = document.getElementById("btn-tool-erase-objects") as HTMLButtonElement | null;
   const btnEraseSpace = document.getElementById("btn-tool-erase-space") as HTMLButtonElement | null;
-  const btnFogReveal = document.getElementById("btn-fog-reveal") as HTMLButtonElement | null;
-  const btnFogObscure = document.getElementById("btn-fog-obscure") as HTMLButtonElement | null;
   const btnAssetTree = document.getElementById("asset-tree") as HTMLButtonElement | null;
   const btnAssetRock = document.getElementById("asset-rock") as HTMLButtonElement | null;
   const btnAssetBush = document.getElementById("asset-bush") as HTMLButtonElement | null;
   const btnAssetWall = document.getElementById("asset-wall") as HTMLButtonElement | null;
   const btnAssetWindow = document.getElementById("asset-window") as HTMLButtonElement | null;
   const btnAssetDoor = document.getElementById("asset-door") as HTMLButtonElement | null;
-  const btnSave = document.getElementById("btn-save") as HTMLButtonElement | null;
-  const btnLoad = document.getElementById("btn-load") as HTMLButtonElement | null;
+  const btnAssetChest = document.getElementById("asset-chest") as HTMLButtonElement | null;
+  const btnAssetSword = document.getElementById("asset-sword") as HTMLButtonElement | null;
+  const btnAssetBow = document.getElementById("asset-bow") as HTMLButtonElement | null;
+  const btnAssetCoins = document.getElementById("asset-coins") as HTMLButtonElement | null;
+  const btnAssetOther = document.getElementById("asset-other") as HTMLButtonElement | null;
   const btnFloorStone = document.getElementById("floor-stone") as HTMLButtonElement | null;
   const btnFloorWood = document.getElementById("floor-wood") as HTMLButtonElement | null;
   const btnFloorWater = document.getElementById("floor-water") as HTMLButtonElement | null;
   const btnFloorSand = document.getElementById("floor-sand") as HTMLButtonElement | null;
-  const btnLocationsRefresh = document.getElementById("btn-locations-refresh") as HTMLButtonElement | null;
-  const btnSaveServer = document.getElementById("btn-save-server") as HTMLButtonElement | null;
+  const btnNewMap = document.getElementById("btn-new-map") as HTMLButtonElement | null;
+  const btnNewFolder = document.getElementById("btn-new-folder") as HTMLButtonElement | null;
+  const btnAddPlayer = document.getElementById("btn-add-player") as HTMLButtonElement | null;
+  const btnAddNPC = document.getElementById("btn-add-npc") as HTMLButtonElement | null;
   const locationsTreeEl = document.getElementById("locations-tree") as HTMLDivElement | null;
   const btnBrush1 = document.getElementById("brush-1") as HTMLButtonElement | null;
   const btnBrush2 = document.getElementById("brush-2") as HTMLButtonElement | null;
   const btnBrush3 = document.getElementById("brush-3") as HTMLButtonElement | null;
   const btnBrush4 = document.getElementById("brush-4") as HTMLButtonElement | null;
+  const btnRevealFog = document.getElementById("btn-tool-reveal-fog") as HTMLButtonElement | null;
+  const btnEraseFog = document.getElementById("btn-tool-erase-fog") as HTMLButtonElement | null;
 
   function updateEditorUI() {
     const isDM = myRole === "DM";
     if (btnCursor) btnCursor.disabled = false; // cursor is always available
+    if (btnEraseTokens) btnEraseTokens.disabled = !isDM;
     if (btnEraseObjects) btnEraseObjects.disabled = !isDM;
     if (btnEraseSpace) btnEraseSpace.disabled = !isDM;
-    if (btnFogReveal) btnFogReveal.disabled = !isDM;
-    if (btnFogObscure) btnFogObscure.disabled = !isDM;
     if (btnAssetTree) btnAssetTree.disabled = !isDM;
     if (btnAssetRock) btnAssetRock.disabled = !isDM;
     if (btnAssetBush) btnAssetBush.disabled = !isDM;
     if (btnAssetWall) btnAssetWall.disabled = !isDM;
     if (btnAssetWindow) btnAssetWindow.disabled = !isDM;
     if (btnAssetDoor) btnAssetDoor.disabled = !isDM;
+    if (btnAssetChest) btnAssetChest.disabled = !isDM;
+    if (btnAssetSword) btnAssetSword.disabled = !isDM;
+    if (btnAssetBow) btnAssetBow.disabled = !isDM;
+    if (btnAssetCoins) btnAssetCoins.disabled = !isDM;
+    if (btnAssetOther) btnAssetOther.disabled = !isDM;
     if (btnFloorStone) btnFloorStone.disabled = !isDM;
     if (btnFloorWood) btnFloorWood.disabled = !isDM;
     if (btnFloorWater) btnFloorWater.disabled = !isDM;
@@ -1060,22 +1245,26 @@ function connect() {
     if (btnBrush2) btnBrush2.disabled = !isDM;
     if (btnBrush3) btnBrush3.disabled = !isDM;
     if (btnBrush4) btnBrush4.disabled = !isDM;
-    if (btnSave) btnSave.disabled = !isDM;
-    if (btnLoad) btnLoad.disabled = !isDM;
-    if (btnLocationsRefresh) btnLocationsRefresh.disabled = !isDM;
-    if (btnSaveServer) btnSaveServer.disabled = !isDM;
+    if (btnNewMap) btnNewMap.disabled = !isDM;
+    if (btnNewFolder) btnNewFolder.disabled = !isDM;
+    if (btnRevealFog) btnRevealFog.disabled = !isDM;
+    if (btnEraseFog) btnEraseFog.disabled = !isDM;
     // selected states
     btnCursor?.classList.toggle("selected", editorMode === "cursor");
+    btnEraseTokens?.classList.toggle("selected", editorMode === "eraseTokens");
     btnEraseObjects?.classList.toggle("selected", editorMode === "eraseObjects");
     btnEraseSpace?.classList.toggle("selected", editorMode === "eraseSpace");
-    btnFogReveal?.classList.toggle("selected", fogAction === "reveal");
-    btnFogObscure?.classList.toggle("selected", fogAction === "obscure");
     btnAssetTree?.classList.toggle("selected", selectedAssetKind === "tree");
     btnAssetRock?.classList.toggle("selected", selectedAssetKind === "rock");
     btnAssetBush?.classList.toggle("selected", selectedAssetKind === "bush");
     btnAssetWall?.classList.toggle("selected", selectedAssetKind === "wall");
     btnAssetWindow?.classList.toggle("selected", selectedAssetKind === "window");
     btnAssetDoor?.classList.toggle("selected", selectedAssetKind === "door");
+    btnAssetChest?.classList.toggle("selected", selectedAssetKind === "chest");
+    btnAssetSword?.classList.toggle("selected", selectedAssetKind === "sword");
+    btnAssetBow?.classList.toggle("selected", selectedAssetKind === "bow");
+    btnAssetCoins?.classList.toggle("selected", selectedAssetKind === "coins");
+    btnAssetOther?.classList.toggle("selected", selectedAssetKind === "other");
     btnFloorStone?.classList.toggle("selected", selectedFloorKind === "stone");
     btnFloorWood?.classList.toggle("selected", selectedFloorKind === "wood");
     btnFloorWater?.classList.toggle("selected", selectedFloorKind === "water");
@@ -1084,58 +1273,99 @@ function connect() {
     btnBrush2?.classList.toggle("selected", brushSize === 2);
     btnBrush3?.classList.toggle("selected", brushSize === 3);
     btnBrush4?.classList.toggle("selected", brushSize === 4);
+    btnRevealFog?.classList.toggle("selected", editorMode === "revealFog");
+    btnEraseFog?.classList.toggle("selected", editorMode === "eraseFog");
+    // Token spawn selection state
+    btnAddPlayer?.classList.toggle("selected", editorMode === "spawnToken" && selectedTokenKind === "player");
+    btnAddNPC?.classList.toggle("selected", editorMode === "spawnToken" && selectedTokenKind === "npc");
+    if (btnAddPlayer) btnAddPlayer.disabled = !isDM;
+    if (btnAddNPC) btnAddNPC.disabled = !isDM;
   }
   updateEditorUI();
   // Editor tool buttons
-  btnCursor?.addEventListener("click", () => { editorMode = "cursor"; fogAction = null; updateEditorUI(); });
-  btnEraseObjects?.addEventListener("click", () => { editorMode = "eraseObjects"; fogAction = null; selectedAssetKind = null; selectedFloorKind = null; updateEditorUI(); });
-  btnEraseSpace?.addEventListener("click", () => { editorMode = "eraseSpace"; fogAction = null; selectedAssetKind = null; selectedFloorKind = null; updateEditorUI(); });
-  btnFogReveal?.addEventListener("click", () => { fogAction = fogAction === "reveal" ? null : "reveal"; updateEditorUI(); });
-  btnFogObscure?.addEventListener("click", () => { fogAction = fogAction === "obscure" ? null : "obscure"; updateEditorUI(); });
-  btnAssetTree?.addEventListener("click", () => { selectedAssetKind = "tree"; selectedFloorKind = null; editorMode = "paint"; fogAction = null; updateEditorUI(); });
-  btnAssetRock?.addEventListener("click", () => { selectedAssetKind = "rock"; selectedFloorKind = null; editorMode = "paint"; fogAction = null; updateEditorUI(); });
-  btnAssetBush?.addEventListener("click", () => { selectedAssetKind = "bush"; selectedFloorKind = null; editorMode = "paint"; fogAction = null; updateEditorUI(); });
-  btnAssetWall?.addEventListener("click", () => { selectedAssetKind = "wall"; selectedFloorKind = null; editorMode = "paint"; fogAction = null; updateEditorUI(); });
-  btnAssetWindow?.addEventListener("click", () => { selectedAssetKind = "window"; selectedFloorKind = null; editorMode = "paint"; fogAction = null; updateEditorUI(); });
-  btnAssetDoor?.addEventListener("click", () => { selectedAssetKind = "door"; selectedFloorKind = null; editorMode = "paint"; fogAction = null; updateEditorUI(); });
-  btnFloorStone?.addEventListener("click", () => { selectedFloorKind = "stone"; selectedAssetKind = null; editorMode = "paint"; fogAction = null; updateEditorUI(); });
-  btnFloorWood?.addEventListener("click", () => { selectedFloorKind = "wood"; selectedAssetKind = null; editorMode = "paint"; fogAction = null; updateEditorUI(); });
-  btnFloorWater?.addEventListener("click", () => { selectedFloorKind = "water"; selectedAssetKind = null; editorMode = "paint"; fogAction = null; updateEditorUI(); });
-  btnFloorSand?.addEventListener("click", () => { selectedFloorKind = "sand"; selectedAssetKind = null; editorMode = "paint"; fogAction = null; updateEditorUI(); });
+  btnCursor?.addEventListener("click", () => { editorMode = "cursor"; selectedAssetKind = null; selectedFloorKind = null; selectedTokenKind = null; updateEditorUI(); });
+  btnEraseTokens?.addEventListener("click", () => { 
+    editorMode = "eraseTokens"; 
+    selectedAssetKind = null; 
+    selectedFloorKind = null; 
+    selectedTokenKind = null;
+    document.body.style.cursor = "crosshair";
+    updateEditorUI(); 
+  });
+  btnEraseObjects?.addEventListener("click", () => { editorMode = "eraseObjects"; selectedAssetKind = null; selectedFloorKind = null; selectedTokenKind = null; updateEditorUI(); });
+  btnEraseSpace?.addEventListener("click", () => { editorMode = "eraseSpace"; selectedAssetKind = null; selectedFloorKind = null; selectedTokenKind = null; updateEditorUI(); });
+  btnAssetTree?.addEventListener("click", () => { selectedAssetKind = "tree"; selectedFloorKind = null; selectedTokenKind = null; editorMode = "paint"; updateEditorUI(); });
+  btnAssetRock?.addEventListener("click", () => { selectedAssetKind = "rock"; selectedFloorKind = null; selectedTokenKind = null; editorMode = "paint"; updateEditorUI(); });
+  btnAssetBush?.addEventListener("click", () => { selectedAssetKind = "bush"; selectedFloorKind = null; selectedTokenKind = null; editorMode = "paint"; updateEditorUI(); });
+  btnAssetWall?.addEventListener("click", () => { selectedAssetKind = "wall"; selectedFloorKind = null; selectedTokenKind = null; editorMode = "paint"; updateEditorUI(); });
+  btnAssetWindow?.addEventListener("click", () => { selectedAssetKind = "window"; selectedFloorKind = null; selectedTokenKind = null; editorMode = "paint"; updateEditorUI(); });
+  btnAssetDoor?.addEventListener("click", () => { selectedAssetKind = "door"; selectedFloorKind = null; selectedTokenKind = null; editorMode = "paint"; updateEditorUI(); });
+  btnAssetChest?.addEventListener("click", () => { selectedAssetKind = "chest"; selectedFloorKind = null; selectedTokenKind = null; editorMode = "paint"; updateEditorUI(); });
+  btnAssetSword?.addEventListener("click", () => { selectedAssetKind = "sword"; selectedFloorKind = null; selectedTokenKind = null; editorMode = "paint"; updateEditorUI(); });
+  btnAssetBow?.addEventListener("click", () => { selectedAssetKind = "bow"; selectedFloorKind = null; selectedTokenKind = null; editorMode = "paint"; updateEditorUI(); });
+  btnAssetCoins?.addEventListener("click", () => { selectedAssetKind = "coins"; selectedFloorKind = null; selectedTokenKind = null; editorMode = "paint"; updateEditorUI(); });
+  btnAssetOther?.addEventListener("click", () => { selectedAssetKind = "other"; selectedFloorKind = null; selectedTokenKind = null; editorMode = "paint"; updateEditorUI(); });
+  btnFloorStone?.addEventListener("click", () => { selectedFloorKind = "stone"; selectedAssetKind = null; selectedTokenKind = null; editorMode = "paint"; updateEditorUI(); });
+  btnFloorWood?.addEventListener("click", () => { selectedFloorKind = "wood"; selectedAssetKind = null; selectedTokenKind = null; editorMode = "paint"; updateEditorUI(); });
+  btnFloorWater?.addEventListener("click", () => { selectedFloorKind = "water"; selectedAssetKind = null; selectedTokenKind = null; editorMode = "paint"; updateEditorUI(); });
+  btnFloorSand?.addEventListener("click", () => { selectedFloorKind = "sand"; selectedAssetKind = null; selectedTokenKind = null; editorMode = "paint"; updateEditorUI(); });
   btnBrush1?.addEventListener("click", () => { brushSize = 1; updateEditorUI(); });
   btnBrush2?.addEventListener("click", () => { brushSize = 2; updateEditorUI(); });
   btnBrush3?.addEventListener("click", () => { brushSize = 3; updateEditorUI(); });
   btnBrush4?.addEventListener("click", () => { brushSize = 4; updateEditorUI(); });
-  btnSave?.addEventListener("click", () => {
-    if (!socket) return;
-    const msg: ClientToServer = { t: "requestSave" } as any;
-    socket.send(JSON.stringify(msg));
-  });
-  btnLoad?.addEventListener("click", () => {
-    if (!socket) return;
-    const inp = document.createElement("input");
-    inp.type = "file";
-    inp.accept = "application/json";
-    inp.onchange = async () => {
-      const f = inp.files?.[0];
-      if (!f) return;
-      const text = await f.text();
-      try {
-        const snapshot = JSON.parse(text);
-        const msg: ClientToServer = { t: "loadSnapshot", snapshot } as any;
-        socket!.send(JSON.stringify(msg));
-      } catch {}
-    };
-    inp.click();
-  });
-  // Locations panel: refresh/list, save-to-server, and tree rendering
-  btnLocationsRefresh?.addEventListener("click", () => requestLocationsList());
-  btnSaveServer?.addEventListener("click", () => {
+  btnRevealFog?.addEventListener("click", () => { editorMode = "revealFog"; selectedAssetKind = null; selectedFloorKind = null; updateEditorUI(); });
+  btnEraseFog?.addEventListener("click", () => { editorMode = "eraseFog"; selectedAssetKind = null; selectedFloorKind = null; updateEditorUI(); });
+  btnRevealFog?.addEventListener("click", () => { selectedTokenKind = null; });
+  btnEraseFog?.addEventListener("click", () => { selectedTokenKind = null; });
+  btnAddPlayer?.addEventListener("click", () => {
     if (!socket || myRole !== "DM") return;
-    const def = (currentLocation?.name || "new-location").toLowerCase().replace(/\s+/g, "-");
-    const rel = prompt("Введите путь для сохранения (относительно корня):", `${def}.json`);
-    if (!rel) return;
-    const msg: ClientToServer = { t: "saveLocation", path: rel } as any;
+    selectedTokenKind = "player";
+    selectedAssetKind = null; selectedFloorKind = null;
+    editorMode = "spawnToken";
+    document.body.style.cursor = "crosshair";
+    updateEditorUI();
+  });
+  btnAddNPC?.addEventListener("click", () => {
+    if (!socket || myRole !== "DM") return;
+    selectedTokenKind = "npc";
+    selectedAssetKind = null; selectedFloorKind = null;
+    editorMode = "spawnToken";
+    document.body.style.cursor = "crosshair";
+    updateEditorUI();
+  });
+  btnNewMap?.addEventListener("click", () => {
+    if (!socket || myRole !== "DM") return;
+    const name = prompt("Название новой карты:", "Новая карта");
+    if (name == null) return;
+    const levelIdNew: ID = uid("lvl");
+    const locationIdNew: ID = uid("loc");
+    const seed = `seed-${Date.now().toString(36)}`;
+    const snap = {
+      location: { id: locationIdNew, name: name || "Новая карта", levels: [{ id: levelIdNew, seed, spawnPoint: { x: 5, y: 5 }, lights: [] }] },
+      tokens: [] as any[],
+      assets: [] as any[],
+      floors: [] as any[],
+      events: [] as any[],
+    };
+    const msg: ClientToServer = { t: "loadSnapshot", snapshot: snap } as any;
+    socket.send(JSON.stringify(msg));
+    // Immediately persist to disk so it appears in the list
+    const slug = (name || "map")
+      .replace(/[\\/]/g, "-")
+      .replace(/\s+/g, "-")
+      .replace(/^-+|-+$/g, "") || "map";
+    const relPath = `${slug}.json`;
+    const saveMsg: ClientToServer = { t: "saveLocation", path: relPath } as any;
+    socket.send(JSON.stringify(saveMsg));
+  });
+
+  btnNewFolder?.addEventListener("click", () => {
+    if (!socket || myRole !== "DM") return;
+    const rel = prompt("Введите путь папки (относительно корня):", "new-folder");
+    if (rel == null) return;
+    const pathClean = rel.replace(/\\+/g, "/").replace(/^\/+|\/+$/g, "");
+    if (!pathClean) return;
+    const msg: ClientToServer = { t: "createFolder", path: pathClean } as any;
     socket.send(JSON.stringify(msg));
   });
 
@@ -1145,67 +1375,165 @@ function connect() {
     socket.send(JSON.stringify(msg));
   }
 
-  function hudToast(text: string) {
-    const hud = document.getElementById("hud");
-    if (!hud) return;
-    const el = document.createElement("div");
-    el.textContent = text;
-    el.style.opacity = "0.95";
-    el.style.transition = "opacity 0.5s ease";
-    hud.appendChild(el);
-    setTimeout(() => { el.style.opacity = "0"; setTimeout(() => el.remove(), 600); }, 1400);
-  }
-
   function renderLocationsTree(tree: LocationTreeNode[], lastUsed?: string) {
     if (!locationsTreeEl) return;
     locationsTreeEl.innerHTML = "";
-    const root = document.createElement("div");
-    root.style.marginLeft = "2px";
-    for (const node of tree) root.appendChild(renderNode(node, 0, lastUsed));
-    locationsTreeEl.appendChild(root);
+    // Build path map for quick lookup (used by Recent)
+    try { console.debug(`[LOC][client] renderLocationsTree: treeRoots=${tree.length}, lastUsed=${lastUsed ?? ""}`); } catch {}
+    const pathMap = new Map<string, LocationTreeNode>();
+    const walk = (n: LocationTreeNode) => { pathMap.set(n.path, n); if (n.children) n.children.forEach(walk); };
+    for (const n of tree) walk(n);
+    try {
+      const hasDemo = Array.from(pathMap.keys()).some((k) => {
+        const p = k.toLowerCase();
+        return p === "demo-location2.json" || p.endsWith("/demo-location2.json");
+      });
+      console.debug(`[LOC][client] pathMap size=${pathMap.size}, has demo-location2=${hasDemo}`);
+    } catch {}
+
+    // Clean up recent list: remove items not present in tree
+    const prevCount = recentLocations.length;
+    const cleaned = recentLocations.filter((p) => {
+      const lower = p.toLowerCase();
+      // Keep demo and test entries now; only require presence in the tree
+      return pathMap.has(p);
+    });
+    try { console.debug(`[LOC][client] recent before=${prevCount}, afterFilter=${cleaned.length}`); } catch {}
+    if (cleaned.length !== recentLocations.length) {
+      recentLocations = cleaned;
+      saveRecents();
+    }
+
+    // Recent section (limit to 3)
+    if (recentLocations.length) {
+      const sec = document.createElement("div");
+      const h = document.createElement("div"); h.className = "loc-section-title"; h.textContent = "Recent"; sec.appendChild(h);
+      for (const p of recentLocations.slice(0, 3)) {
+        const n = pathMap.get(p);
+        const baseLabel = n ? (n.locationName ? `${n.locationName} (${n.name})` : n.name) : p;
+        const label = baseLabel + (p === lastUsed ? " ★" : "");
+        const row = createLocItem(label, "🕘", p === lastUsed);
+        row.title = p;
+        row.onclick = () => {
+          if (!socket || myRole !== "DM") return;
+          const msg: ClientToServer = { t: "loadLocation", path: p } as any;
+          socket.send(JSON.stringify(msg));
+          addRecent(p);
+        };
+        sec.appendChild(row);
+      }
+      locationsTreeEl.appendChild(sec);
+    }
+
+    // All section
+    const secAll = document.createElement("div");
+    const hAll = document.createElement("div"); hAll.className = "loc-section-title"; hAll.textContent = "All"; secAll.appendChild(hAll);
+    for (const node of tree) secAll.appendChild(renderNode(node, 0, lastUsed));
+    locationsTreeEl.appendChild(secAll);
   }
 
   function renderNode(node: LocationTreeNode, depth: number, lastUsed?: string): HTMLElement {
-    const row = document.createElement("div");
-    row.style.display = "flex";
-    row.style.alignItems = "center";
-    row.style.gap = "6px";
-    row.style.marginLeft = `${depth * 12}px`;
     if (node.type === "folder") {
       const open = locationsExpanded.has(node.path);
-      const twist = document.createElement("span");
-      twist.textContent = open ? "▾" : "▸";
-      twist.style.cursor = "pointer";
-      const name = document.createElement("span");
-      name.textContent = node.name;
-      name.style.cursor = "pointer";
-      const icon = document.createElement("span"); icon.textContent = "📁";
+      const container = document.createElement("div");
+      const row = document.createElement("div");
+      row.className = "loc-item";
+      row.style.paddingLeft = `${8 + depth * 12}px`;
+      const twist = document.createElement("span"); twist.textContent = open ? "▾" : "▸"; twist.className = "twist";
+      const icon = document.createElement("span"); icon.className = "icon"; icon.textContent = "📁";
+      const name = document.createElement("span"); name.className = "name"; name.textContent = node.name;
       row.appendChild(twist); row.appendChild(icon); row.appendChild(name);
-      const toggle = () => {
-        if (open) locationsExpanded.delete(node.path); else locationsExpanded.add(node.path);
-        requestLocationsList(); // re-fetch to reflect new children
+      const spacer = document.createElement("span"); spacer.style.flex = "1"; row.appendChild(spacer);
+      // Actions: create subfolder
+      const btnAdd = document.createElement("span");
+      btnAdd.title = "Новая папка внутри";
+      btnAdd.textContent = "+";
+      btnAdd.style.opacity = "0.85";
+      btnAdd.style.marginLeft = "6px";
+      btnAdd.style.userSelect = "none";
+      btnAdd.onclick = (e) => {
+        e.stopPropagation();
+        if (!socket || myRole !== "DM") return;
+        const name = prompt("Название новой папки:", "folder");
+        if (!name) return;
+        const base = node.path.endsWith("/") ? node.path.slice(0, -1) : node.path;
+        const rel = `${base}/${name}`;
+        const msg: ClientToServer = { t: "createFolder", path: rel } as any;
+        socket.send(JSON.stringify(msg));
       };
-      twist.onclick = toggle; name.onclick = toggle;
+      row.appendChild(btnAdd);
+      // Action: rename folder (pencil)
+      const btnRename = document.createElement("span");
+      btnRename.title = "Переименовать папку";
+      btnRename.textContent = "✎";
+      btnRename.style.opacity = "0.85";
+      btnRename.style.marginLeft = "6px";
+      btnRename.style.userSelect = "none";
+      btnRename.onclick = (e) => {
+        e.stopPropagation();
+        if (!socket || myRole !== "DM") return;
+        const cur = node.name;
+        const nn = prompt("Новое имя папки:", cur || "folder");
+        if (!nn) return;
+        const newName = nn.replace(/\s+/g, " ").trim();
+        if (!newName || /[\\/]/.test(newName)) { alert("Недопустимое имя папки"); return; }
+        const msg: ClientToServer = { t: "renameFolder", path: node.path, newName } as any;
+        socket.send(JSON.stringify(msg));
+      };
+      row.appendChild(btnRename);
+      const toggle = () => { if (open) locationsExpanded.delete(node.path); else locationsExpanded.add(node.path); requestLocationsList(); };
+      row.onclick = toggle; twist.onclick = (e) => { e.stopPropagation(); toggle(); };
+      container.appendChild(row);
       if (open && node.children) {
-        const frag = document.createElement("div");
-        for (const ch of node.children) frag.appendChild(renderNode(ch, depth + 1, lastUsed));
-        row.appendChild(frag);
+        const childrenWrap = document.createElement("div");
+        for (const ch of node.children) childrenWrap.appendChild(renderNode(ch, depth + 1, lastUsed));
+        container.appendChild(childrenWrap);
       }
+      return container;
     } else {
-      const icon = document.createElement("span"); icon.textContent = "📄";
       const title = node.locationName ? `${node.locationName} (${node.name})` : node.name;
-      const btn = document.createElement("button");
-      btn.textContent = title + (node.path === lastUsed ? " ★" : "");
-      btn.title = node.path;
-      btn.style.fontSize = "12px";
-      btn.style.padding = "4px 8px";
-      btn.onclick = () => {
+      const row = createLocItem(title + (node.path === lastUsed ? " ★" : ""), "📄", node.path === lastUsed);
+      row.style.paddingLeft = `${8 + depth * 12}px`;
+      row.title = node.path;
+      row.onclick = () => {
         if (!socket || myRole !== "DM") return;
         const msg: ClientToServer = { t: "loadLocation", path: node.path } as any;
         socket.send(JSON.stringify(msg));
+        addRecent(node.path);
       };
-      row.appendChild(icon); row.appendChild(btn);
+      // Inline actions on the right: Move, Delete
+      const spacer = document.createElement("span"); spacer.style.flex = "1"; row.appendChild(spacer);
+      const mkAction = (label: string, title: string, handler: (e: MouseEvent) => void) => {
+        const s = document.createElement("span"); s.textContent = label; s.title = title; s.style.opacity = "0.85"; s.style.marginLeft = "6px"; s.style.userSelect = "none"; s.onclick = handler; return s;
+      };
+      const onMove = (e: MouseEvent) => {
+        e.stopPropagation();
+        if (!socket || myRole !== "DM") return;
+        const dest = prompt("Переместить в папку (путь относительно корня, пусто = корень):", "");
+        if (dest == null) return;
+        const toFolder = dest.replace(/\\+/g, "/").replace(/^\/+|\/+$/g, "");
+        const msg: ClientToServer = { t: "moveLocation", from: node.path, toFolder } as any;
+        socket.send(JSON.stringify(msg));
+      };
+      const onDelete = (e: MouseEvent) => {
+        e.stopPropagation();
+        if (!socket || myRole !== "DM") return;
+        if (!confirm(`Удалить локацию ${title}?`)) return;
+        const msg: ClientToServer = { t: "deleteLocation", path: node.path } as any;
+        socket.send(JSON.stringify(msg));
+      };
+      row.appendChild(mkAction("↪", "Переместить", onMove));
+      row.appendChild(mkAction("🗑", "Удалить", onDelete));
+      return row;
     }
+  }
+
+  function createLocItem(label: string, iconChar: string, active?: boolean): HTMLDivElement {
+    const row = document.createElement("div");
+    row.className = "loc-item" + (active ? " active" : "");
+    const icon = document.createElement("span"); icon.className = "icon"; icon.textContent = iconChar;
+    const name = document.createElement("span"); name.className = "name"; name.textContent = label;
+    row.appendChild(icon); row.appendChild(name);
     return row;
   }
   // Update buttons after welcome determines role
@@ -1254,8 +1582,13 @@ app.stage.on("pointerdown", (e: any) => {
   if (typeof e.button === "number" && e.button !== 0) return;
   // ignore clicks over minimap
   if (isOverMinimap(e.global.x, e.global.y)) return;
-  if (myRole === "DM" && (editorMode === "paint" || editorMode === "eraseObjects" || editorMode === "eraseSpace" || fogAction)) {
-    document.body.style.cursor = "crosshair";
+  if (myRole === "DM") {
+    if (editorMode === "paint" || editorMode === "eraseObjects" || editorMode === "eraseSpace" || 
+        editorMode === "revealFog" || editorMode === "eraseFog" || editorMode === "eraseTokens" || editorMode === "spawnToken") {
+      document.body.style.cursor = "crosshair";
+    } else {
+      document.body.style.cursor = dragging ? "grabbing" : "default";
+    }
     painting = true;
     lastPaintKey = null;
     // reset action flag for this pointer sequence
@@ -1263,15 +1596,7 @@ app.stage.on("pointerdown", (e: any) => {
     const p = world.toLocal(e.global);
     const cell = snapToGrid(p.x, p.y);
     const cells = brushCells(cell, brushSize);
-    if (fogAction) {
-      if (socket && levelId) {
-        const msg: ClientToServer = fogAction === "reveal"
-          ? { t: "revealFog", levelId, cells }
-          : { t: "obscureFog", levelId, cells } as any;
-        socket.send(JSON.stringify(msg));
-        lastPointerDownDidAct = true;
-      }
-    } else if (editorMode === "paint") {
+    if (editorMode === "paint") {
       if (levelId) {
         let touchedFloor = false;
         for (const c of cells) {
@@ -1284,15 +1609,16 @@ app.stage.on("pointerdown", (e: any) => {
               socket.send(JSON.stringify(msg));
             }
           } else {
+            // assets are server-authoritative; only send if socket exists
             if (socket) {
               const kind = selectedAssetKind ?? "tree";
               const msg: ClientToServer = { t: "placeAsset", levelId, pos: c, kind };
               socket.send(JSON.stringify(msg));
-              lastPointerDownDidAct = true;
             }
           }
         }
-        if (touchedFloor) { drawFloor(); drawGrid(); drawFog(); lastPointerDownDidAct = true; }
+        if (touchedFloor) { drawFloor(); drawGrid(); drawFog(); }
+        lastPointerDownDidAct = true;
       }
     } else if (editorMode === "eraseObjects") {
       if (socket && levelId) {
@@ -1318,7 +1644,33 @@ app.stage.on("pointerdown", (e: any) => {
             socket.send(JSON.stringify(fl));
           }
         }
-        if (touchedFloor) { drawFloor(); drawGrid(); drawFog(); lastPointerDownDidAct = true; }
+        if (touchedFloor) { drawFloor(); drawGrid(); drawFog(); }
+        lastPointerDownDidAct = true;
+      }
+    } else if (editorMode === "revealFog") {
+      if (socket && levelId) {
+        const msg: ClientToServer = { t: "revealFog", levelId, cells } as any;
+        socket.send(JSON.stringify(msg));
+        lastPointerDownDidAct = true;
+      }
+    } else if (editorMode === "eraseFog") {
+      if (socket && levelId) {
+        const msg: ClientToServer = { t: "obscureFog", levelId, cells } as any;
+        socket.send(JSON.stringify(msg));
+        lastPointerDownDidAct = true;
+      }
+    } else if (editorMode === "spawnToken") {
+      // place a single token at the clicked cell, then return to cursor mode
+      if (socket && levelId && selectedTokenKind) {
+        const p = world.toLocal(e.global);
+        const cell = snapToGrid(p.x, p.y);
+        const msg: ClientToServer = { t: "spawnToken", kind: selectedTokenKind, levelId, pos: cell } as any;
+        socket.send(JSON.stringify(msg));
+        lastPointerDownDidAct = true;
+        // reset tool back to cursor after one placement
+        selectedTokenKind = null;
+        editorMode = "cursor";
+        document.body.style.cursor = dragging ? "grabbing" : "default";
       }
     }
     lastPaintKey = cellKey(cell);
@@ -1358,7 +1710,7 @@ app.stage.on("pointermove", (e: any) => {
     const key = cellKey(cell);
     if (key !== lastPaintKey) {
       const cells = brushCells(cell, brushSize);
-      if (editorMode === "paint" && myRole === "DM") {
+      if (editorMode === "paint") {
         if (levelId) {
           let touchedFloor = false;
           for (const c of cells) {
@@ -1371,6 +1723,7 @@ app.stage.on("pointermove", (e: any) => {
                 socket.send(JSON.stringify(msg));
               }
             } else {
+              // assets are server-authoritative; only send if socket exists
               if (socket) {
                 const kind = selectedAssetKind ?? "tree";
                 const msg: ClientToServer = { t: "placeAsset", levelId, pos: c, kind };
@@ -1380,14 +1733,14 @@ app.stage.on("pointermove", (e: any) => {
           }
           if (touchedFloor) { drawFloor(); drawGrid(); drawFog(); }
         }
-      } else if (editorMode === "eraseObjects" && myRole === "DM") {
+      } else if (editorMode === "eraseObjects") {
         if (socket && levelId) {
           for (const c of cells) {
             const msg: ClientToServer = { t: "removeAssetAt", levelId, pos: c };
             socket.send(JSON.stringify(msg));
           }
         }
-      } else if (editorMode === "eraseSpace" && myRole === "DM") {
+      } else if (editorMode === "eraseSpace") {
         if (levelId) {
           let touchedFloor = false;
           for (const c of cells) {
@@ -1405,11 +1758,14 @@ app.stage.on("pointermove", (e: any) => {
           }
           if (touchedFloor) { drawFloor(); drawGrid(); drawFog(); }
         }
-      } else if (fogAction && myRole === "DM") {
+      } else if (editorMode === "revealFog") {
         if (socket && levelId) {
-          const msg: ClientToServer = fogAction === "reveal"
-            ? { t: "revealFog", levelId, cells }
-            : { t: "obscureFog", levelId, cells } as any;
+          const msg: ClientToServer = { t: "revealFog", levelId, cells } as any;
+          socket.send(JSON.stringify(msg));
+        }
+      } else if (editorMode === "eraseFog") {
+        if (socket && levelId) {
+          const msg: ClientToServer = { t: "obscureFog", levelId, cells } as any;
           socket.send(JSON.stringify(msg));
         }
       }
@@ -1466,7 +1822,17 @@ minimap.cursor = "pointer";
 minimap.on("pointerdown", (ev: any) => ev.stopPropagation());
 let minimapSize = 180; // px
 function positionMinimap() {
-  minimap.position.set(app.screen.width - minimapSize - 12, app.screen.height - minimapSize - 12);
+  // Keep minimap fully visible: shift left by right panel width (if present)
+  let rightInset = 12;
+  try {
+    const rp = document.getElementById("right-panel");
+    if (rp) {
+      const w = Math.ceil(rp.getBoundingClientRect().width);
+      // include an extra small gap between panel and minimap
+      rightInset += w + 12;
+    }
+  } catch {}
+  minimap.position.set(app.screen.width - minimapSize - rightInset, app.screen.height - minimapSize - 12);
 }
 positionMinimap();
 window.addEventListener("resize", positionMinimap);

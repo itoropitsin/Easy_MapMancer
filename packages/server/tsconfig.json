@@ -2,12 +2,11 @@
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
     "outDir": "dist",
+    "rootDir": "src",
     "noEmit": false,
     "types": ["node"],
     "baseUrl": ".",
-    "paths": {
-      "@dnd/shared": ["../shared/src/index.ts"]
-    }
+    "paths": {}
   },
   "include": ["src"]
 }

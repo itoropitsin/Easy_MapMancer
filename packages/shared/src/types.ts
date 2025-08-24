@@ -23,12 +23,17 @@ export interface Location {
 export interface Token {
   id: ID;
   owner: ID; // player id
+  kind?: "player" | "npc"; // token kind (player by default if omitted for backward compatibility)
   levelId: ID;
   pos: Vec2; // grid coords
   vision?: { radius: number; angle?: number };
   light?: { radius: number } | null;
   flags?: Record<string, boolean>;
   name?: string;
+  hp?: number;
+  ac?: number;
+  tint?: number;
+  stats?: { str?: number; dex?: number; con?: number; int?: number; wis?: number; cha?: number; hp?: number; ac?: number };
 }
 
 export interface Asset {
@@ -48,6 +53,8 @@ export type FloorKind = "stone" | "wood" | "water" | "sand";
 export type Event =
   | { type: "tokenMoved"; tokenId: ID; pos: Vec2; levelId: ID }
   | { type: "tokenSpawned"; token: Token }
+  | { type: "tokenUpdated"; token: Token }
+  | { type: "tokenRemoved"; tokenId: ID }
   | { type: "fogRevealed"; levelId: ID; cells: Vec2[] }
   | { type: "fogObscured"; levelId: ID; cells: Vec2[] }
   | { type: "assetPlaced"; asset: Asset }

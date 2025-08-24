@@ -63,6 +63,24 @@
       "light": null,
       "flags": {},
       "name": "Player"
+    },
+    {
+      "id": "t-49094ac7-0772-4b03-8b15-282bb986520c",
+      "owner": "p-7ffb72cc-9ab3-42af-9e0a-6619343f3a7a",
+      "kind": "npc",
+      "levelId": "L1",
+      "pos": {
+        "x": 0,
+        "y": 2
+      },
+      "vision": {
+        "radius": 8,
+        "angle": 360
+      },
+      "light": null,
+      "flags": {},
+      "name": "NPC",
+      "tint": 16767715
     }
   ],
   "assets": [
@@ -326,6 +344,15 @@
         "y": 1
       },
       "kind": "door"
+    },
+    {
+      "id": "a-89f165f5-47bf-4467-9db5-45ddfbe168e3",
+      "levelId": "L1",
+      "pos": {
+        "x": -6,
+        "y": 0
+      },
+      "kind": "rock"
     }
   ],
   "events": [
@@ -1287,7 +1314,7 @@
         "x": -3,
         "y": 2
       },
-      "kind": "water"
+      "kind": "stone"
     },
     {
       "levelId": "L1",
@@ -1327,7 +1354,7 @@
         "x": -3,
         "y": 3
       },
-      "kind": "water"
+      "kind": "stone"
     },
     {
       "levelId": "L1",
@@ -1367,7 +1394,7 @@
         "x": -4,
         "y": 4
       },
-      "kind": "water"
+      "kind": "stone"
     },
     {
       "levelId": "L1",
@@ -1375,7 +1402,7 @@
         "x": -3,
         "y": 4
       },
-      "kind": "water"
+      "kind": "stone"
     },
     {
       "levelId": "L1",
@@ -1415,7 +1442,7 @@
         "x": -2,
         "y": 4
       },
-      "kind": "water"
+      "kind": "stone"
     },
     {
       "levelId": "L1",
@@ -1774,6 +1801,246 @@
       "pos": {
         "x": 0,
         "y": 6
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -6,
+        "y": 7
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -6,
+        "y": 8
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -7,
+        "y": 8
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -7,
+        "y": 8
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -6,
+        "y": 6
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -2,
+        "y": 7
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -7,
+        "y": -1
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -7,
+        "y": 0
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -7,
+        "y": 1
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -7,
+        "y": 2
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -7,
+        "y": 3
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -8,
+        "y": 0
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -8,
+        "y": 1
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -8,
+        "y": 2
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -8,
+        "y": 3
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -7,
+        "y": 4
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -7,
+        "y": 5
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -7,
+        "y": 6
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -9,
+        "y": 2
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -8,
+        "y": -1
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -7,
+        "y": -2
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -7,
+        "y": -3
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -9,
+        "y": -1
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -9,
+        "y": 0
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -9,
+        "y": 1
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -1,
+        "y": 3
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -1,
+        "y": 4
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -1,
+        "y": 5
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -1,
+        "y": 6
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -1,
+        "y": 7
       },
       "kind": "stone"
     }

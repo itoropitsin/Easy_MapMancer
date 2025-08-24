@@ -9,6 +9,9 @@
     "server:dev": "npm run -w @dnd/server dev",
     "client:dev": "npm run -w @dnd/client dev",
     "build": "npm run -w @dnd/shared build && npm run -w @dnd/server build && npm run -w @dnd/client build",
+    "start": "concurrently -n server,client -c yellow,cyan \"npm:server:start\" \"npm:client:preview\"",
+    "server:start": "npm run -w @dnd/server start",
+    "client:preview": "npm run -w @dnd/client preview",
     "format": "prettier -w ."
   },
   "devDependencies": {
