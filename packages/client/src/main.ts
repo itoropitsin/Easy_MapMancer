@@ -937,256 +937,301 @@ function revealByVisionForToken(ws: WebSocket, t: any) {
 }
 
 function connect() {
-  // HUD status
+  // Single-run guard (HMR-safe)
+  const w = window as any;
+  if (w.__DND_WS_CONNECT_SCHEDULED) { try { console.debug("[WS][client] connect() already scheduled, skipping"); } catch {} return; }
+  w.__DND_WS_CONNECT_SCHEDULED = true;
+
+  // HUD status (reuse if present)
   const hud = document.getElementById("hud");
-  const statusEl = document.createElement("div");
-  statusEl.id = "status";
+  let statusEl = document.getElementById("status") as HTMLDivElement | null;
+  if (!statusEl) { statusEl = document.createElement("div"); statusEl.id = "status"; hud?.appendChild(statusEl); }
+  let mapInfoEl = document.getElementById("map-info") as HTMLDivElement | null;
+  if (!mapInfoEl) { mapInfoEl = document.createElement("div"); mapInfoEl.id = "map-info"; hud?.appendChild(mapInfoEl); }
   statusEl.textContent = "WS: connecting...";
-  hud?.appendChild(statusEl);
-  // Current map info (top-right)
-  const mapInfoEl = document.createElement("div");
-  mapInfoEl.id = "map-info";
   mapInfoEl.textContent = "Карта: —";
-  hud?.appendChild(mapInfoEl);
 
   const params = new URLSearchParams(location.search);
   const inv = params.get("inv") ?? "pl-local";
-  const port = params.get("port") || "8080";
-  const wsUrl = `${location.protocol === "https:" ? "wss" : "ws"}://${location.hostname}:${port}/ws?inv=${encodeURIComponent(inv)}`;
-  const ws = new WebSocket(wsUrl);
-  socket = ws;
-  ws.addEventListener("open", () => {
-    statusEl.textContent = "WS: connected";
-    const msg: ClientToServer = { t: "join", name: "Player", invite: inv };
-    ws.send(JSON.stringify(msg));
-  });
-  ws.addEventListener("message", (ev) => {
-    const msg: ServerToClient = JSON.parse(ev.data);
-    if (msg.t === "welcome") {
-      playerId = msg.playerId;
-      myRole = msg.role;
-      // store location/seed
-      currentLocation = msg.snapshot.location;
-      // Update HUD map name and URL with location ID
-      try {
-        mapInfoEl.textContent = `Карта: ${currentLocation?.name ?? "—"}`;
+  const startPort = Number(params.get("port") || 8080);
+  const endPort = Number(params.get("maxPort") || (startPort + 20));
+  const protocol = location.protocol === "https:" ? "wss" : "ws";
+  const host = location.hostname;
+
+  let currentPort = startPort;
+  let connecting = false;
+  const delay = (ms: number) => new Promise<void>(r => setTimeout(r, ms));
+
+  const attachHandlers = (ws: WebSocket, port: number) => {
+    ws.addEventListener("message", (ev) => {
+      const msg: ServerToClient = JSON.parse(ev.data);
+      if (msg.t === "welcome") {
+        playerId = msg.playerId;
+        myRole = msg.role;
+        // store location/seed
+        currentLocation = msg.snapshot.location;
+        // Update HUD map name and URL with location ID
+        try {
+        (mapInfoEl as HTMLDivElement).textContent = `Карта: ${currentLocation?.name ?? "—"}`;
         if (currentLocation?.id) {
           const url = new URL(window.location.href);
           url.searchParams.set("loc", currentLocation.id);
           history.replaceState(null, "", url.toString());
         }
-      } catch {}
-      // pick first token owned by me
-      tokens.clear();
-      for (const t of msg.snapshot.tokens) {
-        tokens.set(t.id, t);
-        if (t.owner === playerId) { myTokenId = t.id; levelId = t.levelId; }
-      }
-      // receive assets
-      assets.clear();
-      for (const a of (msg.snapshot as any).assets ?? []) {
-        assets.set(a.id, a);
-      }
-      // receive floors
-      const floorsArr = (msg.snapshot as any).floors as { levelId: ID; pos: Vec2; kind: FloorKind }[] | undefined;
-      if (Array.isArray(floorsArr)) {
-        for (const f of floorsArr) setFloorOverride(f.levelId, f.pos, f.kind);
-      }
-      // Ensure we have a levelId even if we don't own a token
-      if (!levelId && currentLocation) {
-        levelId = currentLocation.levels[0]?.id ?? null;
-      }
-      // choose seed for current level
-      if (currentLocation && levelId) {
-        const lvl = currentLocation.levels.find(l => l.id === levelId);
-        currentSeed = lvl?.seed ?? null;
-      }
-      // apply existing fog from snapshot events, if any
-      const evs = (msg as any).snapshot?.events as any[] | undefined;
-      if (Array.isArray(evs)) {
-        for (const e of evs) {
-          if (e.type === "fogRevealed") {
+        } catch {}
+        // pick first token owned by me
+        tokens.clear();
+        for (const t of msg.snapshot.tokens) {
+          tokens.set(t.id, t);
+          if (t.owner === playerId) { myTokenId = t.id; levelId = t.levelId; }
+        }
+        // receive assets
+        assets.clear();
+        for (const a of (msg.snapshot as any).assets ?? []) {
+          assets.set(a.id, a);
+        }
+        // receive floors
+        const floorsArr = (msg.snapshot as any).floors as { levelId: ID; pos: Vec2; kind: FloorKind }[] | undefined;
+        if (Array.isArray(floorsArr)) {
+          for (const f of floorsArr) setFloorOverride(f.levelId, f.pos, f.kind);
+        }
+        // Ensure we have a levelId even if we don't own a token
+        if (!levelId && currentLocation) {
+          levelId = currentLocation.levels[0]?.id ?? null;
+        }
+        // choose seed for current level
+        if (currentLocation && levelId) {
+          const lvl = currentLocation.levels.find(l => l.id === levelId);
+          currentSeed = lvl?.seed ?? null;
+        }
+        // apply existing fog from snapshot events, if any
+        const evs = (msg as any).snapshot?.events as any[] | undefined;
+        if (Array.isArray(evs)) {
+          for (const e of evs) {
+            if (e.type === "fogRevealed") {
+              const set = getRevealed(e.levelId as ID);
+              for (const c of e.cells) set.add(cellKey(c));
+            }
+          }
+        }
+        drawFloor();
+        drawGrid();
+        drawWalls();
+        drawObjects();
+        drawAssets();
+        drawTokens();
+        centerOnMyToken();
+        drawMinimap(); positionMinimap();
+        // update UI state based on role
+        try { (updateEditorUI as any)(); } catch {}
+        // auto-reveal around DM token on join to make map visible
+        if (myRole === "DM") {
+          for (const t of tokens.values()) {
+            revealByVisionForToken(ws, t as any);
+          }
+        }
+        drawFog();
+        renderCharacterPanel();
+        // Ask server for locations list after initial sync
+        try { requestLocationsList(); } catch {}
+      } else if ((msg as any).t === "saveData") {
+        const data = (msg as any).snapshot;
+        const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+        const a = document.createElement("a");
+        const ts = new Date().toISOString().replace(/[:.]/g, "-");
+        a.href = URL.createObjectURL(blob);
+        a.download = `dnd-location-${ts}.json`;
+        a.click();
+        URL.revokeObjectURL(a.href);
+      } else if ((msg as any).t === "reset") {
+        const snap = (msg as any).snapshot as { location: Location; tokens: Token[]; assets: Asset[]; floors?: { levelId: ID; pos: Vec2; kind: FloorKind }[]; events?: any[] };
+        // apply snapshot fresh
+        playerId = playerId; // unchanged
+        myRole = myRole; // unchanged
+        currentLocation = snap.location;
+        // Update HUD map name and URL with location ID
+        try {
+        (mapInfoEl as HTMLDivElement).textContent = `Карта: ${currentLocation?.name ?? "—"}`;
+        if (currentLocation?.id) {
+          const url = new URL(window.location.href);
+          url.searchParams.set("loc", currentLocation.id);
+          history.replaceState(null, "", url.toString());
+        }
+        } catch {}
+        tokens.clear();
+        for (const t of snap.tokens) {
+          tokens.set(t.id, t);
+        }
+        // pick my token if exists
+        myTokenId = null;
+        for (const t of snap.tokens) { if (t.owner === playerId) { myTokenId = t.id; break; } }
+        // ensure level id/seed
+        levelId = myTokenId ? tokens.get(myTokenId!)?.levelId ?? null : (currentLocation?.levels[0]?.id ?? null);
+        if (currentLocation && levelId) {
+          const lvl = currentLocation.levels.find(l => l.id === levelId);
+          currentSeed = lvl?.seed ?? null;
+        }
+        // assets
+        assets.clear();
+        for (const a of snap.assets) assets.set(a.id, a);
+        // floors
+        floorsByLevel.clear();
+        if (Array.isArray(snap.floors)) {
+          for (const f of snap.floors) setFloorOverride(f.levelId, f.pos, f.kind);
+        }
+        // fog
+        revealedByLevel.clear();
+        if (Array.isArray(snap.events)) {
+          for (const e of snap.events) {
+            if ((e as any).type === "fogRevealed") {
+              const set = getRevealed((e as any).levelId as ID);
+              for (const c of (e as any).cells) set.add(cellKey(c));
+            }
+          }
+        }
+        drawFloor();
+        drawGrid();
+        drawWalls();
+        drawObjects();
+        drawAssets();
+        drawTokens();
+        centerOnMyToken();
+        drawMinimap(); positionMinimap();
+        drawFog();
+        renderCharacterPanel();
+        // ensure locations list is refreshed after switching/creating maps
+        try { requestLocationsList(); } catch {}
+      } else if (msg.t === "statePatch") {
+        for (const e of msg.events) {
+          if (e.type === "tokenSpawned") {
+            tokens.set(e.token.id, e.token);
+            if (e.token.owner === playerId) {
+              myTokenId = e.token.id;
+              levelId = e.token.levelId;
+            }
+            if (myRole === "DM") {
+              revealByVisionForToken(ws, e.token as any);
+            }
+          } else if (e.type === "tokenRemoved") {
+            tokens.delete(e.tokenId);
+            if (selectedTokenId === e.tokenId) {
+              selectedTokenId = null;
+              renderCharacterPanel();
+            }
+          } else if (e.type === "tokenMoved") {
+            const tok = tokens.get(e.tokenId); if (tok) { tok.pos = e.pos; tok.levelId = e.levelId; if (myRole === "DM") { revealByVisionForToken(ws, tok as any); } }
+          } else if (e.type === "fogRevealed") {
             const set = getRevealed(e.levelId as ID);
             for (const c of e.cells) set.add(cellKey(c));
-          }
-        }
-      }
-      drawFloor();
-      drawGrid();
-      drawWalls();
-      drawObjects();
-      drawAssets();
-      drawTokens();
-      centerOnMyToken();
-      drawMinimap(); positionMinimap();
-      // update UI state based on role
-      try { (updateEditorUI as any)(); } catch {}
-      // auto-reveal around DM token on join to make map visible
-      if (myRole === "DM") {
-        for (const t of tokens.values()) {
-          revealByVisionForToken(ws, t as any);
-        }
-      }
-      drawFog();
-      renderCharacterPanel();
-      // Ask server for locations list after initial sync
-      try { requestLocationsList(); } catch {}
-    } else if ((msg as any).t === "saveData") {
-      const data = (msg as any).snapshot;
-      const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
-      const a = document.createElement("a");
-      const ts = new Date().toISOString().replace(/[:.]/g, "-");
-      a.href = URL.createObjectURL(blob);
-      a.download = `dnd-location-${ts}.json`;
-      a.click();
-      URL.revokeObjectURL(a.href);
-    } else if ((msg as any).t === "reset") {
-      const snap = (msg as any).snapshot as { location: Location; tokens: Token[]; assets: Asset[]; floors?: { levelId: ID; pos: Vec2; kind: FloorKind }[]; events?: any[] };
-      // apply snapshot fresh
-      playerId = playerId; // unchanged
-      myRole = myRole; // unchanged
-      currentLocation = snap.location;
-      // Update HUD map name and URL with location ID
-      try {
-        mapInfoEl.textContent = `Карта: ${currentLocation?.name ?? "—"}`;
-        if (currentLocation?.id) {
-          const url = new URL(window.location.href);
-          url.searchParams.set("loc", currentLocation.id);
-          history.replaceState(null, "", url.toString());
-        }
-      } catch {}
-      tokens.clear();
-      for (const t of snap.tokens) {
-        tokens.set(t.id, t);
-      }
-      // pick my token if exists
-      myTokenId = null;
-      for (const t of snap.tokens) { if (t.owner === playerId) { myTokenId = t.id; break; } }
-      // ensure level id/seed
-      levelId = myTokenId ? tokens.get(myTokenId!)?.levelId ?? null : (currentLocation?.levels[0]?.id ?? null);
-      if (currentLocation && levelId) {
-        const lvl = currentLocation.levels.find(l => l.id === levelId);
-        currentSeed = lvl?.seed ?? null;
-      }
-      // assets
-      assets.clear();
-      for (const a of snap.assets) assets.set(a.id, a);
-      // floors
-      floorsByLevel.clear();
-      if (Array.isArray(snap.floors)) {
-        for (const f of snap.floors) setFloorOverride(f.levelId, f.pos, f.kind);
-      }
-      // fog
-      revealedByLevel.clear();
-      if (Array.isArray(snap.events)) {
-        for (const e of snap.events) {
-          if ((e as any).type === "fogRevealed") {
+          } else if ((e as any).type === "fogObscured") {
             const set = getRevealed((e as any).levelId as ID);
-            for (const c of (e as any).cells) set.add(cellKey(c));
-          }
-        }
-      }
-      drawFloor();
-      drawGrid();
-      drawWalls();
-      drawObjects();
-      drawAssets();
-      drawTokens();
-      centerOnMyToken();
-      drawMinimap(); positionMinimap();
-      drawFog();
-      renderCharacterPanel();
-      // ensure locations list is refreshed after switching/creating maps
-      try { requestLocationsList(); } catch {}
-    } else if (msg.t === "statePatch") {
-      for (const e of msg.events) {
-        if (e.type === "tokenSpawned") {
-          tokens.set(e.token.id, e.token);
-          if (e.token.owner === playerId) {
-            myTokenId = e.token.id;
-            levelId = e.token.levelId;
-          }
-          if (myRole === "DM") {
-            revealByVisionForToken(ws, e.token as any);
-          }
-        } else if (e.type === "tokenRemoved") {
-          tokens.delete(e.tokenId);
-          if (selectedTokenId === e.tokenId) {
-            selectedTokenId = null;
-            renderCharacterPanel();
-          }
-        } else if (e.type === "tokenMoved") {
-          const tok = tokens.get(e.tokenId); if (tok) { tok.pos = e.pos; tok.levelId = e.levelId; if (myRole === "DM") { revealByVisionForToken(ws, tok as any); } }
-        } else if (e.type === "fogRevealed") {
-          const set = getRevealed(e.levelId as ID);
-          for (const c of e.cells) set.add(cellKey(c));
-        } else if ((e as any).type === "fogObscured") {
-          const set = getRevealed((e as any).levelId as ID);
-          for (const c of (e as any).cells) set.delete(cellKey(c));
-        } else if ((e as any).type === "assetPlaced") {
-          const a = (e as any).asset as Asset;
-          assets.set(a.id, a);
-        } else if ((e as any).type === "assetRemoved") {
-          const id = (e as any).assetId as ID;
-          assets.delete(id);
-        } else if ((e as any).type === "floorPainted") {
-          const ev = e as any as { levelId: ID; pos: Vec2; kind: FloorKind | null };
-          setFloorOverride(ev.levelId, ev.pos, ev.kind ?? null);
-        } else if ((e as any).type === "tokenUpdated") {
-          const anyE: any = e as any;
-          if (anyE.token) {
-            const full: any = anyE.token;
-            tokens.set(full.id, full);
-            if (myRole === "DM") revealByVisionForToken(ws, full as any);
-          } else {
-            const ev = e as any as { type: string; tokenId: ID; patch: any };
-            const t = tokens.get(ev.tokenId);
-            if (t) {
-              Object.assign(t, ev.patch || {});
-              if (myRole === "DM") revealByVisionForToken(ws, t as any);
-            }
-          }
-        }
-      }
-      drawTokens();
-      drawAssets();
-      drawFloor();
-      drawGrid();
-      drawWalls();
-      drawFog();
-      drawMinimap();
-    } else if (msg.t === "locationsTree") {
-      try {
-        const hasDemo = (() => {
-          const exists = (nodes: any[]): boolean => {
-            for (const n of nodes) {
-              if ((n as any).type === "file") {
-                const p = String((n as any).path || "").toLowerCase();
-                if ((n as any).name === "demo-location2" || p === "demo-location2.json" || p.endsWith("/demo-location2.json")) return true;
+            for (const c of (e as any).cells) set.delete(cellKey(c));
+          } else if ((e as any).type === "assetPlaced") {
+            const a = (e as any).asset as Asset;
+            assets.set(a.id, a);
+          } else if ((e as any).type === "assetRemoved") {
+            const id = (e as any).assetId as ID;
+            assets.delete(id);
+          } else if ((e as any).type === "floorPainted") {
+            const ev = e as any as { levelId: ID; pos: Vec2; kind: FloorKind | null };
+            setFloorOverride(ev.levelId, ev.pos, ev.kind ?? null);
+          } else if ((e as any).type === "tokenUpdated") {
+            const anyE: any = e as any;
+            if (anyE.token) {
+              const full: any = anyE.token;
+              tokens.set(full.id, full);
+              if (myRole === "DM") revealByVisionForToken(ws, full as any);
+            } else {
+              const ev = e as any as { type: string; tokenId: ID; patch: any };
+              const t = tokens.get(ev.tokenId);
+              if (t) {
+                Object.assign(t, ev.patch || {});
+                if (myRole === "DM") revealByVisionForToken(ws, t as any);
               }
-              if ((n as any).children?.length && exists((n as any).children)) return true;
             }
-            return false;
-          };
-          return exists((msg as any).tree || []);
-        })();
-        console.debug(`[LOC][client] received locationsTree: nodes=${(msg as any).tree?.length ?? 0}, lastUsed=${msg.lastUsedPath ?? ""}, has demo-location2=${hasDemo}`);
-      } catch {}
-      lastUsedLocationPath = msg.lastUsedPath;
-      if (lastUsedLocationPath) addRecent(lastUsedLocationPath);
-      renderLocationsTree(msg.tree, lastUsedLocationPath);
-    } else if (msg.t === "savedOk") {
-      // lightweight toast and refresh locations list
-      hudToast(`Сохранено: ${msg.path}`);
-      addRecent(msg.path);
-      try { requestLocationsList(); } catch {}
-    } else if ((msg as any).t === "error") {
-      // show error toast for server-side failures
-      try { hudToast(`Ошибка: ${(msg as any).message || "неизвестная ошибка"}`); } catch {}
+          }
+        }
+        drawTokens();
+        drawAssets();
+        drawFloor();
+        drawGrid();
+        drawWalls();
+        drawFog();
+        drawMinimap();
+      } else if (msg.t === "locationsTree") {
+        try {
+          const hasDemo = (() => {
+            const exists = (nodes: any[]): boolean => {
+              for (const n of nodes) {
+                if ((n as any).type === "file") {
+                  const p = String((n as any).path || "").toLowerCase();
+                  if ((n as any).name === "demo-location2" || p === "demo-location2.json" || p.endsWith("/demo-location2.json")) return true;
+                }
+                if ((n as any).children?.length && exists((n as any).children)) return true;
+              }
+              return false;
+            };
+            return exists((msg as any).tree || []);
+          })();
+          console.debug(`[LOC][client] received locationsTree: nodes=${(msg as any).tree?.length ?? 0}, lastUsed=${msg.lastUsedPath ?? ""}, has demo-location2=${hasDemo}`);
+        } catch {}
+        lastUsedLocationPath = msg.lastUsedPath;
+        if (lastUsedLocationPath) addRecent(lastUsedLocationPath);
+        renderLocationsTree(msg.tree, lastUsedLocationPath);
+      } else if (msg.t === "savedOk") {
+        // lightweight toast and refresh locations list
+        hudToast(`Сохранено: ${msg.path}`);
+        addRecent(msg.path);
+        try { requestLocationsList(); } catch {}
+      } else if ((msg as any).t === "error") {
+        // show error toast for server-side failures
+        try { hudToast(`Ошибка: ${(msg as any).message || "неизвестная ошибка"}`); } catch {}
+      }
+    });
+    ws.addEventListener("close", (ev) => {
+      (statusEl as HTMLDivElement).textContent = "WS: disconnected";
+      try { console.warn(`[WS][client] disconnected from :${port} code=${(ev as any)?.code}`); } catch {}
+      setTimeout(() => { tryConnectSequence(); }, 1000);
+    });
+    ws.addEventListener("error", () => { (statusEl as HTMLDivElement).textContent = "WS: error"; });
+  };
+
+  async function tryConnectSequence() {
+    if (connecting) return;
+    connecting = true;
+    while (true) {
+      const port = currentPort;
+      const wsUrl = `${protocol}://${host}:${port}/ws?inv=${encodeURIComponent(inv)}`;
+      try { console.debug(`[WS][client] trying ${wsUrl}`); } catch {}
+      (statusEl as HTMLDivElement).textContent = `WS: connecting (:${port})...`;
+      const ws = new WebSocket(wsUrl);
+      socket = ws;
+      const opened = await new Promise<boolean>((resolve) => {
+        let done = false;
+        const ok = () => { if (done) return; done = true; resolve(true); };
+        const fail = () => { if (done) return; done = true; resolve(false); };
+        ws.addEventListener("open", ok, { once: true } as any);
+        ws.addEventListener("error", fail, { once: true } as any);
+        ws.addEventListener("close", fail, { once: true } as any);
+      });
+      if (opened) {
+        (statusEl as HTMLDivElement).textContent = "WS: connected";
+        try { console.log(`[WS][client] connected on :${port}`); } catch {}
+        const joinMsg: ClientToServer = { t: "join", name: "Player", invite: inv } as any;
+        ws.send(JSON.stringify(joinMsg));
+        attachHandlers(ws, port);
+        connecting = false;
+        return;
+      } else {
+        try { console.warn(`[WS][client] failed to connect on :${port}`); } catch {}
+        currentPort = port + 1 > endPort ? startPort : (port + 1);
+        await delay(500);
+      }
     }
-  });
-  ws.addEventListener("close", () => { statusEl.textContent = "WS: disconnected"; });
-  ws.addEventListener("error", () => { statusEl.textContent = "WS: error"; });
+  }
+
+  try { console.debug(`[WS][client] connect(): scanning ports ${startPort}-${endPort}`); } catch {}
+  tryConnectSequence();
 
   // Left panel controls
   const btnCursor = document.getElementById("btn-tool-cursor") as HTMLButtonElement | null;

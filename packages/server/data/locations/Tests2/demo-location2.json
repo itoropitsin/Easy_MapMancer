@@ -71,7 +71,7 @@
       "levelId": "L1",
       "pos": {
         "x": 0,
-        "y": 2
+        "y": 5
       },
       "vision": {
         "radius": 8,
@@ -353,6 +353,24 @@
         "y": 0
       },
       "kind": "rock"
+    },
+    {
+      "id": "a-66f4771f-b018-4e56-ab9b-9e9ca6d1de69",
+      "levelId": "L1",
+      "pos": {
+        "x": 5,
+        "y": 3
+      },
+      "kind": "bow"
+    },
+    {
+      "id": "a-13c281f7-2d90-4ad7-860c-36654e4e9b0b",
+      "levelId": "L1",
+      "pos": {
+        "x": 4,
+        "y": 3
+      },
+      "kind": "sword"
     }
   ],
   "events": [
@@ -914,7 +932,7 @@
         "x": 2,
         "y": 3
       },
-      "kind": "wood"
+      "kind": "stone"
     },
     {
       "levelId": "L1",
@@ -1818,7 +1836,7 @@
         "x": -6,
         "y": 8
       },
-      "kind": "sand"
+      "kind": "stone"
     },
     {
       "levelId": "L1",
@@ -1826,20 +1844,44 @@
         "x": -7,
         "y": 8
       },
-      "kind": "sand"
+      "kind": "stone"
     },
     {
       "levelId": "L1",
       "pos": {
-        "x": -7,
+        "x": 2,
+        "y": 2
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": 1,
+        "y": 6
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -8,
         "y": 8
       },
-      "kind": "sand"
+      "kind": "stone"
     },
     {
       "levelId": "L1",
       "pos": {
-        "x": -6,
+        "x": -9,
+        "y": 8
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -11,
         "y": 6
       },
       "kind": "stone"
@@ -1847,7 +1889,31 @@
     {
       "levelId": "L1",
       "pos": {
-        "x": -2,
+        "x": -10,
+        "y": 6
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -9,
+        "y": 6
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -8,
+        "y": 6
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -11,
         "y": 7
       },
       "kind": "stone"
@@ -1855,192 +1921,2185 @@
     {
       "levelId": "L1",
       "pos": {
-        "x": -7,
-        "y": -1
-      },
-      "kind": "stone"
-    },
-    {
-      "levelId": "L1",
-      "pos": {
-        "x": -7,
-        "y": 0
-      },
-      "kind": "stone"
-    },
-    {
-      "levelId": "L1",
-      "pos": {
-        "x": -7,
-        "y": 1
-      },
-      "kind": "stone"
-    },
-    {
-      "levelId": "L1",
-      "pos": {
-        "x": -7,
-        "y": 2
-      },
-      "kind": "stone"
-    },
-    {
-      "levelId": "L1",
-      "pos": {
-        "x": -7,
-        "y": 3
-      },
-      "kind": "stone"
-    },
-    {
-      "levelId": "L1",
-      "pos": {
-        "x": -8,
-        "y": 0
-      },
-      "kind": "stone"
-    },
-    {
-      "levelId": "L1",
-      "pos": {
-        "x": -8,
-        "y": 1
-      },
-      "kind": "stone"
-    },
-    {
-      "levelId": "L1",
-      "pos": {
-        "x": -8,
-        "y": 2
-      },
-      "kind": "stone"
-    },
-    {
-      "levelId": "L1",
-      "pos": {
-        "x": -8,
-        "y": 3
-      },
-      "kind": "stone"
-    },
-    {
-      "levelId": "L1",
-      "pos": {
-        "x": -7,
-        "y": 4
-      },
-      "kind": "stone"
-    },
-    {
-      "levelId": "L1",
-      "pos": {
-        "x": -7,
-        "y": 5
-      },
-      "kind": "stone"
-    },
-    {
-      "levelId": "L1",
-      "pos": {
-        "x": -7,
-        "y": 6
-      },
-      "kind": "stone"
-    },
-    {
-      "levelId": "L1",
-      "pos": {
-        "x": -9,
-        "y": 2
-      },
-      "kind": "stone"
-    },
-    {
-      "levelId": "L1",
-      "pos": {
-        "x": -8,
-        "y": -1
-      },
-      "kind": "stone"
-    },
-    {
-      "levelId": "L1",
-      "pos": {
-        "x": -7,
-        "y": -2
-      },
-      "kind": "stone"
-    },
-    {
-      "levelId": "L1",
-      "pos": {
-        "x": -7,
-        "y": -3
-      },
-      "kind": "stone"
-    },
-    {
-      "levelId": "L1",
-      "pos": {
-        "x": -9,
-        "y": -1
-      },
-      "kind": "stone"
-    },
-    {
-      "levelId": "L1",
-      "pos": {
-        "x": -9,
-        "y": 0
-      },
-      "kind": "stone"
-    },
-    {
-      "levelId": "L1",
-      "pos": {
-        "x": -9,
-        "y": 1
-      },
-      "kind": "stone"
-    },
-    {
-      "levelId": "L1",
-      "pos": {
-        "x": -1,
-        "y": 3
-      },
-      "kind": "stone"
-    },
-    {
-      "levelId": "L1",
-      "pos": {
-        "x": -1,
-        "y": 4
-      },
-      "kind": "stone"
-    },
-    {
-      "levelId": "L1",
-      "pos": {
-        "x": -1,
-        "y": 5
-      },
-      "kind": "stone"
-    },
-    {
-      "levelId": "L1",
-      "pos": {
-        "x": -1,
-        "y": 6
-      },
-      "kind": "stone"
-    },
-    {
-      "levelId": "L1",
-      "pos": {
-        "x": -1,
+        "x": -10,
         "y": 7
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -9,
+        "y": 7
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -8,
+        "y": 7
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -11,
+        "y": 8
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -10,
+        "y": 8
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -11,
+        "y": 9
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -10,
+        "y": 9
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -9,
+        "y": 9
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -8,
+        "y": 9
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -12,
+        "y": 6
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -12,
+        "y": 7
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -12,
+        "y": 8
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -12,
+        "y": 9
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -13,
+        "y": 6
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -13,
+        "y": 7
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -13,
+        "y": 8
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -13,
+        "y": 9
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -14,
+        "y": 6
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -14,
+        "y": 7
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -14,
+        "y": 8
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -14,
+        "y": 9
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -15,
+        "y": 6
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -15,
+        "y": 7
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -15,
+        "y": 8
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -15,
+        "y": 9
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -16,
+        "y": 6
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -16,
+        "y": 7
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -16,
+        "y": 8
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -16,
+        "y": 9
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -17,
+        "y": 6
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -17,
+        "y": 7
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -17,
+        "y": 8
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -17,
+        "y": 9
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -18,
+        "y": 6
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -18,
+        "y": 7
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -18,
+        "y": 8
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -18,
+        "y": 9
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -19,
+        "y": 6
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -19,
+        "y": 7
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -19,
+        "y": 8
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -19,
+        "y": 9
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -20,
+        "y": 6
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -20,
+        "y": 7
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -20,
+        "y": 8
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -20,
+        "y": 9
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -21,
+        "y": 6
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -21,
+        "y": 7
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -21,
+        "y": 8
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -21,
+        "y": 9
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -22,
+        "y": 6
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -22,
+        "y": 7
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -22,
+        "y": 8
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -22,
+        "y": 9
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -23,
+        "y": 6
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -23,
+        "y": 7
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -23,
+        "y": 8
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -23,
+        "y": 9
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -24,
+        "y": 6
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -24,
+        "y": 7
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -24,
+        "y": 8
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -24,
+        "y": 9
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -25,
+        "y": 6
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -25,
+        "y": 7
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -25,
+        "y": 8
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -25,
+        "y": 9
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -26,
+        "y": 6
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -26,
+        "y": 7
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -26,
+        "y": 8
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -26,
+        "y": 9
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -27,
+        "y": 6
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -27,
+        "y": 7
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -27,
+        "y": 8
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -27,
+        "y": 9
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -28,
+        "y": 6
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -28,
+        "y": 7
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -28,
+        "y": 8
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -28,
+        "y": 9
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -29,
+        "y": 6
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -29,
+        "y": 7
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -29,
+        "y": 8
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -29,
+        "y": 9
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -30,
+        "y": 5
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -29,
+        "y": 5
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -28,
+        "y": 5
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -27,
+        "y": 5
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -30,
+        "y": 6
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -30,
+        "y": 7
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -30,
+        "y": 8
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -31,
+        "y": 5
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -31,
+        "y": 6
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -31,
+        "y": 7
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -31,
+        "y": 8
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -33,
+        "y": 4
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -32,
+        "y": 4
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -31,
+        "y": 4
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -30,
+        "y": 4
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -33,
+        "y": 5
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -32,
+        "y": 5
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -33,
+        "y": 6
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -32,
+        "y": 6
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -33,
+        "y": 7
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -32,
+        "y": 7
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -29,
+        "y": 4
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -28,
+        "y": 4
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -27,
+        "y": 4
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -34,
+        "y": 4
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -34,
+        "y": 5
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -34,
+        "y": 6
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -34,
+        "y": 7
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -35,
+        "y": 4
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -35,
+        "y": 5
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -35,
+        "y": 6
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -35,
+        "y": 7
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -36,
+        "y": 4
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -36,
+        "y": 5
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -36,
+        "y": 6
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -36,
+        "y": 7
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -37,
+        "y": 4
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -37,
+        "y": 5
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -37,
+        "y": 6
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -37,
+        "y": 7
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -38,
+        "y": 4
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -38,
+        "y": 5
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -38,
+        "y": 6
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -38,
+        "y": 7
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -39,
+        "y": 4
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -39,
+        "y": 5
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -39,
+        "y": 6
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -39,
+        "y": 7
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -40,
+        "y": 4
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -40,
+        "y": 5
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -40,
+        "y": 6
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -40,
+        "y": 7
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -41,
+        "y": 4
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -41,
+        "y": 5
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -41,
+        "y": 6
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -41,
+        "y": 7
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -42,
+        "y": 4
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -42,
+        "y": 5
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -42,
+        "y": 6
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -42,
+        "y": 7
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -43,
+        "y": 4
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -43,
+        "y": 5
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -43,
+        "y": 6
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -43,
+        "y": 7
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -44,
+        "y": 4
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -44,
+        "y": 5
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -44,
+        "y": 6
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -44,
+        "y": 7
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -45,
+        "y": 4
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -45,
+        "y": 5
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -45,
+        "y": 6
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -45,
+        "y": 7
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -45,
+        "y": 3
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -44,
+        "y": 3
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -43,
+        "y": 3
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -42,
+        "y": 3
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -46,
+        "y": 3
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -46,
+        "y": 4
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -46,
+        "y": 5
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -46,
+        "y": 6
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -47,
+        "y": 3
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -47,
+        "y": 4
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -47,
+        "y": 5
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -47,
+        "y": 6
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -48,
+        "y": 3
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -48,
+        "y": 4
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -48,
+        "y": 5
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -48,
+        "y": 6
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -49,
+        "y": 3
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -49,
+        "y": 4
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -49,
+        "y": 5
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -49,
+        "y": 6
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -50,
+        "y": 3
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -50,
+        "y": 4
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -50,
+        "y": 5
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -50,
+        "y": 6
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -51,
+        "y": 3
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -51,
+        "y": 4
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -51,
+        "y": 5
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -51,
+        "y": 6
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -52,
+        "y": 3
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -52,
+        "y": 4
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -52,
+        "y": 5
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -52,
+        "y": 6
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -53,
+        "y": 3
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -53,
+        "y": 4
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -53,
+        "y": 5
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -53,
+        "y": 6
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -54,
+        "y": 3
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -54,
+        "y": 4
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -54,
+        "y": 5
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -54,
+        "y": 6
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -55,
+        "y": 3
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -55,
+        "y": 4
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -55,
+        "y": 5
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -55,
+        "y": 6
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -56,
+        "y": 3
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -56,
+        "y": 4
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -56,
+        "y": 5
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -56,
+        "y": 6
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -57,
+        "y": 3
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -57,
+        "y": 4
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -57,
+        "y": 5
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -57,
+        "y": 6
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -58,
+        "y": 3
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -58,
+        "y": 4
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -58,
+        "y": 5
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -58,
+        "y": 6
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -59,
+        "y": 3
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -59,
+        "y": 4
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -59,
+        "y": 5
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -59,
+        "y": 6
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -60,
+        "y": 3
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -60,
+        "y": 4
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -60,
+        "y": 5
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -60,
+        "y": 6
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -61,
+        "y": 3
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -61,
+        "y": 4
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -61,
+        "y": 5
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -61,
+        "y": 6
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -62,
+        "y": 3
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -62,
+        "y": 4
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -62,
+        "y": 5
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -62,
+        "y": 6
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -63,
+        "y": 3
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -63,
+        "y": 4
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -63,
+        "y": 5
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -63,
+        "y": 6
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -64,
+        "y": 3
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -64,
+        "y": 4
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -64,
+        "y": 5
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -64,
+        "y": 6
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -65,
+        "y": 3
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -65,
+        "y": 4
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -65,
+        "y": 5
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -65,
+        "y": 6
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -66,
+        "y": 3
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -66,
+        "y": 4
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -66,
+        "y": 5
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -66,
+        "y": 6
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -67,
+        "y": 3
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -67,
+        "y": 4
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -67,
+        "y": 5
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -67,
+        "y": 6
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -68,
+        "y": 3
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -68,
+        "y": 4
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -68,
+        "y": 5
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -68,
+        "y": 6
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -69,
+        "y": 3
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -69,
+        "y": 4
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -69,
+        "y": 5
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -69,
+        "y": 6
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -70,
+        "y": 3
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -70,
+        "y": 4
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -70,
+        "y": 5
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -70,
+        "y": 6
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -71,
+        "y": 3
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -71,
+        "y": 4
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -71,
+        "y": 5
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -71,
+        "y": 6
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -72,
+        "y": 3
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -72,
+        "y": 4
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -72,
+        "y": 5
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -72,
+        "y": 6
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -73,
+        "y": 3
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -73,
+        "y": 4
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -73,
+        "y": 5
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -73,
+        "y": 6
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -74,
+        "y": 3
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -74,
+        "y": 4
+      },
+      "kind": "stone"
+    }
+  ]
+}{
+      "levelId": "L1",
+      "pos": {
+        "x": -74,
+        "y": 5
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "L1",
+      "pos": {
+        "x": -74,
+        "y": 6
       },
       "kind": "stone"
     }

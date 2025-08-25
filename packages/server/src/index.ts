@@ -985,11 +985,47 @@ async function start() {
     res.writeHead(200, { "Content-Type": "text/plain" });
     res.end("DnD Server is running\n");
   });
+  // Port listen with retry: if in use, increment port until a free one is found (bounded range)
+  let selectedPort = PORT;
+  const maxPort = Number(process.env.MAX_PORT || (PORT + 20));
+  let attempts = 0;
+  while (true) {
+    attempts++;
+    try {
+      try { console.log(`[server] attempting to listen on http://localhost:${selectedPort} (attempt ${attempts})`); } catch {}
+      await new Promise<void>((resolve, reject) => {
+        const onListening = () => {
+          server.off("error", onError);
+          resolve();
+        };
+        const onError = (err: any) => {
+          server.off("listening", onListening);
+          reject(err);
+        };
+        server.once("listening", onListening);
+        server.once("error", onError);
+        server.listen(selectedPort);
+      });
+      break; // success
+    } catch (err: any) {
+      if (err && err.code === "EADDRINUSE") {
+        try { console.warn(`[server] port ${selectedPort} is in use, trying next...`); } catch {}
+        selectedPort++;
+        if (selectedPort > maxPort) {
+          throw new Error(`[server] No free port found in range ${PORT}-${maxPort}`);
+        }
+        continue;
+      }
+      throw err; // other errors
+    }
+  }
+  // Only create WebSocket server once HTTP server is bound successfully
   const wss = new WebSocketServer({ server, path: "/ws" });
   wss.on("connection", onConnection);
-  server.listen(PORT, () => {
-    console.log(`[server] listening on http://localhost:${PORT}`);
+  wss.on("error", (err) => {
+    try { console.warn(`[server][wss] error: ${String((err as any)?.message || err)}`); } catch {}
   });
+  console.log(`[server] listening on http://localhost:${selectedPort}`);
 }
 
 start();
