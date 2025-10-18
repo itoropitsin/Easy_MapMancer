@@ -78,12 +78,15 @@ let myRole: "DM" | "PLAYER" | null = null;
 const revealedByLevel: Map<ID, Set<string>> = new Map();
 const assets = new Map<ID, Asset>();
 let editorMode: "cursor" | "paint" | "eraseObjects" | "eraseSpace" | "revealFog" | "eraseFog" | "eraseTokens" | "spawnToken" = "cursor";
+type EditorMode = typeof editorMode;
+const BRUSH_MODES: EditorMode[] = ["paint", "eraseObjects", "eraseSpace", "revealFog", "eraseFog"];
 let selectedTokenId: ID | null = null;
 let selectedAssetKind: string | null = null; // when null, floor tools may be used
 let selectedFloorKind: FloorKind | null = null;
 let selectedTokenKind: "player" | "npc" | null = null;
 let painting = false;
 let lastPaintKey: string | null = null;
+let lastPaintCell: Vec2 | null = null;
 let brushSize: 1 | 2 | 3 | 4 = 1;
 let locationsExpanded = new Set<string>();
 let lastUsedLocationPath: string | undefined;
@@ -111,6 +114,103 @@ function brushCells(center: Vec2, size: 1 | 2 | 3 | 4): Vec2[] {
     }
   }
   return cells;
+}
+
+function resolveActiveLevel(): ID | null {
+  return levelId || (currentLocation?.levels?.[0]?.id as ID | undefined) || null;
+}
+
+type BrushResult = { acted: boolean; touchedFloor: boolean };
+
+function cellsBetween(a: Vec2, b: Vec2): Vec2[] {
+  const out: Vec2[] = [];
+  let x = a.x;
+  let y = a.y;
+  const dx = Math.abs(b.x - a.x);
+  const dy = Math.abs(b.y - a.y);
+  const sx = a.x < b.x ? 1 : -1;
+  const sy = a.y < b.y ? 1 : -1;
+  let err = dx - dy;
+  while (x !== b.x || y !== b.y) {
+    const e2 = err * 2;
+    if (e2 > -dy) { err -= dy; x += sx; }
+    if (e2 < dx) { err += dx; y += sy; }
+    out.push({ x, y });
+  }
+  return out;
+}
+
+function applyBrushAtCell(cell: Vec2): BrushResult {
+  let acted = false;
+  let touchedFloor = false;
+  const cells = brushCells(cell, brushSize);
+  if (editorMode === "paint") {
+    const lvl = resolveActiveLevel();
+    if (!lvl) return { acted, touchedFloor };
+    if (!levelId) levelId = lvl;
+    for (const c of cells) {
+      if (selectedFloorKind) {
+        setFloorOverride(lvl, c, selectedFloorKind);
+        touchedFloor = true;
+        acted = true;
+        if (socket) {
+          const msg: ClientToServer = { t: "paintFloor", levelId: lvl, pos: c, kind: selectedFloorKind };
+          socket.send(JSON.stringify(msg));
+        }
+      } else if (socket) {
+        const kind = selectedAssetKind ?? "tree";
+        const msg: ClientToServer = { t: "placeAsset", levelId: lvl, pos: c, kind };
+        socket.send(JSON.stringify(msg));
+        acted = true;
+      }
+    }
+    return { acted, touchedFloor };
+  }
+  if (editorMode === "eraseObjects") {
+    const lvl = resolveActiveLevel();
+    if (!socket || !lvl) return { acted, touchedFloor };
+    for (const c of cells) {
+      const msg: ClientToServer = { t: "removeAssetAt", levelId: lvl, pos: c };
+      socket.send(JSON.stringify(msg));
+      acted = true;
+    }
+    return { acted, touchedFloor };
+  }
+  if (editorMode === "eraseSpace") {
+    const lvl = resolveActiveLevel();
+    if (!lvl) return { acted, touchedFloor };
+    for (const c of cells) {
+      if (socket) {
+        const rm: ClientToServer = { t: "removeAssetAt", levelId: lvl, pos: c };
+        socket.send(JSON.stringify(rm));
+      }
+      setFloorOverride(lvl, c, null);
+      touchedFloor = true;
+      acted = true;
+      if (socket) {
+        const fl: ClientToServer = { t: "paintFloor", levelId: lvl, pos: c, kind: null };
+        socket.send(JSON.stringify(fl));
+      }
+    }
+    return { acted, touchedFloor };
+  }
+  if (editorMode === "revealFog") {
+    if (socket && levelId) {
+      const msg: ClientToServer = { t: "revealFog", levelId, cells };
+      socket.send(JSON.stringify(msg));
+      acted = true;
+    }
+    return { acted, touchedFloor };
+  }
+  if (editorMode === "eraseFog") {
+    if (socket && levelId) {
+      const msg: ClientToServer = { t: "obscureFog", levelId, cells };
+      socket.send(JSON.stringify(msg));
+      acted = true;
+    }
+    return { acted, touchedFloor };
+  }
+  return { acted, touchedFloor };
 }
 
 // floors overrides, by levelId -> key -> kind
@@ -1596,92 +1696,27 @@ app.stage.on("pointerdown", (e: any) => {
   if (typeof e.button === "number" && e.button !== 0) return;
   // ignore clicks over minimap
   if (isOverMinimap(e.global.x, e.global.y)) return;
+  const p = world.toLocal(e.global);
+  const cell = snapToGrid(p.x, p.y);
   if (myRole === "DM") {
-    if (editorMode === "paint" || editorMode === "eraseObjects" || editorMode === "eraseSpace" || 
-        editorMode === "revealFog" || editorMode === "eraseFog" || editorMode === "eraseTokens" || editorMode === "spawnToken") {
-      document.body.style.cursor = "crosshair";
-    } else {
-      document.body.style.cursor = dragging ? "grabbing" : "default";
-    }
-    painting = true;
-    lastPaintKey = null;
-    // reset action flag for this pointer sequence
+    const brushActive = BRUSH_MODES.includes(editorMode);
     lastPointerDownDidAct = false;
-    const p = world.toLocal(e.global);
-    const cell = snapToGrid(p.x, p.y);
-    const cells = brushCells(cell, brushSize);
-    if (editorMode === "paint") {
-      const lvl = levelId || (currentLocation?.levels?.[0]?.id as ID | undefined) || null;
-      if (lvl) {
-        if (!levelId) levelId = lvl;
-        let touchedFloor = false;
-        for (const c of cells) {
-          if (selectedFloorKind) {
-            // optimistic local update
-            setFloorOverride(lvl, c, selectedFloorKind);
-            touchedFloor = true;
-            if (socket) {
-              const msg: ClientToServer = { t: "paintFloor", levelId: lvl, pos: c, kind: selectedFloorKind };
-              socket.send(JSON.stringify(msg));
-            }
-          } else {
-            // assets are server-authoritative; only send if socket exists
-            if (socket) {
-              const kind = selectedAssetKind ?? "tree";
-              const msg: ClientToServer = { t: "placeAsset", levelId: lvl, pos: c, kind };
-              socket.send(JSON.stringify(msg));
-            }
-          }
-        }
-        if (touchedFloor) { drawFloor(); drawGrid(); drawFog(); }
-        lastPointerDownDidAct = true;
-      }
-    } else if (editorMode === "eraseObjects") {
-      const lvl = levelId || (currentLocation?.levels?.[0]?.id as ID | undefined) || null;
-      if (socket && lvl) {
-        for (const c of cells) {
-          const msg: ClientToServer = { t: "removeAssetAt", levelId: lvl, pos: c };
-          socket.send(JSON.stringify(msg));
-        }
-        lastPointerDownDidAct = true;
-      }
-    } else if (editorMode === "eraseSpace") {
-      const lvl = levelId || (currentLocation?.levels?.[0]?.id as ID | undefined) || null;
-      if (lvl) {
-        let touchedFloor = false;
-        for (const c of cells) {
-          if (socket) {
-            const rm: ClientToServer = { t: "removeAssetAt", levelId: lvl, pos: c };
-            socket.send(JSON.stringify(rm));
-          }
-          // optimistic local floor removal
-          setFloorOverride(lvl, c, null);
-          touchedFloor = true;
-          if (socket) {
-            const fl: ClientToServer = { t: "paintFloor", levelId: lvl, pos: c, kind: null };
-            socket.send(JSON.stringify(fl));
-          }
-        }
-        if (touchedFloor) { drawFloor(); drawGrid(); drawFog(); }
-        lastPointerDownDidAct = true;
-      }
-    } else if (editorMode === "revealFog") {
-      if (socket && levelId) {
-        const msg: ClientToServer = { t: "revealFog", levelId, cells };
-        socket.send(JSON.stringify(msg));
-        lastPointerDownDidAct = true;
-      }
-    } else if (editorMode === "eraseFog") {
-      if (socket && levelId) {
-        const msg: ClientToServer = { t: "obscureFog", levelId, cells };
-        socket.send(JSON.stringify(msg));
-        lastPointerDownDidAct = true;
-      }
-    } else if (editorMode === "spawnToken") {
-      // place a single token at the clicked cell, then return to cursor mode
+    if (brushActive) {
+      document.body.style.cursor = "crosshair";
+      painting = true;
+      lastPaintKey = null;
+      lastPaintCell = null;
+      const result = applyBrushAtCell(cell);
+      if (result.touchedFloor) { drawFloor(); drawGrid(); drawFog(); }
+      if (result.acted) lastPointerDownDidAct = true;
+      lastPaintCell = cell;
+      lastPaintKey = cellKey(cell);
+      e.stopPropagation?.();
+      return;
+    }
+    if (editorMode === "spawnToken") {
+      document.body.style.cursor = "crosshair";
       if (socket && levelId && selectedTokenKind) {
-        const p = world.toLocal(e.global);
-        const cell = snapToGrid(p.x, p.y);
         const kind = selectedTokenKind;
         const msg: ClientToServer = { t: "spawnToken", kind, levelId, pos: cell };
         socket.send(JSON.stringify(msg));
@@ -1691,10 +1726,12 @@ app.stage.on("pointerdown", (e: any) => {
         editorMode = "cursor";
         document.body.style.cursor = dragging ? "grabbing" : "default";
       }
+      e.stopPropagation?.();
+      return;
     }
-    lastPaintKey = cellKey(cell);
-    e.stopPropagation?.();
-    return;
+    painting = false;
+    lastPaintCell = null;
+    lastPaintKey = null;
   }
   panning = { startX: e.global.x, startY: e.global.y, worldX: world.position.x, worldY: world.position.y };
   document.body.style.cursor = "grabbing";
@@ -1707,95 +1744,41 @@ app.stage.on("pointertap", (e: any) => {
   if (myRole !== "DM") return;
   // Only handle paint tool here to avoid duplicating other actions; also avoid duplicates if pointerdown already acted
   if (editorMode !== "paint" || !selectedFloorKind || lastPointerDownDidAct) return;
-  const lvlTap = levelId || (currentLocation?.levels?.[0]?.id as ID | undefined) || null;
+  const lvlTap = resolveActiveLevel();
   if (!lvlTap) return;
   if (!levelId) levelId = lvlTap;
   const p = world.toLocal(e.global);
   const cell = snapToGrid(p.x, p.y);
-  const cells = brushCells(cell, brushSize);
-  let touchedFloor = false;
-  for (const c of cells) {
-    setFloorOverride(lvlTap, c, selectedFloorKind);
-    touchedFloor = true;
-    if (socket) {
-      const msg: ClientToServer = { t: "paintFloor", levelId: lvlTap, pos: c, kind: selectedFloorKind };
-      socket.send(JSON.stringify(msg));
-    }
-  }
-  if (touchedFloor) { drawFloor(); drawGrid(); drawFog(); }
+  const result = applyBrushAtCell(cell);
+  if (result.touchedFloor) { drawFloor(); drawGrid(); drawFog(); }
+  if (result.acted) lastPointerDownDidAct = true;
+  lastPaintCell = cell;
+  lastPaintKey = cellKey(cell);
 });
 app.stage.on("pointermove", (e: any) => {
   if (painting) {
     const p = world.toLocal(e.global);
     const cell = snapToGrid(p.x, p.y);
     const key = cellKey(cell);
-    if (key !== lastPaintKey) {
-      const cells = brushCells(cell, brushSize);
-      if (editorMode === "paint") {
-        const lvl = levelId || (currentLocation?.levels?.[0]?.id as ID | undefined) || null;
-        if (lvl) {
-          if (!levelId) levelId = lvl;
-          let touchedFloor = false;
-          for (const c of cells) {
-            if (selectedFloorKind) {
-              // optimistic local update
-              setFloorOverride(lvl, c, selectedFloorKind);
-              touchedFloor = true;
-              if (socket) {
-                const msg: ClientToServer = { t: "paintFloor", levelId: lvl, pos: c, kind: selectedFloorKind };
-                socket.send(JSON.stringify(msg));
-              }
-            } else {
-              // assets are server-authoritative; only send if socket exists
-              if (socket) {
-                const kind = selectedAssetKind ?? "tree";
-                const msg: ClientToServer = { t: "placeAsset", levelId: lvl, pos: c, kind };
-                socket.send(JSON.stringify(msg));
-              }
-            }
-          }
-          if (touchedFloor) { drawFloor(); drawGrid(); drawFog(); }
-        }
-      } else if (editorMode === "eraseObjects") {
-        const lvl = levelId || (currentLocation?.levels?.[0]?.id as ID | undefined) || null;
-        if (socket && lvl) {
-          for (const c of cells) {
-            const msg: ClientToServer = { t: "removeAssetAt", levelId: lvl, pos: c };
-            socket.send(JSON.stringify(msg));
-          }
-        }
-      } else if (editorMode === "eraseSpace") {
-        const lvl = levelId || (currentLocation?.levels?.[0]?.id as ID | undefined) || null;
-        if (lvl) {
-          let touchedFloor = false;
-          for (const c of cells) {
-            if (socket) {
-              const rm: ClientToServer = { t: "removeAssetAt", levelId: lvl, pos: c };
-              socket.send(JSON.stringify(rm));
-            }
-            // optimistic local floor removal
-            setFloorOverride(lvl, c, null);
-            touchedFloor = true;
-            if (socket) {
-              const fl: ClientToServer = { t: "paintFloor", levelId: lvl, pos: c, kind: null };
-              socket.send(JSON.stringify(fl));
-            }
-          }
-          if (touchedFloor) { drawFloor(); drawGrid(); drawFog(); }
-        }
-      } else if (editorMode === "revealFog") {
-        if (socket && levelId) {
-          const msg: ClientToServer = { t: "revealFog", levelId, cells };
-          socket.send(JSON.stringify(msg));
-        }
-      } else if (editorMode === "eraseFog") {
-        if (socket && levelId) {
-          const msg: ClientToServer = { t: "obscureFog", levelId, cells };
-          socket.send(JSON.stringify(msg));
-        }
-      }
+    if (key === lastPaintKey) return;
+    const prev = lastPaintCell;
+    const steps = prev ? cellsBetween(prev, cell) : [cell];
+    if (steps.length === 0) {
+      lastPaintCell = cell;
       lastPaintKey = key;
+      return;
     }
+    let touchedFloor = false;
+    let acted = false;
+    for (const step of steps) {
+      const result = applyBrushAtCell(step);
+      if (result.touchedFloor) touchedFloor = true;
+      if (result.acted) acted = true;
+    }
+    if (touchedFloor) { drawFloor(); drawGrid(); drawFog(); }
+    if (acted) lastPointerDownDidAct = true;
+    lastPaintCell = cell;
+    lastPaintKey = key;
     return;
   }
   if (!panning) return;
@@ -1808,6 +1791,7 @@ function endPan() {
   if (painting) {
     painting = false;
     lastPaintKey = null;
+    lastPaintCell = null;
     document.body.style.cursor = "default";
   }
   if (!panning) return;

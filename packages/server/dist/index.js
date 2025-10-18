@@ -1,6 +1,6 @@
 import { createServer } from "node:http";
 import { randomUUID } from "node:crypto";
-import { promises as fs } from "node:fs";
+import { promises as fs, statSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { WebSocketServer } from "ws";
@@ -22,7 +22,7 @@ function resolveDataRoot() {
     for (const p of candidates) {
         try {
             // statSync avoids needing async before first use; will throw if not exists
-            const st = require('node:fs').statSync(p);
+            const st = statSync(p);
             if (st && st.isDirectory())
                 return p;
         }
