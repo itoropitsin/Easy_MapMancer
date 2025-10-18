@@ -1,6 +1,6 @@
 import { createServer } from "node:http";
 import { randomUUID } from "node:crypto";
-import { promises as fs } from "node:fs";
+import { promises as fs, statSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { WebSocketServer } from "ws";
@@ -12,7 +12,28 @@ import type { ServerToClient, ClientToServer, Location, Level, Token, Vec2, Role
 const PORT = Number(process.env.PORT || 8080);
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const DATA_ROOT = process.env.LOCATIONS_DIR || path.resolve(__dirname, "../data/locations");
+// Resolve data directory robustly for both dev (tsx) and build (dist):
+// 1) LOCATIONS_DIR env
+// 2) ../data/locations relative to compiled file
+// 3) ../../data/locations (if running from nested dist path)
+function resolveDataRoot(): string {
+  const fromEnv = process.env.LOCATIONS_DIR;
+  if (fromEnv && fromEnv.trim()) return path.resolve(fromEnv);
+  const candidates = [
+    path.resolve(__dirname, "../data/locations"),
+    path.resolve(__dirname, "../../data/locations"),
+  ];
+  for (const p of candidates) {
+    try {
+      // statSync avoids needing async before first use; will throw if not exists
+      const st = statSync(p);
+      if (st && st.isDirectory()) return p;
+    } catch {}
+  }
+  // fallback to first candidate
+  return candidates[0];
+}
+const DATA_ROOT = resolveDataRoot();
 const LAST_USED_FILE = path.resolve(DATA_ROOT, "last-used.json");
 
 // Simple in-memory state
@@ -274,17 +295,22 @@ function onMessage(client: ClientRec, data: any) {
       const kind = (msg as any).kind === "npc" ? "npc" : "player";
       const level: ID = (msg as any).levelId || state.location.levels[0]?.id || "L1";
       const basePos: Vec2 = (msg as any).pos || state.location.levels[0]?.spawnPoint || { x: 5, y: 5 };
-      // clamp inside bounds
-      let pos = clampVec(basePos, { x: 0, y: 0 }, { x: 9, y: 9 });
-      const hasFloor = (() => {
+      // normalize to integer grid
+      let pos: Vec2 = { x: Math.floor(basePos.x), y: Math.floor(basePos.y) };
+      const hasFloorAt = (p: Vec2) => {
         const m = state.floors.get(level);
         if (!m) return false;
-        return m.has(`${pos.x},${pos.y}`);
-      })();
-      // If not land or floor, try to snap to spawnPoint
-      if (!isLand(pos.x, pos.y) && !hasFloor) {
-        const sp = state.location.levels[0]?.spawnPoint || { x: 5, y: 5 };
-        pos = clampVec(sp, { x: 0, y: 0 }, { x: 9, y: 9 });
+        return m.has(`${p.x},${p.y}`);
+      };
+      const hasFloor = hasFloorAt(pos);
+      // If there is no floor override at requested cell, restrict to natural island
+      if (!hasFloor) {
+        pos = clampVec(pos, { x: 0, y: 0 }, { x: 9, y: 9 });
+        if (!isLand(pos.x, pos.y)) {
+          // try to snap to spawnPoint within island
+          const sp = state.location.levels[0]?.spawnPoint || { x: 5, y: 5 };
+          pos = clampVec(sp, { x: 0, y: 0 }, { x: 9, y: 9 });
+        }
       }
       // If occupied, search small spiral for a free nearby cell
       function occupied(p: Vec2): boolean {
@@ -299,13 +325,11 @@ function onMessage(client: ClientRec, data: any) {
           { x: 1, y: 1 }, { x: 1, y: -1 }, { x: -1, y: 1 }, { x: -1, y: -1 },
         ];
         for (const d of dirs) {
-          const p = clampVec({ x: pos.x + d.x, y: pos.y + d.y }, { x: 0, y: 0 }, { x: 9, y: 9 });
-          const hasFloor2 = (() => {
-            const m = state.floors.get(level);
-            if (!m) return false;
-            return m.has(`${p.x},${p.y}`);
-          })();
-          if (!occupied(p) && (isLand(p.x, p.y) || hasFloor2)) { pos = p; break; }
+          let p = { x: pos.x + d.x, y: pos.y + d.y };
+          const hasFloor2 = hasFloorAt(p);
+          // For natural terrain, keep inside island; for floor overrides, allow outside
+          if (!hasFloor2) p = clampVec(p, { x: 0, y: 0 }, { x: 9, y: 9 });
+          if (!occupied(p) && (hasFloor2 || isLand(p.x, p.y))) { pos = p; break; }
         }
       }
       const owner: ID = (msg as any).owner || client.id;
@@ -319,15 +343,23 @@ function onMessage(client: ClientRec, data: any) {
       const tok = state.tokens.get(msg.tokenId);
       if (!tok) return;
       if (client.role !== "DM" && tok.owner !== client.id) return;
-      // Keep inside 10x10 island and only on land
-      const pos = clampVec(msg.pos, { x: 0, y: 0 }, { x: 9, y: 9 });
-      // allow moving onto natural land OR painted floor override
+      // Normalize target to integer grid
+      const target: Vec2 = { x: Math.floor(msg.pos.x), y: Math.floor(msg.pos.y) };
       const hasFloor = (() => {
         const m = state.floors.get(msg.levelId);
         if (!m) return false;
-        return m.has(`${pos.x},${pos.y}`);
+        return m.has(`${target.x},${target.y}`);
       })();
-      if (!isLand(pos.x, pos.y) && !hasFloor) return;
+      let pos: Vec2;
+      if (hasFloor) {
+        // Allow movement anywhere if a floor override exists at the cell
+        pos = target;
+      } else {
+        // Otherwise restrict movement to the natural 10x10 island
+        const clamped = clampVec(target, { x: 0, y: 0 }, { x: 9, y: 9 });
+        if (!isLand(clamped.x, clamped.y)) return;
+        pos = clamped;
+      }
       tok.pos = pos;
       tok.levelId = msg.levelId;
       const events: Event[] = [];

@@ -80,18 +80,19 @@ npm start
 - Клиент (preview): http://localhost:5173
 Можно открыть клиент как DM/Player: `http://localhost:5173/?inv=dm-local` или `?inv=pl-local`.
 
-## Протокол (черновик)
-- Client → Server:
-  - `{ t: "join", name?, invite? }`
-  - `{ t: "moveToken", tokenId, pos:{x,y}, levelId }`
-- Server → Client:
-  - `{ t: "welcome", playerId, role, snapshot }`
-  - `{ t: "statePatch", events: [...] }`
-  - `{ t: "error", message }`
+## Протокол
+Полные типы сообщений описаны в `packages/shared/src/protocol.ts` и повторно используются клиентом. Основные команды:
 
-События (часть):
-- `tokenSpawned { token }`
-- `tokenMoved { tokenId, pos, levelId }`
+- Client → Server:
+  - `join`, `moveToken`, `spawnToken`, `removeTokenAt`
+  - `revealFog`, `obscureFog`
+  - `placeAsset`, `removeAssetAt`, `toggleDoor`
+  - `paintFloor`, `updateToken`
+  - `requestSave`, `loadSnapshot`
+  - `listLocations`, `saveLocation`, `createFolder`, `deleteLocation`, `moveLocation`, `renameFolder`, `loadLocation`
+- Server → Client:
+  - `welcome`, `statePatch`, `saveData`, `reset`, `error`
+  - `locationsTree`, `savedOk`
 
 ## MVP-план ближайших итераций
 - Генерация пола/стен/объектов (чанки 32×32, seed‑детерминированно)
@@ -102,7 +103,7 @@ npm start
 
 ## Заметки
 - Алиасы TS: `@dnd/shared` указывает на `packages/shared/src/` (dev)
-- Граница карты сейчас условная (±50 клеток) и проверяется на сервере
+- Базовая генерация ограничена 10×10 островом; расширяйте зону, рисуя дополнительный пол (floor overrides)
 - Для роли DM используйте инвайт, начинающийся с `dm-` (например, `dm-local`)
 - Клиент может подключаться к серверу на другом порту: `http://localhost:5173/?inv=dm-local&port=9090` (подставит WS `:9090`).
 
@@ -112,4 +113,3 @@ npm start
 
 ## Лицензия
 MIT
-

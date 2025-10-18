@@ -7,7 +7,31 @@ import { WebSocketServer } from "ws";
 const PORT = Number(process.env.PORT || 8080);
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const DATA_ROOT = process.env.LOCATIONS_DIR || path.resolve(__dirname, "../data/locations");
+// Resolve data directory robustly for both dev (tsx) and build (dist):
+// 1) LOCATIONS_DIR env
+// 2) ../data/locations relative to compiled file
+// 3) ../../data/locations (if running from nested dist path)
+function resolveDataRoot() {
+    const fromEnv = process.env.LOCATIONS_DIR;
+    if (fromEnv && fromEnv.trim())
+        return path.resolve(fromEnv);
+    const candidates = [
+        path.resolve(__dirname, "../data/locations"),
+        path.resolve(__dirname, "../../data/locations"),
+    ];
+    for (const p of candidates) {
+        try {
+            // statSync avoids needing async before first use; will throw if not exists
+            const st = require('node:fs').statSync(p);
+            if (st && st.isDirectory())
+                return p;
+        }
+        catch { }
+    }
+    // fallback to first candidate
+    return candidates[0];
+}
+const DATA_ROOT = resolveDataRoot();
 const LAST_USED_FILE = path.resolve(DATA_ROOT, "last-used.json");
 function applySnapshot(snap) {
     // replace state
@@ -296,18 +320,23 @@ function onMessage(client, data) {
             const kind = msg.kind === "npc" ? "npc" : "player";
             const level = msg.levelId || state.location.levels[0]?.id || "L1";
             const basePos = msg.pos || state.location.levels[0]?.spawnPoint || { x: 5, y: 5 };
-            // clamp inside bounds
-            let pos = clampVec(basePos, { x: 0, y: 0 }, { x: 9, y: 9 });
-            const hasFloor = (() => {
+            // normalize to integer grid
+            let pos = { x: Math.floor(basePos.x), y: Math.floor(basePos.y) };
+            const hasFloorAt = (p) => {
                 const m = state.floors.get(level);
                 if (!m)
                     return false;
-                return m.has(`${pos.x},${pos.y}`);
-            })();
-            // If not land or floor, try to snap to spawnPoint
-            if (!isLand(pos.x, pos.y) && !hasFloor) {
-                const sp = state.location.levels[0]?.spawnPoint || { x: 5, y: 5 };
-                pos = clampVec(sp, { x: 0, y: 0 }, { x: 9, y: 9 });
+                return m.has(`${p.x},${p.y}`);
+            };
+            const hasFloor = hasFloorAt(pos);
+            // If there is no floor override at requested cell, restrict to natural island
+            if (!hasFloor) {
+                pos = clampVec(pos, { x: 0, y: 0 }, { x: 9, y: 9 });
+                if (!isLand(pos.x, pos.y)) {
+                    // try to snap to spawnPoint within island
+                    const sp = state.location.levels[0]?.spawnPoint || { x: 5, y: 5 };
+                    pos = clampVec(sp, { x: 0, y: 0 }, { x: 9, y: 9 });
+                }
             }
             // If occupied, search small spiral for a free nearby cell
             function occupied(p) {
@@ -323,14 +352,12 @@ function onMessage(client, data) {
                     { x: 1, y: 1 }, { x: 1, y: -1 }, { x: -1, y: 1 }, { x: -1, y: -1 },
                 ];
                 for (const d of dirs) {
-                    const p = clampVec({ x: pos.x + d.x, y: pos.y + d.y }, { x: 0, y: 0 }, { x: 9, y: 9 });
-                    const hasFloor2 = (() => {
-                        const m = state.floors.get(level);
-                        if (!m)
-                            return false;
-                        return m.has(`${p.x},${p.y}`);
-                    })();
-                    if (!occupied(p) && (isLand(p.x, p.y) || hasFloor2)) {
+                    let p = { x: pos.x + d.x, y: pos.y + d.y };
+                    const hasFloor2 = hasFloorAt(p);
+                    // For natural terrain, keep inside island; for floor overrides, allow outside
+                    if (!hasFloor2)
+                        p = clampVec(p, { x: 0, y: 0 }, { x: 9, y: 9 });
+                    if (!occupied(p) && (hasFloor2 || isLand(p.x, p.y))) {
                         pos = p;
                         break;
                     }
@@ -349,17 +376,26 @@ function onMessage(client, data) {
                 return;
             if (client.role !== "DM" && tok.owner !== client.id)
                 return;
-            // Keep inside 10x10 island and only on land
-            const pos = clampVec(msg.pos, { x: 0, y: 0 }, { x: 9, y: 9 });
-            // allow moving onto natural land OR painted floor override
+            // Normalize target to integer grid
+            const target = { x: Math.floor(msg.pos.x), y: Math.floor(msg.pos.y) };
             const hasFloor = (() => {
                 const m = state.floors.get(msg.levelId);
                 if (!m)
                     return false;
-                return m.has(`${pos.x},${pos.y}`);
+                return m.has(`${target.x},${target.y}`);
             })();
-            if (!isLand(pos.x, pos.y) && !hasFloor)
-                return;
+            let pos;
+            if (hasFloor) {
+                // Allow movement anywhere if a floor override exists at the cell
+                pos = target;
+            }
+            else {
+                // Otherwise restrict movement to the natural 10x10 island
+                const clamped = clampVec(target, { x: 0, y: 0 }, { x: 9, y: 9 });
+                if (!isLand(clamped.x, clamped.y))
+                    return;
+                pos = clamped;
+            }
             tok.pos = pos;
             tok.levelId = msg.levelId;
             const events = [];
@@ -1100,10 +1136,56 @@ async function start() {
         res.writeHead(200, { "Content-Type": "text/plain" });
         res.end("DnD Server is running\n");
     });
+    // Port listen with retry: if in use, increment port until a free one is found (bounded range)
+    let selectedPort = PORT;
+    const maxPort = Number(process.env.MAX_PORT || (PORT + 20));
+    let attempts = 0;
+    while (true) {
+        attempts++;
+        try {
+            try {
+                console.log(`[server] attempting to listen on http://localhost:${selectedPort} (attempt ${attempts})`);
+            }
+            catch { }
+            await new Promise((resolve, reject) => {
+                const onListening = () => {
+                    server.off("error", onError);
+                    resolve();
+                };
+                const onError = (err) => {
+                    server.off("listening", onListening);
+                    reject(err);
+                };
+                server.once("listening", onListening);
+                server.once("error", onError);
+                server.listen(selectedPort);
+            });
+            break; // success
+        }
+        catch (err) {
+            if (err && err.code === "EADDRINUSE") {
+                try {
+                    console.warn(`[server] port ${selectedPort} is in use, trying next...`);
+                }
+                catch { }
+                selectedPort++;
+                if (selectedPort > maxPort) {
+                    throw new Error(`[server] No free port found in range ${PORT}-${maxPort}`);
+                }
+                continue;
+            }
+            throw err; // other errors
+        }
+    }
+    // Only create WebSocket server once HTTP server is bound successfully
     const wss = new WebSocketServer({ server, path: "/ws" });
     wss.on("connection", onConnection);
-    server.listen(PORT, () => {
-        console.log(`[server] listening on http://localhost:${PORT}`);
+    wss.on("error", (err) => {
+        try {
+            console.warn(`[server][wss] error: ${String(err?.message || err)}`);
+        }
+        catch { }
     });
+    console.log(`[server] listening on http://localhost:${selectedPort}`);
 }
 start();

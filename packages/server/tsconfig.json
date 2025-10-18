@@ -5,8 +5,7 @@
     "rootDir": "src",
     "noEmit": false,
     "types": ["node"],
-    "baseUrl": ".",
-    "paths": {}
+    "baseUrl": "."
   },
   "include": ["src"]
 }

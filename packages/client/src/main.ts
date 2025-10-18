@@ -37,15 +37,19 @@ function drawObjects() {
 }
 
 import { Application, Graphics, Container, Text, Circle } from "pixi.js";
-
-type ID = string;
-
-type Vec2 = { x: number; y: number };
-
-type Token = { id: ID; owner: ID; levelId: ID; kind?: "player" | "npc"; pos: Vec2; name?: string; hp?: number; ac?: number; tint?: number; stats?: Record<string, number>; vision?: { radius?: number; angle?: number } };
-
-type Asset = { id: ID; levelId: ID; pos: Vec2; kind: string; rot?: number; scale?: number; tint?: number };
-type FloorKind = "stone" | "wood" | "water" | "sand";
+import type {
+  ID,
+  Vec2,
+  Token,
+  Asset,
+  FloorKind,
+  Location,
+  ServerToClient,
+  ClientToServer,
+  LocationTreeNode,
+  Event,
+  GameSnapshot
+} from "@dnd/shared";
 
 // Small top-level toast helper for reuse outside connect()
 function hudToast(text: string) {
@@ -62,42 +66,6 @@ function hudToast(text: string) {
 function uid(prefix: string): string {
   return `${prefix}-${Math.random().toString(36).slice(2, 8)}-${Date.now().toString(36)}`;
 }
-
-type Level = { id: ID; seed: string; spawnPoint: Vec2; lights: any[] };
-type Location = { id: ID; name: string; levels: Level[] };
-
-type ServerToClient =
-  | { t: "welcome"; playerId: ID; role: "DM" | "PLAYER"; snapshot: { location: Location; tokens: Token[]; assets: Asset[]; floors?: { levelId: ID; pos: Vec2; kind: FloorKind }[]; events?: any[] } }
-  | { t: "statePatch"; events: any[] }
-  | { t: "saveData"; snapshot: { location: Location; tokens: Token[]; assets: Asset[]; floors?: { levelId: ID; pos: Vec2; kind: FloorKind }[]; events?: any[] } }
-  | { t: "reset"; snapshot: { location: Location; tokens: Token[]; assets: Asset[]; floors?: { levelId: ID; pos: Vec2; kind: FloorKind }[]; events?: any[] } }
-  | { t: "error"; message: string }
-  | { t: "locationsTree"; tree: LocationTreeNode[]; lastUsedPath?: string }
-  | { t: "savedOk"; path: string };
-
-type ClientToServer =
-  | { t: "join"; name?: string; invite?: string }
-  | { t: "moveToken"; tokenId: ID; pos: Vec2; levelId: ID }
-  | { t: "spawnToken"; kind: "player" | "npc"; levelId?: ID; pos?: Vec2; owner?: ID }
-  | { t: "revealFog"; levelId: ID; cells: Vec2[] }
-  | { t: "obscureFog"; levelId: ID; cells: Vec2[] }
-  | { t: "placeAsset"; levelId: ID; pos: Vec2; kind: string; rot?: number; scale?: number; tint?: number }
-  | { t: "removeAssetAt"; levelId: ID; pos: Vec2 }
-  | { t: "removeTokenAt"; levelId: ID; pos: Vec2 }
-  | { t: "paintFloor"; levelId: ID; pos: Vec2; kind: FloorKind | null }
-  | { t: "requestSave" }
-  | { t: "loadSnapshot"; snapshot: { location: Location; tokens: Token[]; assets: Asset[]; floors?: { levelId: ID; pos: Vec2; kind: FloorKind }[]; events?: any[] } }
-  | { t: "listLocations" }
-  | { t: "saveLocation"; path: string }
-  | { t: "createFolder"; path: string }
-  | { t: "deleteLocation"; path: string }
-  | { t: "moveLocation"; from: string; toFolder: string }
-  | { t: "renameFolder"; path: string; newName: string }
-  | { t: "updateToken"; tokenId: ID; patch: Partial<{ name: string; hp: number; ac: number; tint: number; stats: Record<string, number>; vision: { radius?: number; angle?: number } }> }
-  | { t: "loadLocation"; path: string };
-
-// minimal copy of server type for client rendering
-type LocationTreeNode = { type: "folder" | "file"; name: string; path: string; children?: LocationTreeNode[]; locationName?: string };
 
 const CELL = 32;
 let playerId: ID | null = null;
@@ -465,9 +433,9 @@ function sendMove(tokenId: ID, pos: Vec2) {
   socket.send(JSON.stringify(msg));
 }
 
-function sendUpdateToken(tokenId: ID, patch: Partial<{ name: string; hp: number; ac: number; stats: Record<string, number>; vision: { radius?: number; angle?: number }; tint: number }>) {
+function sendUpdateToken(tokenId: ID, patch: Partial<Token>) {
   if (!socket) return;
-  const msg: ClientToServer = { t: "updateToken", tokenId, patch } as any;
+  const msg: ClientToServer = { t: "updateToken", tokenId, patch };
   socket.send(JSON.stringify(msg));
 }
 
@@ -527,56 +495,33 @@ function drawTokens() {
       continue;
     }
     const node = new Container();
-    const body = new Graphics();
-    const isMine = tok.id === myTokenId;
-    const baseFill = isMine ? 0x8ab4f8 : 0x9aa0a6;
     const isNPC = (tok as any).kind === "npc";
-    if (!isNPC) {
-      // Player: circle
-      body.circle(0, 0, CELL * 0.4).fill(baseFill).stroke({ color: 0x202124, width: 2 });
-    } else {
-      // NPC: triangle
-      const r = CELL * 0.44;
-      const h = r * Math.sqrt(3);
-      // vertices for upright triangle centered at (0,0)
-      const p1 = { x: 0, y: -h / 3 * 2 / 2 }; // adjust to center mass visually
-      const p2 = { x: -r * 0.86, y: h / 3 };
-      const p3 = { x: r * 0.86, y: h / 3 };
-      body.moveTo(p1.x, p1.y).lineTo(p2.x, p2.y).lineTo(p3.x, p3.y).closePath().fill(baseFill).stroke({ color: 0x202124, width: 2 });
-    }
-    // Apply per-token tint to the shape only
-    if (typeof (tok as any).tint === "number") {
-      (body as any).tint = (tok as any).tint;
-    }
-    // Overlay letter label (initial) as separate sibling so it's not affected by shape tint
-    const letter = ((tok as any).name && (tok as any).name.trim().length > 0
-      ? (tok as any).name.trim()[0]
-      : (isNPC ? "N" : "P")).toUpperCase();
-    const label = new Text({
-      text: letter,
+    const isMine = tok.id === myTokenId;
+    // Emoji-like token appearance
+    const emoji = isNPC ? "🧟" : "🧙";
+    const text = new Text({
+      text: emoji,
       style: {
-        fill: 0xffffff,
-        fontFamily: "Inter, system-ui, -apple-system, Segoe UI, Roboto",
-        fontSize: Math.floor(CELL * 0.34),
-        fontWeight: "700",
+        fontFamily: "Apple Color Emoji, Segoe UI Emoji, Noto Color Emoji, Inter, system-ui",
+        fontSize: Math.floor(CELL * 1.05),
         stroke: 0x202124,
-        strokeThickness: 2,
+        strokeThickness: 1,
       }
     } as any);
-    // @ts-ignore Text has anchor in Pixi v8
-    (label as any).anchor?.set?.(0.5);
-    label.position.set(0, 0);
-    // Don't let the label intercept events; we want the whole token to be draggable
+    (text as any).anchor?.set?.(0.5);
+    text.position.set(0, 0);
+    // Subtle ring to improve visibility/select state
+    const ring = new Graphics();
+    const ringColor = isMine ? 0x8ab4f8 : 0x9aa0a6;
+    ring.circle(0, 0, CELL * 0.46).stroke({ color: ringColor, width: 2, alpha: 0.8 });
+    // Compose
     // @ts-ignore
-    label.eventMode = "none";
-    // Compose node
-    // @ts-ignore Container accepts children
-    node.addChild(body as any);
-    // @ts-ignore Container accepts children
-    node.addChild(label as any);
+    node.addChild(ring);
+    // @ts-ignore
+    node.addChild(text);
     node.position.set(tok.pos.x * CELL + CELL / 2, tok.pos.y * CELL + CELL / 2);
-    // Enlarge hit area slightly to make grabbing easier
-    try { (body as any).hitArea = new Circle(0, 0, CELL * 0.5); } catch {}
+    // Enlarge hit area to make grabbing easier
+    try { (node as any).hitArea = new Circle(0, 0, CELL * 0.55); } catch {}
     // Drag & drop
     if (canControl(tok)) {
       // @ts-ignore v8 event model
@@ -604,7 +549,7 @@ function drawTokens() {
       node.on("pointertap", (e: any) => { 
         e.stopPropagation?.();
         if (editorMode === "eraseTokens" && myRole === "DM" && socket) {
-          const msg: ClientToServer = { t: "removeTokenAt", levelId: tok.levelId, pos: { x: Math.floor(tok.pos.x), y: Math.floor(tok.pos.y) } } as any;
+          const msg: ClientToServer = { t: "removeTokenAt", levelId: tok.levelId, pos: { x: Math.floor(tok.pos.x), y: Math.floor(tok.pos.y) } };
           socket.send(JSON.stringify(msg));
         } else {
           selectedTokenId = tok.id;
@@ -618,7 +563,7 @@ function drawTokens() {
       node.on("pointertap", (e: any) => { 
         e.stopPropagation?.();
         if (editorMode === "eraseTokens" && myRole === "DM" && socket) {
-          const msg: ClientToServer = { t: "removeTokenAt", levelId: tok.levelId, pos: { x: Math.floor(tok.pos.x), y: Math.floor(tok.pos.y) } } as any;
+          const msg: ClientToServer = { t: "removeTokenAt", levelId: tok.levelId, pos: { x: Math.floor(tok.pos.x), y: Math.floor(tok.pos.y) } };
           socket.send(JSON.stringify(msg));
         } else {
           selectedTokenId = tok.id;
@@ -688,10 +633,17 @@ function renderCharacterPanel() {
     const n = parseInt(hex.replace(/^#/, ""), 16);
     if (Number.isFinite(n)) sendUpdateToken(tok.id, { tint: (n & 0xffffff) });
   });
-  const statIds: Array<[string, string]> = [["str", "#char-str"], ["dex", "#char-dex"], ["con", "#char-con"], ["int", "#char-int"], ["wis", "#char-wis"], ["cha", "#char-cha"]];
+  const statIds: Array<[keyof NonNullable<Token["stats"]>, string]> = [["str", "#char-str"], ["dex", "#char-dex"], ["con", "#char-con"], ["int", "#char-int"], ["wis", "#char-wis"], ["cha", "#char-cha"]];
   for (const [k, sel] of statIds) {
     const el = q(sel);
-    el?.addEventListener("change", () => { if (!editable) return; const v = parseNum(el, -99, 99); if (v != null) sendUpdateToken(tok.id, { stats: { [k]: v } }); });
+    el?.addEventListener("change", () => {
+      if (!editable) return;
+      const v = parseNum(el, -99, 99);
+      if (v != null) {
+        const statsPatch: Partial<NonNullable<Token["stats"]>> = { [k]: v };
+        sendUpdateToken(tok.id, { stats: statsPatch });
+      }
+    });
   }
   const vrEl = q("#char-vision-radius");
   vrEl?.addEventListener("change", () => {
@@ -712,7 +664,7 @@ function drawAssets() {
   assetsLayer.removeChildren();
   if (!levelId) return;
   const revealed = getRevealed(levelId);
-  // Build occupancy map for structural connections
+  // Build occupancy map for structural connections (walls/windows/doors)
   const byKey = new Map<string, { kind: string; open?: boolean }>();
   for (const a of assets.values()) {
     if (a.levelId !== levelId) continue;
@@ -727,92 +679,109 @@ function drawAssets() {
   for (const a of assets.values()) {
     if (a.levelId !== levelId) continue;
     if (myRole !== "DM" && !revealed.has(`${a.pos.x},${a.pos.y}`)) continue;
-    const g = new Graphics();
-    if (a.kind === "tree") {
-      // trunk
-      g.rect(-CELL * 0.08, CELL * 0.05, CELL * 0.16, CELL * 0.25).fill(0x8d6e63);
-      // canopy
-      g.circle(0, -CELL * 0.1, CELL * 0.35).fill(0x2e7d32).stroke({ color: 0x1b5e20, width: 2 });
-    } else if (a.kind === "rock") {
-      g.ellipse(0, 0, CELL * 0.28, CELL * 0.2).fill(0x9aa0a6).stroke({ color: 0x606469, width: 2 });
-    } else if (a.kind === "bush") {
-      g.circle(0, 0, CELL * 0.28).fill(0x1f7a3e).stroke({ color: 0x145c2f, width: 2 });
-    } else if (a.kind === "wall") {
-      // Dynamic wall: connect to neighbors
-      const t = CELL * 0.16;
-      const L = byKey.get(`${a.pos.x - 1},${a.pos.y}`);
-      const R = byKey.get(`${a.pos.x + 1},${a.pos.y}`);
-      const U = byKey.get(`${a.pos.x},${a.pos.y - 1}`);
-      const D = byKey.get(`${a.pos.x},${a.pos.y + 1}`);
-      const hasH = isWallLike(L) || isWallLike(R);
-      const hasV = isWallLike(U) || isWallLike(D);
-      const col = 0x6b7280, stroke = 0x4b5563;
-      if (hasH) g.rect(-CELL / 2, -t / 2, CELL, t).fill(col).stroke({ color: stroke, width: 2 });
-      if (hasV) g.rect(-t / 2, -CELL / 2, t, CELL).fill(col).stroke({ color: stroke, width: 2 });
-      if (!hasH && !hasV) g.rect(-t / 2, -t / 2, t, t).fill(col).stroke({ color: stroke, width: 2 });
-    } else if (a.kind === "window") {
-      // Windows connect/merge similar to walls but with glass style
-      const t = CELL * 0.14;
-      const L = byKey.get(`${a.pos.x - 1},${a.pos.y}`);
-      const R = byKey.get(`${a.pos.x + 1},${a.pos.y}`);
-      const U = byKey.get(`${a.pos.x},${a.pos.y - 1}`);
-      const D = byKey.get(`${a.pos.x},${a.pos.y + 1}`);
-      const hasH = isWallLike(L) || isWallLike(R);
-      const hasV = isWallLike(U) || isWallLike(D);
-      const fill = { color: 0x66ccff, alpha: 0.9 } as any;
-      const stroke = 0x1d4ed8;
-      if (hasH) g.roundRect(-CELL / 2, -t / 2, CELL, t, 6).fill(fill).stroke({ color: stroke, width: 2 });
-      if (hasV) g.roundRect(-t / 2, -CELL / 2, t, CELL, 6).fill(fill).stroke({ color: stroke, width: 2 });
-      if (!hasH && !hasV) g.roundRect(-CELL * 0.25, -CELL * 0.12, CELL * 0.5, CELL * 0.24, 6).fill(fill).stroke({ color: stroke, width: 2 });
-    } else if (a.kind === "door") {
-      // Door attaches to nearest wall direction; closed behaves like wall segment; open — rotated leaf
-      const L = byKey.get(`${a.pos.x - 1},${a.pos.y}`);
-      const R = byKey.get(`${a.pos.x + 1},${a.pos.y}`);
-      const U = byKey.get(`${a.pos.x},${a.pos.y - 1}`);
-      const D = byKey.get(`${a.pos.x},${a.pos.y + 1}`);
-      const horiz = isWallLike(L) || isWallLike(R);
-      const vert = isWallLike(U) || isWallLike(D);
-      const t = CELL * 0.18;
-      const col = 0x8b5a2b, stroke = 0x5a3a1c;
-      const open = (a as any).open === true;
-      if (!open) {
-        // closed: blocking bar aligned to orientation
-        if (horiz && !vert) g.rect(-CELL / 2, -t / 2, CELL, t).fill(col).stroke({ color: stroke, width: 2 });
-        else if (vert && !horiz) g.rect(-t / 2, -CELL / 2, t, CELL).fill(col).stroke({ color: stroke, width: 2 });
-        else g.rect(-t / 2, -t / 2, t, t).fill(col).stroke({ color: stroke, width: 2 });
-      } else {
-        // open: a leaf rotated ~45 degrees, length ~0.7 cell
-        const w = CELL * 0.7, h = t;
-        g.rect(-w / 2, -h / 2, w, h).fill(col).stroke({ color: stroke, width: 2 });
-        g.rotation = horiz ? Math.PI / 4 : -Math.PI / 4; // swing depending on orientation
+    const node = new Container();
+    // Linear, connected styles for building structures
+    if (a.kind === "wall" || a.kind === "window" || a.kind === "door") {
+      const g = new Graphics();
+      if (a.kind === "wall") {
+        const t = CELL * 0.16;
+        const L = byKey.get(`${a.pos.x - 1},${a.pos.y}`);
+        const R = byKey.get(`${a.pos.x + 1},${a.pos.y}`);
+        const U = byKey.get(`${a.pos.x},${a.pos.y - 1}`);
+        const D = byKey.get(`${a.pos.x},${a.pos.y + 1}`);
+        const hasH = isWallLike(L) || isWallLike(R);
+        const hasV = isWallLike(U) || isWallLike(D);
+        const col = 0x6b7280, stroke = 0x4b5563;
+        if (hasH) g.rect(-CELL / 2, -t / 2, CELL, t).fill(col).stroke({ color: stroke, width: 2 });
+        if (hasV) g.rect(-t / 2, -CELL / 2, t, CELL).fill(col).stroke({ color: stroke, width: 2 });
+        if (!hasH && !hasV) g.rect(-t / 2, -t / 2, t, t).fill(col).stroke({ color: stroke, width: 2 });
+      } else if (a.kind === "window") {
+        const t = CELL * 0.14;
+        const L = byKey.get(`${a.pos.x - 1},${a.pos.y}`);
+        const R = byKey.get(`${a.pos.x + 1},${a.pos.y}`);
+        const U = byKey.get(`${a.pos.x},${a.pos.y - 1}`);
+        const D = byKey.get(`${a.pos.x},${a.pos.y + 1}`);
+        const hasH = isWallLike(L) || isWallLike(R);
+        const hasV = isWallLike(U) || isWallLike(D);
+        const fill = { color: 0x66ccff, alpha: 0.9 } as any;
+        const stroke = 0x1d4ed8;
+        if (hasH) g.roundRect(-CELL / 2, -t / 2, CELL, t, 6).fill(fill).stroke({ color: stroke, width: 2 });
+        if (hasV) g.roundRect(-t / 2, -CELL / 2, t, CELL, 6).fill(fill).stroke({ color: stroke, width: 2 });
+        if (!hasH && !hasV) g.roundRect(-CELL * 0.25, -CELL * 0.12, CELL * 0.5, CELL * 0.24, 6).fill(fill).stroke({ color: stroke, width: 2 });
+      } else if (a.kind === "door") {
+        const L = byKey.get(`${a.pos.x - 1},${a.pos.y}`);
+        const R = byKey.get(`${a.pos.x + 1},${a.pos.y}`);
+        const U = byKey.get(`${a.pos.x},${a.pos.y - 1}`);
+        const D = byKey.get(`${a.pos.x},${a.pos.y + 1}`);
+        const horiz = isWallLike(L) || isWallLike(R);
+        const vert = isWallLike(U) || isWallLike(D);
+        const t = CELL * 0.18;
+        const col = 0x8b5a2b, stroke = 0x5a3a1c;
+        const open = (a as any).open === true;
+        if (!open) {
+          if (horiz && !vert) g.rect(-CELL / 2, -t / 2, CELL, t).fill(col).stroke({ color: stroke, width: 2 });
+          else if (vert && !horiz) g.rect(-t / 2, -CELL / 2, t, CELL).fill(col).stroke({ color: stroke, width: 2 });
+          else g.rect(-t / 2, -t / 2, t, t).fill(col).stroke({ color: stroke, width: 2 });
+        } else {
+          const w = CELL * 0.7, h = t;
+          g.rect(-w / 2, -h / 2, w, h).fill(col).stroke({ color: stroke, width: 2 });
+          g.rotation = horiz ? Math.PI / 4 : -Math.PI / 4;
+        }
       }
+      node.addChild(g as any);
+      node.position.set(a.pos.x * CELL + CELL / 2, a.pos.y * CELL + CELL / 2);
+      if (typeof a.scale === "number") node.scale.set(a.scale);
+      if (typeof a.rot === "number") node.rotation = a.rot;
+      if (typeof a.tint === "number") (node as any).tint = a.tint;
     } else {
-      // default marker
-      g.rect(-CELL * 0.2, -CELL * 0.2, CELL * 0.4, CELL * 0.4).fill(0xb5651d);
+      // Emoji-like for decorative items
+      const emojiFor = (k: string): string => {
+        switch (k) {
+          case "tree": return "🌳";
+          case "rock": return "🪨";
+          case "bush": return "🌿";
+          case "chest": return "📦";
+          case "sword": return "🗡️";
+          case "bow": return "🏹";
+          case "coins": return "🪙";
+          case "other": return "✨";
+          default: return "✨";
+        }
+      };
+      const label = new Text({
+        text: emojiFor(a.kind),
+        style: {
+          fontFamily: "Apple Color Emoji, Segoe UI Emoji, Noto Color Emoji, Inter, system-ui",
+          fontSize: Math.floor(CELL * 0.9),
+          align: "center",
+        }
+      } as any);
+      (label as any).anchor?.set?.(0.5);
+      label.position.set(0, 0);
+      node.addChild(label as any);
+      node.position.set(a.pos.x * CELL + CELL / 2, a.pos.y * CELL + CELL / 2);
+      if (typeof a.scale === "number") node.scale.set(a.scale);
+      if (typeof a.rot === "number") node.rotation = a.rot;
+      if (typeof a.tint === "number") (label as any).tint = a.tint;
     }
-    // position to cell center
-    g.position.set(a.pos.x * CELL + CELL / 2, a.pos.y * CELL + CELL / 2);
-    if (typeof a.scale === "number") g.scale.set(a.scale);
-    if (typeof a.rot === "number") g.rotation = a.rot;
-    if (typeof a.tint === "number") g.tint = a.tint;
     // Enable dragging assets in cursor mode for DM
     if (myRole === "DM") {
       // @ts-ignore pixi v8 events
-      g.eventMode = "static";
-      g.cursor = editorMode === "cursor" ? "grab" : "default";
-      g.on("pointerdown", (e: any) => {
+      node.eventMode = "static";
+      node.cursor = editorMode === "cursor" ? "grab" : "default";
+      node.on("pointerdown", (e: any) => {
         if (editorMode !== "cursor") return;
         // door toggle takes priority
         if (a.kind === "door" && socket) {
-          const msg: ClientToServer = { t: "toggleDoor", assetId: a.id } as any;
+          const msg: ClientToServer = { t: "toggleDoor", assetId: a.id };
           socket.send(JSON.stringify(msg));
           e.stopPropagation?.();
           return;
         }
         const p0 = world.toLocal(e.global);
-        const off = { x: g.x - p0.x, y: g.y - p0.y };
-        draggingAsset = { assetId: a.id, kind: a.kind, sprite: g, offset: off, from: { ...a.pos } };
-        g.cursor = "grabbing";
+        const off = { x: node.x - p0.x, y: node.y - p0.y };
+        draggingAsset = { assetId: a.id, kind: a.kind, sprite: node, offset: off, from: { ...a.pos } };
+        node.cursor = "grabbing";
         // stage listeners
         app.stage.on("pointermove", onAssetDragMove);
         app.stage.on("pointerup", onAssetDragEnd);
@@ -823,21 +792,21 @@ function drawAssets() {
     // Doors should be clickable for players (DM handled above to avoid double toggle)
     if (a.kind === "door" && myRole !== "DM") {
       // @ts-ignore
-      g.eventMode = "static";
-      g.cursor = editorMode === "cursor" ? "pointer" : g.cursor;
-      g.on("pointerdown", (e: any) => {
+      node.eventMode = "static";
+      node.cursor = editorMode === "cursor" ? "pointer" : node.cursor;
+      node.on("pointerdown", (e: any) => {
         if (editorMode !== "cursor") return;
         if (!socket) return;
-        const msg: ClientToServer = { t: "toggleDoor", assetId: a.id } as any;
+        const msg: ClientToServer = { t: "toggleDoor", assetId: a.id };
         socket.send(JSON.stringify(msg));
         e.stopPropagation?.();
       });
     }
-    assetsLayer.addChild(g);
+    assetsLayer.addChild(node);
   }
 }
 
-type DraggingAsset = { assetId: ID; kind: string; sprite: Graphics; offset: { x: number; y: number }; from: Vec2 } | null;
+type DraggingAsset = { assetId: ID; kind: string; sprite: Container; offset: { x: number; y: number }; from: Vec2 } | null;
 let draggingAsset: DraggingAsset = null;
 function onAssetDragMove(e: any) {
   if (!draggingAsset) return;
@@ -1217,7 +1186,7 @@ function connect() {
       if (opened) {
         (statusEl as HTMLDivElement).textContent = "WS: connected";
         try { console.log(`[WS][client] connected on :${port}`); } catch {}
-        const joinMsg: ClientToServer = { t: "join", name: "Player", invite: inv } as any;
+        const joinMsg: ClientToServer = { t: "join", name: "Player", invite: inv };
         ws.send(JSON.stringify(joinMsg));
         attachHandlers(ws, port);
         connecting = false;
@@ -1385,14 +1354,14 @@ function connect() {
     const levelIdNew: ID = uid("lvl");
     const locationIdNew: ID = uid("loc");
     const seed = `seed-${Date.now().toString(36)}`;
-    const snap = {
+    const snap: GameSnapshot = {
       location: { id: locationIdNew, name: name || "Новая карта", levels: [{ id: levelIdNew, seed, spawnPoint: { x: 5, y: 5 }, lights: [] }] },
-      tokens: [] as any[],
-      assets: [] as any[],
-      floors: [] as any[],
-      events: [] as any[],
+      tokens: [],
+      assets: [],
+      floors: [],
+      events: [] as Event[],
     };
-    const msg: ClientToServer = { t: "loadSnapshot", snapshot: snap } as any;
+    const msg: ClientToServer = { t: "loadSnapshot", snapshot: snap };
     socket.send(JSON.stringify(msg));
     // Immediately persist to disk so it appears in the list
     const slug = (name || "map")
@@ -1400,7 +1369,7 @@ function connect() {
       .replace(/\s+/g, "-")
       .replace(/^-+|-+$/g, "") || "map";
     const relPath = `${slug}.json`;
-    const saveMsg: ClientToServer = { t: "saveLocation", path: relPath } as any;
+    const saveMsg: ClientToServer = { t: "saveLocation", path: relPath };
     socket.send(JSON.stringify(saveMsg));
   });
 
@@ -1410,13 +1379,13 @@ function connect() {
     if (rel == null) return;
     const pathClean = rel.replace(/\\+/g, "/").replace(/^\/+|\/+$/g, "");
     if (!pathClean) return;
-    const msg: ClientToServer = { t: "createFolder", path: pathClean } as any;
+    const msg: ClientToServer = { t: "createFolder", path: pathClean };
     socket.send(JSON.stringify(msg));
   });
 
   function requestLocationsList() {
     if (!socket) return;
-    const msg: ClientToServer = { t: "listLocations" } as any;
+    const msg: ClientToServer = { t: "listLocations" };
     socket.send(JSON.stringify(msg));
   }
 
@@ -1461,7 +1430,7 @@ function connect() {
         row.title = p;
         row.onclick = () => {
           if (!socket || myRole !== "DM") return;
-          const msg: ClientToServer = { t: "loadLocation", path: p } as any;
+          const msg: ClientToServer = { t: "loadLocation", path: p };
           socket.send(JSON.stringify(msg));
           addRecent(p);
         };
@@ -1503,7 +1472,7 @@ function connect() {
         if (!name) return;
         const base = node.path.endsWith("/") ? node.path.slice(0, -1) : node.path;
         const rel = `${base}/${name}`;
-        const msg: ClientToServer = { t: "createFolder", path: rel } as any;
+        const msg: ClientToServer = { t: "createFolder", path: rel };
         socket.send(JSON.stringify(msg));
       };
       row.appendChild(btnAdd);
@@ -1522,7 +1491,7 @@ function connect() {
         if (!nn) return;
         const newName = nn.replace(/\s+/g, " ").trim();
         if (!newName || /[\\/]/.test(newName)) { alert("Недопустимое имя папки"); return; }
-        const msg: ClientToServer = { t: "renameFolder", path: node.path, newName } as any;
+        const msg: ClientToServer = { t: "renameFolder", path: node.path, newName };
         socket.send(JSON.stringify(msg));
       };
       row.appendChild(btnRename);
@@ -1542,7 +1511,7 @@ function connect() {
       row.title = node.path;
       row.onclick = () => {
         if (!socket || myRole !== "DM") return;
-        const msg: ClientToServer = { t: "loadLocation", path: node.path } as any;
+        const msg: ClientToServer = { t: "loadLocation", path: node.path };
         socket.send(JSON.stringify(msg));
         addRecent(node.path);
       };
@@ -1557,14 +1526,14 @@ function connect() {
         const dest = prompt("Переместить в папку (путь относительно корня, пусто = корень):", "");
         if (dest == null) return;
         const toFolder = dest.replace(/\\+/g, "/").replace(/^\/+|\/+$/g, "");
-        const msg: ClientToServer = { t: "moveLocation", from: node.path, toFolder } as any;
+        const msg: ClientToServer = { t: "moveLocation", from: node.path, toFolder };
         socket.send(JSON.stringify(msg));
       };
       const onDelete = (e: MouseEvent) => {
         e.stopPropagation();
         if (!socket || myRole !== "DM") return;
         if (!confirm(`Удалить локацию ${title}?`)) return;
-        const msg: ClientToServer = { t: "deleteLocation", path: node.path } as any;
+        const msg: ClientToServer = { t: "deleteLocation", path: node.path };
         socket.send(JSON.stringify(msg));
       };
       row.appendChild(mkAction("↪", "Переместить", onMove));
@@ -1642,22 +1611,24 @@ app.stage.on("pointerdown", (e: any) => {
     const cell = snapToGrid(p.x, p.y);
     const cells = brushCells(cell, brushSize);
     if (editorMode === "paint") {
-      if (levelId) {
+      const lvl = levelId || (currentLocation?.levels?.[0]?.id as ID | undefined) || null;
+      if (lvl) {
+        if (!levelId) levelId = lvl;
         let touchedFloor = false;
         for (const c of cells) {
           if (selectedFloorKind) {
             // optimistic local update
-            setFloorOverride(levelId, c, selectedFloorKind);
+            setFloorOverride(lvl, c, selectedFloorKind);
             touchedFloor = true;
             if (socket) {
-              const msg: ClientToServer = { t: "paintFloor", levelId, pos: c, kind: selectedFloorKind };
+              const msg: ClientToServer = { t: "paintFloor", levelId: lvl, pos: c, kind: selectedFloorKind };
               socket.send(JSON.stringify(msg));
             }
           } else {
             // assets are server-authoritative; only send if socket exists
             if (socket) {
               const kind = selectedAssetKind ?? "tree";
-              const msg: ClientToServer = { t: "placeAsset", levelId, pos: c, kind };
+              const msg: ClientToServer = { t: "placeAsset", levelId: lvl, pos: c, kind };
               socket.send(JSON.stringify(msg));
             }
           }
@@ -1666,26 +1637,28 @@ app.stage.on("pointerdown", (e: any) => {
         lastPointerDownDidAct = true;
       }
     } else if (editorMode === "eraseObjects") {
-      if (socket && levelId) {
+      const lvl = levelId || (currentLocation?.levels?.[0]?.id as ID | undefined) || null;
+      if (socket && lvl) {
         for (const c of cells) {
-          const msg: ClientToServer = { t: "removeAssetAt", levelId, pos: c };
+          const msg: ClientToServer = { t: "removeAssetAt", levelId: lvl, pos: c };
           socket.send(JSON.stringify(msg));
         }
         lastPointerDownDidAct = true;
       }
     } else if (editorMode === "eraseSpace") {
-      if (levelId) {
+      const lvl = levelId || (currentLocation?.levels?.[0]?.id as ID | undefined) || null;
+      if (lvl) {
         let touchedFloor = false;
         for (const c of cells) {
           if (socket) {
-            const rm: ClientToServer = { t: "removeAssetAt", levelId, pos: c };
+            const rm: ClientToServer = { t: "removeAssetAt", levelId: lvl, pos: c };
             socket.send(JSON.stringify(rm));
           }
           // optimistic local floor removal
-          setFloorOverride(levelId, c, null);
+          setFloorOverride(lvl, c, null);
           touchedFloor = true;
           if (socket) {
-            const fl: ClientToServer = { t: "paintFloor", levelId, pos: c, kind: null };
+            const fl: ClientToServer = { t: "paintFloor", levelId: lvl, pos: c, kind: null };
             socket.send(JSON.stringify(fl));
           }
         }
@@ -1694,13 +1667,13 @@ app.stage.on("pointerdown", (e: any) => {
       }
     } else if (editorMode === "revealFog") {
       if (socket && levelId) {
-        const msg: ClientToServer = { t: "revealFog", levelId, cells } as any;
+        const msg: ClientToServer = { t: "revealFog", levelId, cells };
         socket.send(JSON.stringify(msg));
         lastPointerDownDidAct = true;
       }
     } else if (editorMode === "eraseFog") {
       if (socket && levelId) {
-        const msg: ClientToServer = { t: "obscureFog", levelId, cells } as any;
+        const msg: ClientToServer = { t: "obscureFog", levelId, cells };
         socket.send(JSON.stringify(msg));
         lastPointerDownDidAct = true;
       }
@@ -1709,7 +1682,8 @@ app.stage.on("pointerdown", (e: any) => {
       if (socket && levelId && selectedTokenKind) {
         const p = world.toLocal(e.global);
         const cell = snapToGrid(p.x, p.y);
-        const msg: ClientToServer = { t: "spawnToken", kind: selectedTokenKind, levelId, pos: cell } as any;
+        const kind = selectedTokenKind;
+        const msg: ClientToServer = { t: "spawnToken", kind, levelId, pos: cell };
         socket.send(JSON.stringify(msg));
         lastPointerDownDidAct = true;
         // reset tool back to cursor after one placement
@@ -1733,16 +1707,18 @@ app.stage.on("pointertap", (e: any) => {
   if (myRole !== "DM") return;
   // Only handle paint tool here to avoid duplicating other actions; also avoid duplicates if pointerdown already acted
   if (editorMode !== "paint" || !selectedFloorKind || lastPointerDownDidAct) return;
-  if (!levelId) return;
+  const lvlTap = levelId || (currentLocation?.levels?.[0]?.id as ID | undefined) || null;
+  if (!lvlTap) return;
+  if (!levelId) levelId = lvlTap;
   const p = world.toLocal(e.global);
   const cell = snapToGrid(p.x, p.y);
   const cells = brushCells(cell, brushSize);
   let touchedFloor = false;
   for (const c of cells) {
-    setFloorOverride(levelId, c, selectedFloorKind);
+    setFloorOverride(lvlTap, c, selectedFloorKind);
     touchedFloor = true;
     if (socket) {
-      const msg: ClientToServer = { t: "paintFloor", levelId, pos: c, kind: selectedFloorKind };
+      const msg: ClientToServer = { t: "paintFloor", levelId: lvlTap, pos: c, kind: selectedFloorKind };
       socket.send(JSON.stringify(msg));
     }
   }
@@ -1756,22 +1732,24 @@ app.stage.on("pointermove", (e: any) => {
     if (key !== lastPaintKey) {
       const cells = brushCells(cell, brushSize);
       if (editorMode === "paint") {
-        if (levelId) {
+        const lvl = levelId || (currentLocation?.levels?.[0]?.id as ID | undefined) || null;
+        if (lvl) {
+          if (!levelId) levelId = lvl;
           let touchedFloor = false;
           for (const c of cells) {
             if (selectedFloorKind) {
               // optimistic local update
-              setFloorOverride(levelId, c, selectedFloorKind);
+              setFloorOverride(lvl, c, selectedFloorKind);
               touchedFloor = true;
               if (socket) {
-                const msg: ClientToServer = { t: "paintFloor", levelId, pos: c, kind: selectedFloorKind };
+                const msg: ClientToServer = { t: "paintFloor", levelId: lvl, pos: c, kind: selectedFloorKind };
                 socket.send(JSON.stringify(msg));
               }
             } else {
               // assets are server-authoritative; only send if socket exists
               if (socket) {
                 const kind = selectedAssetKind ?? "tree";
-                const msg: ClientToServer = { t: "placeAsset", levelId, pos: c, kind };
+                const msg: ClientToServer = { t: "placeAsset", levelId: lvl, pos: c, kind };
                 socket.send(JSON.stringify(msg));
               }
             }
@@ -1779,25 +1757,27 @@ app.stage.on("pointermove", (e: any) => {
           if (touchedFloor) { drawFloor(); drawGrid(); drawFog(); }
         }
       } else if (editorMode === "eraseObjects") {
-        if (socket && levelId) {
+        const lvl = levelId || (currentLocation?.levels?.[0]?.id as ID | undefined) || null;
+        if (socket && lvl) {
           for (const c of cells) {
-            const msg: ClientToServer = { t: "removeAssetAt", levelId, pos: c };
+            const msg: ClientToServer = { t: "removeAssetAt", levelId: lvl, pos: c };
             socket.send(JSON.stringify(msg));
           }
         }
       } else if (editorMode === "eraseSpace") {
-        if (levelId) {
+        const lvl = levelId || (currentLocation?.levels?.[0]?.id as ID | undefined) || null;
+        if (lvl) {
           let touchedFloor = false;
           for (const c of cells) {
             if (socket) {
-              const rm: ClientToServer = { t: "removeAssetAt", levelId, pos: c };
+              const rm: ClientToServer = { t: "removeAssetAt", levelId: lvl, pos: c };
               socket.send(JSON.stringify(rm));
             }
             // optimistic local floor removal
-            setFloorOverride(levelId, c, null);
+            setFloorOverride(lvl, c, null);
             touchedFloor = true;
             if (socket) {
-              const fl: ClientToServer = { t: "paintFloor", levelId, pos: c, kind: null };
+              const fl: ClientToServer = { t: "paintFloor", levelId: lvl, pos: c, kind: null };
               socket.send(JSON.stringify(fl));
             }
           }
@@ -1805,12 +1785,12 @@ app.stage.on("pointermove", (e: any) => {
         }
       } else if (editorMode === "revealFog") {
         if (socket && levelId) {
-          const msg: ClientToServer = { t: "revealFog", levelId, cells } as any;
+          const msg: ClientToServer = { t: "revealFog", levelId, cells };
           socket.send(JSON.stringify(msg));
         }
       } else if (editorMode === "eraseFog") {
         if (socket && levelId) {
-          const msg: ClientToServer = { t: "obscureFog", levelId, cells } as any;
+          const msg: ClientToServer = { t: "obscureFog", levelId, cells };
           socket.send(JSON.stringify(msg));
         }
       }
