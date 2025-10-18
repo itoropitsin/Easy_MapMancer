@@ -44,29 +44,42 @@ interface ClientRec {
 }
 
 function applySnapshot(snap: GameSnapshot) {
-  // replace state
-  state.location = snap.location;
+  const payload = snap as Partial<GameSnapshot> & Record<string, unknown>;
+  const loc = payload.location;
+  // replace state with defensive defaults so legacy saves still load
+  state.location = (loc && typeof loc === "object" && Array.isArray((loc as any).levels))
+    ? (loc as Location)
+    : makeDefaultLocation();
   state.tokens.clear();
-  for (const t of snap.tokens) state.tokens.set(t.id, t);
+  const tokens = Array.isArray(payload.tokens) ? (payload.tokens as Token[]) : [];
+  for (const t of tokens) {
+    if (!t || !t.id) continue;
+    state.tokens.set(t.id, t);
+  }
   state.assets.clear();
-  for (const a of snap.assets) state.assets.set(a.id, a);
+  const assets = Array.isArray(payload.assets) ? (payload.assets as Asset[]) : [];
+  for (const a of assets) {
+    if (!a || !a.id) continue;
+    state.assets.set(a.id, a);
+  }
   state.fog.clear();
   // rebuild fog from snapshot events if present
-  if (Array.isArray(snap.events)) {
-    for (const e of snap.events) {
-      if ((e as any).type === "fogRevealed") {
-        const s = getFogSet((e as any).levelId);
-        for (const c of (e as any).cells) s.add(cellKey(c));
-      }
+  const events = Array.isArray(payload.events) ? (payload.events as Event[]) : [];
+  for (const e of events) {
+    if ((e as any).type === "fogRevealed") {
+      const s = getFogSet((e as any).levelId);
+      for (const c of (e as any).cells) s.add(cellKey(c));
     }
   }
   state.floors.clear();
-  if (Array.isArray(snap.floors)) {
-    for (const f of snap.floors) {
-      let m = state.floors.get(f.levelId);
-      if (!m) { m = new Map(); state.floors.set(f.levelId, m); }
-      m.set(`${f.pos.x},${f.pos.y}`, f.kind);
-    }
+  const floors = Array.isArray(payload.floors)
+    ? (payload.floors as { levelId: ID; pos: Vec2; kind: FloorKind }[])
+    : [];
+  for (const f of floors) {
+    if (!f?.levelId || !f.pos) continue;
+    let m = state.floors.get(f.levelId);
+    if (!m) { m = new Map(); state.floors.set(f.levelId, m); }
+    m.set(`${f.pos.x},${f.pos.y}`, f.kind);
   }
 }
 
