@@ -79,6 +79,14 @@ export type ClientToServer = {
     t: "updateToken";
     tokenId: ID;
     patch: Partial<Token>;
+} | {
+    t: "reorderToken";
+    tokenId: ID;
+    direction: "top" | "up" | "down" | "bottom";
+} | {
+    t: "reorderAsset";
+    assetId: ID;
+    direction: "top" | "up" | "down" | "bottom";
 };
 export type ServerToClient = {
     t: "welcome";
