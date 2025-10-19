@@ -61,7 +61,7 @@ export interface Asset {
     tint?: number;
     open?: boolean;
 }
-export type FloorKind = "stone" | "wood" | "water" | "sand";
+export type FloorKind = "stone" | "wood" | "water" | "sand" | "grass";
 export type Event = {
     type: "tokenMoved";
     tokenId: ID;

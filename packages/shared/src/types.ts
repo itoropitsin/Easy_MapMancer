@@ -49,7 +49,7 @@ export interface Asset {
   open?: boolean;
 }
 
-export type FloorKind = "stone" | "wood" | "water" | "sand";
+export type FloorKind = "stone" | "wood" | "water" | "sand" | "grass";
 
 export type Event =
   | { type: "tokenMoved"; tokenId: ID; pos: Vec2; levelId: ID }

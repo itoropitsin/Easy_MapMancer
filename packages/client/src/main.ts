@@ -12,7 +12,7 @@ function drawWalls() {
       const h = hash2D(gx, gy, s);
       // top edge
       if (
-        (h & 0x1f) === 0 && isLand(gx, gy) && isLand(gx, gy - 1) &&
+        (h & 0x1f) === 0 && isGround(gx, gy) && isGround(gx, gy - 1) &&
         !(myRole !== "DM" && revealed && (!revealed.has(`${gx},${gy}`) && !revealed.has(`${gx},${gy - 1}`)))
       ) {
         const x0 = gx * CELL, y0 = gy * CELL;
@@ -20,7 +20,7 @@ function drawWalls() {
       }
       // left edge
       if (
-        ((h >>> 5) & 0x1f) === 0 && isLand(gx, gy) && isLand(gx - 1, gy) &&
+        ((h >>> 5) & 0x1f) === 0 && isGround(gx, gy) && isGround(gx - 1, gy) &&
         !(myRole !== "DM" && revealed && (!revealed.has(`${gx},${gy}`) && !revealed.has(`${gx - 1},${gy}`)))
       ) {
         const x0 = gx * CELL, y0 = gy * CELL;
@@ -124,7 +124,7 @@ function brushCells(center: Vec2, size: 1 | 2 | 3 | 4): Vec2[] {
   for (let dy = -half; dy < size - half; dy++) {
     for (let dx = -half; dx < size - half; dx++) {
       const gx = center.x + dx; const gy = center.y + dy;
-      // No hard bounds: allow painting anywhere; server validates usage via isLand or painted floors
+      // No hard bounds: allow painting anywhere; server validates usage via recorded floor overrides
       cells.push({ x: gx, y: gy });
     }
   }
@@ -385,8 +385,44 @@ function tileColor(gx: number, gy: number, seedStr: string): number {
   return ((r & 0xff) << 16) | ((g & 0xff) << 8) | (b & 0xff);
 }
 
+type FloorPalette = { light: number; mid: number; dark: number };
+const PAINTED_FLOOR_PALETTES: Record<FloorKind, FloorPalette> = {
+  stone: { light: 0x848b99, mid: 0x6b7280, dark: 0x4d5360 },
+  wood: { light: 0xa86b33, mid: 0x8b5a2b, dark: 0x70421f },
+  water: { light: 0x60a5fa, mid: 0x3b82f6, dark: 0x1d4ed8 },
+  sand: { light: 0xe3cfa8, mid: 0xd1b892, dark: 0xb9956b },
+  grass: { light: 0x62c15d, mid: 0x3f8f3e, dark: 0x2d6b2b },
+};
+
+function lerpChannel(a: number, b: number, t: number): number {
+  return Math.round(a + (b - a) * t);
+}
+
+function lerpColor(a: number, b: number, t: number): number {
+  const ar = (a >> 16) & 0xff, ag = (a >> 8) & 0xff, ab = a & 0xff;
+  const br = (b >> 16) & 0xff, bg = (b >> 8) & 0xff, bb = b & 0xff;
+  const r = lerpChannel(ar, br, t);
+  const g = lerpChannel(ag, bg, t);
+  const bch = lerpChannel(ab, bb, t);
+  return (r << 16) | (g << 8) | bch;
+}
+
+function paintedFloorColor(kind: FloorKind, gx: number, gy: number): number {
+  const palette = PAINTED_FLOOR_PALETTES[kind];
+  if (!palette) return 0xffffff;
+  const levelSeed = levelId ? hashString(levelId) : 0;
+  const baseSeed = hashString(`${currentSeed || "demo-seed"}:${kind}`);
+  const noise = hash2D(gx, gy, baseSeed ^ levelSeed);
+  const mixT = ((noise >>> 1) & 0xff) / 255; // 0..1
+  const mix = 0.2 + mixT * 0.35; // keep near mid tone
+  const useLight = (noise & 1) === 0;
+  return useLight ? lerpColor(palette.mid, palette.light, mix) : lerpColor(palette.mid, palette.dark, mix);
+}
+
 // 10x10 irregular island mask around (0..9, 0..9)
+const ENABLE_PROCEDURAL_LAND = false;
 function isLand(gx: number, gy: number): boolean {
+  if (!ENABLE_PROCEDURAL_LAND) return false;
   if (gx < 0 || gx >= 10 || gy < 0 || gy >= 10) return false;
   const s = (hashString(currentSeed || "demo-seed") ^ 0xa5a5a5a5) >>> 0;
   const edge = Math.min(gx, gy, 9 - gx, 9 - gy);
@@ -439,7 +475,7 @@ function drawFloor() {
       // If an override exists, always render a floor tile (creates new land)
       const ov = getFloorOverride(gx, gy);
       if (ov) {
-        const col = ov === "stone" ? 0x6b7280 : ov === "wood" ? 0x8b5a2b : ov === "water" ? 0x3b82f6 : 0xd1b892; // sand
+        const col = paintedFloorColor(ov, gx, gy);
         floor.rect(x, y, CELL, CELL).fill(col);
       } else if (isLand(gx, gy)) {
         const color = tileColor(gx, gy, seed);
@@ -1709,6 +1745,7 @@ function connect() {
   const btnFloorWood = document.getElementById("floor-wood") as HTMLButtonElement | null;
   const btnFloorWater = document.getElementById("floor-water") as HTMLButtonElement | null;
   const btnFloorSand = document.getElementById("floor-sand") as HTMLButtonElement | null;
+  const btnFloorGrass = document.getElementById("floor-grass") as HTMLButtonElement | null;
   const btnNewMap = document.getElementById("btn-new-map") as HTMLButtonElement | null;
   const btnNewFolder = document.getElementById("btn-new-folder") as HTMLButtonElement | null;
   const btnAddPlayer = document.getElementById("btn-add-player") as HTMLButtonElement | null;
@@ -1869,6 +1906,7 @@ function connect() {
     if (btnFloorWood) btnFloorWood.disabled = !isDM;
     if (btnFloorWater) btnFloorWater.disabled = !isDM;
     if (btnFloorSand) btnFloorSand.disabled = !isDM;
+    if (btnFloorGrass) btnFloorGrass.disabled = !isDM;
     if (btnBrush1) btnBrush1.disabled = !isDM;
     if (btnBrush2) btnBrush2.disabled = !isDM;
     if (btnBrush3) btnBrush3.disabled = !isDM;
@@ -1896,6 +1934,7 @@ function connect() {
     btnFloorWood?.classList.toggle("selected", selectedFloorKind === "wood");
     btnFloorWater?.classList.toggle("selected", selectedFloorKind === "water");
     btnFloorSand?.classList.toggle("selected", selectedFloorKind === "sand");
+    btnFloorGrass?.classList.toggle("selected", selectedFloorKind === "grass");
     btnBrush1?.classList.toggle("selected", brushSize === 1);
     btnBrush2?.classList.toggle("selected", brushSize === 2);
     btnBrush3?.classList.toggle("selected", brushSize === 3);
@@ -1946,6 +1985,7 @@ function connect() {
   btnFloorWood?.addEventListener("click", () => { selectedFloorKind = "wood"; selectedAssetKind = null; selectedTokenKind = null; editorMode = "paint"; updateEditorUI(); });
   btnFloorWater?.addEventListener("click", () => { selectedFloorKind = "water"; selectedAssetKind = null; selectedTokenKind = null; editorMode = "paint"; updateEditorUI(); });
   btnFloorSand?.addEventListener("click", () => { selectedFloorKind = "sand"; selectedAssetKind = null; selectedTokenKind = null; editorMode = "paint"; updateEditorUI(); });
+  btnFloorGrass?.addEventListener("click", () => { selectedFloorKind = "grass"; selectedAssetKind = null; selectedTokenKind = null; editorMode = "paint"; updateEditorUI(); });
   btnBrush1?.addEventListener("click", () => { brushSize = 1; updateEditorUI(); });
   btnBrush2?.addEventListener("click", () => { brushSize = 2; updateEditorUI(); });
   btnBrush3?.addEventListener("click", () => { brushSize = 3; updateEditorUI(); });
@@ -2405,27 +2445,27 @@ function drawMinimap() {
   const scale = minimapSize / regionTiles;
   // Background
   minimap.rect(0, 0, minimapSize, minimapSize).fill({ color: 0x0b0e13, alpha: 0.9 }).stroke({ color: 0x111827, width: 2 });
-  // Light land tiles for the 10x10 island
+  // Highlight ground tiles based on existing floors
   for (let j = 0; j < regionTiles; j++) {
     for (let i = 0; i < regionTiles; i++) {
       const gx = startGX + i; const gy = startGY + j;
-      if (!isLand(gx, gy)) continue;
+      if (!isGround(gx, gy)) continue;
       const x = i * scale, y = j * scale;
       minimap.rect(x, y, scale, scale).fill({ color: 0x374151, alpha: 0.25 });
     }
   }
-  // Walls (sampled like main, but masked to land)
+  // Walls (sampled like main, but masked to ground tiles)
   const seed = currentSeed || "demo-seed"; const hs = hashString(seed);
   const wallColor = 0x374151;
   for (let j = 0; j <= regionTiles; j++) {
     for (let i = 0; i <= regionTiles; i++) {
       const gx = startGX + i; const gy = startGY + j;
       const h = hash2D(gx, gy, hs);
-      if ((h & 0x1f) === 0 && isLand(gx, gy) && isLand(gx, gy - 1)) {
+      if ((h & 0x1f) === 0 && isGround(gx, gy) && isGround(gx, gy - 1)) {
         const x0 = i * scale, y0 = j * scale;
         minimap.moveTo(x0, y0).lineTo(x0 + scale, y0).stroke({ color: wallColor, width: 1 });
       }
-      if (((h >>> 5) & 0x1f) === 0 && isLand(gx, gy) && isLand(gx - 1, gy)) {
+      if (((h >>> 5) & 0x1f) === 0 && isGround(gx, gy) && isGround(gx - 1, gy)) {
         const x0 = i * scale, y0 = j * scale;
         minimap.moveTo(x0, y0).lineTo(x0, y0 + scale).stroke({ color: wallColor, width: 1 });
       }

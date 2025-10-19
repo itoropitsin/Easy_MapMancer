@@ -3696,6 +3696,486 @@
         "y": 2
       },
       "kind": "stone"
+    },
+    {
+      "levelId": "lvl-ip012w-meq35r9r",
+      "pos": {
+        "x": 8,
+        "y": 0
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "lvl-ip012w-meq35r9r",
+      "pos": {
+        "x": 9,
+        "y": 0
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "lvl-ip012w-meq35r9r",
+      "pos": {
+        "x": 8,
+        "y": 1
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "lvl-ip012w-meq35r9r",
+      "pos": {
+        "x": 9,
+        "y": 1
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "lvl-ip012w-meq35r9r",
+      "pos": {
+        "x": 8,
+        "y": 2
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "lvl-ip012w-meq35r9r",
+      "pos": {
+        "x": 9,
+        "y": 2
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "lvl-ip012w-meq35r9r",
+      "pos": {
+        "x": 8,
+        "y": 3
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "lvl-ip012w-meq35r9r",
+      "pos": {
+        "x": 9,
+        "y": 3
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "lvl-ip012w-meq35r9r",
+      "pos": {
+        "x": 8,
+        "y": 4
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "lvl-ip012w-meq35r9r",
+      "pos": {
+        "x": 9,
+        "y": 4
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "lvl-ip012w-meq35r9r",
+      "pos": {
+        "x": 1,
+        "y": 5
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "lvl-ip012w-meq35r9r",
+      "pos": {
+        "x": 2,
+        "y": 5
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "lvl-ip012w-meq35r9r",
+      "pos": {
+        "x": 3,
+        "y": 5
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "lvl-ip012w-meq35r9r",
+      "pos": {
+        "x": 4,
+        "y": 5
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "lvl-ip012w-meq35r9r",
+      "pos": {
+        "x": 5,
+        "y": 5
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "lvl-ip012w-meq35r9r",
+      "pos": {
+        "x": 6,
+        "y": 5
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "lvl-ip012w-meq35r9r",
+      "pos": {
+        "x": 7,
+        "y": 5
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "lvl-ip012w-meq35r9r",
+      "pos": {
+        "x": 8,
+        "y": 5
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "lvl-ip012w-meq35r9r",
+      "pos": {
+        "x": 9,
+        "y": 5
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "lvl-ip012w-meq35r9r",
+      "pos": {
+        "x": 1,
+        "y": 6
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "lvl-ip012w-meq35r9r",
+      "pos": {
+        "x": 2,
+        "y": 6
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "lvl-ip012w-meq35r9r",
+      "pos": {
+        "x": 3,
+        "y": 6
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "lvl-ip012w-meq35r9r",
+      "pos": {
+        "x": 4,
+        "y": 6
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "lvl-ip012w-meq35r9r",
+      "pos": {
+        "x": 5,
+        "y": 6
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "lvl-ip012w-meq35r9r",
+      "pos": {
+        "x": 6,
+        "y": 6
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "lvl-ip012w-meq35r9r",
+      "pos": {
+        "x": 7,
+        "y": 6
+      },
+      "kind": "grass"
+    },
+    {
+      "levelId": "lvl-ip012w-meq35r9r",
+      "pos": {
+        "x": 8,
+        "y": 6
+      },
+      "kind": "grass"
+    },
+    {
+      "levelId": "lvl-ip012w-meq35r9r",
+      "pos": {
+        "x": 9,
+        "y": 6
+      },
+      "kind": "grass"
+    },
+    {
+      "levelId": "lvl-ip012w-meq35r9r",
+      "pos": {
+        "x": 1,
+        "y": 7
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "lvl-ip012w-meq35r9r",
+      "pos": {
+        "x": 2,
+        "y": 7
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "lvl-ip012w-meq35r9r",
+      "pos": {
+        "x": 3,
+        "y": 7
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "lvl-ip012w-meq35r9r",
+      "pos": {
+        "x": 4,
+        "y": 7
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "lvl-ip012w-meq35r9r",
+      "pos": {
+        "x": 5,
+        "y": 7
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "lvl-ip012w-meq35r9r",
+      "pos": {
+        "x": 6,
+        "y": 7
+      },
+      "kind": "grass"
+    },
+    {
+      "levelId": "lvl-ip012w-meq35r9r",
+      "pos": {
+        "x": 7,
+        "y": 7
+      },
+      "kind": "grass"
+    },
+    {
+      "levelId": "lvl-ip012w-meq35r9r",
+      "pos": {
+        "x": 8,
+        "y": 7
+      },
+      "kind": "grass"
+    },
+    {
+      "levelId": "lvl-ip012w-meq35r9r",
+      "pos": {
+        "x": 9,
+        "y": 7
+      },
+      "kind": "grass"
+    },
+    {
+      "levelId": "lvl-ip012w-meq35r9r",
+      "pos": {
+        "x": 1,
+        "y": 8
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "lvl-ip012w-meq35r9r",
+      "pos": {
+        "x": 2,
+        "y": 8
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "lvl-ip012w-meq35r9r",
+      "pos": {
+        "x": 3,
+        "y": 8
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "lvl-ip012w-meq35r9r",
+      "pos": {
+        "x": 4,
+        "y": 8
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "lvl-ip012w-meq35r9r",
+      "pos": {
+        "x": 5,
+        "y": 8
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "lvl-ip012w-meq35r9r",
+      "pos": {
+        "x": 6,
+        "y": 8
+      },
+      "kind": "grass"
+    },
+    {
+      "levelId": "lvl-ip012w-meq35r9r",
+      "pos": {
+        "x": 7,
+        "y": 8
+      },
+      "kind": "grass"
+    },
+    {
+      "levelId": "lvl-ip012w-meq35r9r",
+      "pos": {
+        "x": 8,
+        "y": 8
+      },
+      "kind": "grass"
+    },
+    {
+      "levelId": "lvl-ip012w-meq35r9r",
+      "pos": {
+        "x": 9,
+        "y": 8
+      },
+      "kind": "grass"
+    },
+    {
+      "levelId": "lvl-ip012w-meq35r9r",
+      "pos": {
+        "x": 1,
+        "y": 9
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "lvl-ip012w-meq35r9r",
+      "pos": {
+        "x": 2,
+        "y": 9
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "lvl-ip012w-meq35r9r",
+      "pos": {
+        "x": 3,
+        "y": 9
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "lvl-ip012w-meq35r9r",
+      "pos": {
+        "x": 4,
+        "y": 9
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "lvl-ip012w-meq35r9r",
+      "pos": {
+        "x": 5,
+        "y": 9
+      },
+      "kind": "stone"
+    },
+    {
+      "levelId": "lvl-ip012w-meq35r9r",
+      "pos": {
+        "x": 6,
+        "y": 9
+      },
+      "kind": "grass"
+    },
+    {
+      "levelId": "lvl-ip012w-meq35r9r",
+      "pos": {
+        "x": 7,
+        "y": 9
+      },
+      "kind": "grass"
+    },
+    {
+      "levelId": "lvl-ip012w-meq35r9r",
+      "pos": {
+        "x": 8,
+        "y": 9
+      },
+      "kind": "grass"
+    },
+    {
+      "levelId": "lvl-ip012w-meq35r9r",
+      "pos": {
+        "x": 9,
+        "y": 9
+      },
+      "kind": "grass"
+    },
+    {
+      "levelId": "lvl-ip012w-meq35r9r",
+      "pos": {
+        "x": 8,
+        "y": 10
+      },
+      "kind": "grass"
+    },
+    {
+      "levelId": "lvl-ip012w-meq35r9r",
+      "pos": {
+        "x": 9,
+        "y": 10
+      },
+      "kind": "grass"
+    },
+    {
+      "levelId": "lvl-ip012w-meq35r9r",
+      "pos": {
+        "x": 7,
+        "y": 10
+      },
+      "kind": "grass"
+    },
+    {
+      "levelId": "lvl-ip012w-meq35r9r",
+      "pos": {
+        "x": 10,
+        "y": 8
+      },
+      "kind": "grass"
+    },
+    {
+      "levelId": "lvl-ip012w-meq35r9r",
+      "pos": {
+        "x": 6,
+        "y": 10
+      },
+      "kind": "grass"
     }
   ]
 }

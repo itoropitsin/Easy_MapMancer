@@ -78,6 +78,51 @@ function applySnapshot(snap) {
         }
         m.set(`${f.pos.x},${f.pos.y}`, f.kind);
     }
+    const addedFloors = ensureDefaultFloorsForAllLevels();
+    if (addedFloors.length > 0) {
+        const existing = new Set(Array.isArray(payload.floors)
+            ? payload.floors.map((f) => `${f.levelId}:${f.pos.x},${f.pos.y}`)
+            : []);
+        const merged = Array.isArray(payload.floors)
+            ? payload.floors.slice()
+            : [];
+        for (const f of addedFloors) {
+            const key = `${f.levelId}:${f.pos.x},${f.pos.y}`;
+            if (existing.has(key))
+                continue;
+            existing.add(key);
+            merged.push({ levelId: f.levelId, pos: { ...f.pos }, kind: f.kind });
+        }
+        payload.floors = merged;
+    }
+}
+const DEFAULT_FLOOR_KIND = "stone";
+const DEFAULT_FLOOR_WIDTH = 10;
+const DEFAULT_FLOOR_HEIGHT = 10;
+function ensureDefaultFloorsForLevel(levelId) {
+    let map = state.floors.get(levelId);
+    if (!map) {
+        map = new Map();
+        state.floors.set(levelId, map);
+    }
+    const added = [];
+    for (let y = 0; y < DEFAULT_FLOOR_HEIGHT; y++) {
+        for (let x = 0; x < DEFAULT_FLOOR_WIDTH; x++) {
+            const key = `${x},${y}`;
+            if (map.has(key))
+                continue;
+            map.set(key, DEFAULT_FLOOR_KIND);
+            added.push({ levelId, pos: { x, y }, kind: DEFAULT_FLOOR_KIND });
+        }
+    }
+    return added;
+}
+function ensureDefaultFloorsForAllLevels() {
+    const added = [];
+    for (const lvl of state.location.levels) {
+        added.push(...ensureDefaultFloorsForLevel(lvl.id));
+    }
+    return added;
 }
 function makeDefaultLevel() {
     return {
@@ -103,6 +148,7 @@ const state = {
     assets: new Map(),
     floors: new Map(),
 };
+ensureDefaultFloorsForAllLevels();
 // Current file path for autosave (relative to DATA_ROOT)
 let currentSavePath = null;
 // ---- Persistence helpers ----
@@ -338,25 +384,31 @@ function onMessage(client, data) {
             const kind = msg.kind === "npc" ? "npc" : "player";
             const level = msg.levelId || state.location.levels[0]?.id || "L1";
             const basePos = msg.pos || state.location.levels[0]?.spawnPoint || { x: 5, y: 5 };
-            // normalize to integer grid
-            let pos = { x: Math.floor(basePos.x), y: Math.floor(basePos.y) };
-            const hasFloorAt = (p) => {
-                const m = state.floors.get(level);
-                if (!m)
-                    return false;
-                return m.has(`${p.x},${p.y}`);
+            ensureDefaultFloorsForLevel(level);
+            const levelFloors = state.floors.get(level);
+            const parseKey = (key) => {
+                const [sx, sy] = key.split(",");
+                return { x: Number.parseInt(sx, 10) || 0, y: Number.parseInt(sy, 10) || 0 };
             };
-            const hasFloor = hasFloorAt(pos);
-            // If there is no floor override at requested cell, restrict to natural island
-            if (!hasFloor) {
-                pos = clampVec(pos, { x: 0, y: 0 }, { x: 9, y: 9 });
-                if (!isLand(pos.x, pos.y)) {
-                    // try to snap to spawnPoint within island
-                    const sp = state.location.levels[0]?.spawnPoint || { x: 5, y: 5 };
-                    pos = clampVec(sp, { x: 0, y: 0 }, { x: 9, y: 9 });
+            let pos = { x: Math.floor(basePos.x), y: Math.floor(basePos.y) };
+            if (!hasFloorAt(level, pos)) {
+                const spawn = state.location.levels.find((lvl) => lvl.id === level)?.spawnPoint ?? { x: 5, y: 5 };
+                if (hasFloorAt(level, spawn)) {
+                    pos = { x: Math.floor(spawn.x), y: Math.floor(spawn.y) };
+                }
+                else if (levelFloors && levelFloors.size > 0) {
+                    const firstIter = levelFloors.keys().next();
+                    if (!firstIter.done && typeof firstIter.value === "string") {
+                        pos = parseKey(firstIter.value);
+                    }
+                    else {
+                        return;
+                    }
+                }
+                else {
+                    return;
                 }
             }
-            // If occupied, search small spiral for a free nearby cell
             function occupied(p) {
                 for (const t of state.tokens.values()) {
                     if (t.levelId === level && t.pos.x === p.x && t.pos.y === p.y)
@@ -370,12 +422,10 @@ function onMessage(client, data) {
                     { x: 1, y: 1 }, { x: 1, y: -1 }, { x: -1, y: 1 }, { x: -1, y: -1 },
                 ];
                 for (const d of dirs) {
-                    let p = { x: pos.x + d.x, y: pos.y + d.y };
-                    const hasFloor2 = hasFloorAt(p);
-                    // For natural terrain, keep inside island; for floor overrides, allow outside
-                    if (!hasFloor2)
-                        p = clampVec(p, { x: 0, y: 0 }, { x: 9, y: 9 });
-                    if (!occupied(p) && (hasFloor2 || isLand(p.x, p.y))) {
+                    const p = { x: pos.x + d.x, y: pos.y + d.y };
+                    if (!hasFloorAt(level, p))
+                        continue;
+                    if (!occupied(p)) {
                         pos = p;
                         break;
                     }
@@ -396,24 +446,10 @@ function onMessage(client, data) {
                 return;
             // Normalize target to integer grid
             const target = { x: Math.floor(msg.pos.x), y: Math.floor(msg.pos.y) };
-            const hasFloor = (() => {
-                const m = state.floors.get(msg.levelId);
-                if (!m)
-                    return false;
-                return m.has(`${target.x},${target.y}`);
-            })();
-            let pos;
-            if (hasFloor) {
-                // Allow movement anywhere if a floor override exists at the cell
-                pos = target;
-            }
-            else {
-                // Otherwise restrict movement to the natural 10x10 island
-                const clamped = clampVec(target, { x: 0, y: 0 }, { x: 9, y: 9 });
-                if (!isLand(clamped.x, clamped.y))
-                    return;
-                pos = clamped;
-            }
+            ensureDefaultFloorsForLevel(msg.levelId);
+            if (!hasFloorAt(msg.levelId, target))
+                return;
+            const pos = target;
             tok.pos = pos;
             tok.levelId = msg.levelId;
             const events = [];
@@ -527,14 +563,8 @@ function onMessage(client, data) {
                 return;
             const gx = Math.floor(msg.pos.x);
             const gy = Math.floor(msg.pos.y);
-            // allow placing on natural land OR on painted floor override
-            const hasFloor = (() => {
-                const m = state.floors.get(msg.levelId);
-                if (!m)
-                    return false;
-                return m.has(`${gx},${gy}`);
-            })();
-            if (!isLand(gx, gy) && !hasFloor)
+            ensureDefaultFloorsForLevel(msg.levelId);
+            if (!hasFloorAtXY(msg.levelId, gx, gy))
                 return;
             // remove existing asset at pos (single asset per cell policy)
             const existingId = findAssetIdAt(msg.levelId, { x: gx, y: gy });
@@ -999,9 +1029,6 @@ function onMessage(client, data) {
         }
     }
 }
-function clampVec(v, min, max) {
-    return { x: Math.max(min.x, Math.min(max.x, v.x)), y: Math.max(min.y, Math.min(max.y, v.y)) };
-}
 function cellKey(v) { return `${v.x},${v.y}`; }
 function getFogSet(levelId) {
     let s = state.fog.get(levelId);
@@ -1029,38 +1056,17 @@ function findAssetIdAt(levelId, pos) {
     }
     return null;
 }
-// --- world helpers (mirror client) ---
-function hashString(s) {
-    let h = 2166136261 >>> 0;
-    for (let i = 0; i < s.length; i++) {
-        h ^= s.charCodeAt(i);
-        h = Math.imul(h, 16777619);
-    }
-    return h >>> 0;
-}
-function hash2D(x, y, seed) {
-    let h = (Math.imul(x | 0, 374761393) + Math.imul(y | 0, 668265263) + seed) >>> 0;
-    h ^= h >>> 13;
-    h = Math.imul(h, 1274126177);
-    return (h ^ (h >>> 16)) >>> 0;
-}
-function isLand(gx, gy) {
-    if (gx < 0 || gx >= 10 || gy < 0 || gy >= 10)
+function hasFloorAt(levelId, pos) {
+    const m = state.floors.get(levelId);
+    if (!m)
         return false;
-    const seed = state.location.levels[0]?.seed || "seed-1";
-    const s = (hashString(seed) ^ 0xa5a5a5a5) >>> 0;
-    const edge = Math.min(gx, gy, 9 - gx, 9 - gy);
-    if (edge === 0) {
-        const h = hash2D(gx, gy, s);
-        if ((h & 0xff) < 50)
-            return false;
-    }
-    else if (edge === 1) {
-        const h = hash2D(gx * 3 + 7, gy * 5 + 11, s);
-        if ((h & 0xff) < 20)
-            return false;
-    }
-    return true;
+    return m.has(`${pos.x},${pos.y}`);
+}
+function hasFloorAtXY(levelId, x, y) {
+    const m = state.floors.get(levelId);
+    if (!m)
+        return false;
+    return m.has(`${x},${y}`);
 }
 // Generate a bright-ish random color (each channel in [128..255])
 function randomBrightColor() {
@@ -1096,6 +1102,7 @@ function makeNPCToken(owner, levelId, spawn) {
     };
 }
 function snapshot() {
+    ensureDefaultFloorsForAllLevels();
     const events = [];
     for (const [lvl, set] of state.fog.entries()) {
         const cells = Array.from(set).map((k) => {
