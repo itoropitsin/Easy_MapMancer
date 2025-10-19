@@ -625,6 +625,23 @@ function drawTokens() {
     } as any);
     (text as any).anchor?.set?.(0.5);
     text.position.set(0, 0);
+    const labelRaw = (tok.name ?? "").trim();
+    const labelText = labelRaw ? Array.from(labelRaw).slice(0, 6).join("") : "";
+    const label = labelText ? new Text({
+      text: labelText,
+      style: {
+        fontFamily: "Inter, system-ui, sans-serif",
+        fontSize: Math.floor(CELL * 0.3),
+        fill: 0xffffff,
+        stroke: 0x202124,
+        strokeThickness: 2,
+        align: "center",
+      }
+    } as any) : null;
+    if (label) {
+      (label as any).anchor?.set?.(0.5, 0);
+      label.position.set(0, CELL * 0.42);
+    }
     // Subtle ring to improve visibility/select state
     const ring = new Graphics();
     const ringColor = isMine ? 0x8ab4f8 : 0x9aa0a6;
@@ -634,6 +651,10 @@ function drawTokens() {
     node.addChild(ring);
     // @ts-ignore
     node.addChild(text);
+    if (label) {
+      // @ts-ignore
+      node.addChild(label);
+    }
     node.position.set(tok.pos.x * CELL + CELL / 2, tok.pos.y * CELL + CELL / 2);
     // Enlarge hit area to make grabbing easier
     try { (node as any).hitArea = new Circle(0, 0, CELL * 0.55); } catch {}
