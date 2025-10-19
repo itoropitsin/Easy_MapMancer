@@ -67,6 +67,20 @@ function uid(prefix: string): string {
   return `${prefix}-${Math.random().toString(36).slice(2, 8)}-${Date.now().toString(36)}`;
 }
 
+function escapeHtml(value: string | number | null | undefined): string {
+  const str = String(value ?? "");
+  return str.replace(/[&<>"']/g, (ch) => {
+    switch (ch) {
+      case "&": return "&amp;";
+      case "<": return "&lt;";
+      case ">": return "&gt;";
+      case '"': return "&quot;";
+      case "'": return "&#39;";
+      default: return ch;
+    }
+  });
+}
+
 const CELL = 32;
 let playerId: ID | null = null;
 let myTokenId: ID | null = null;
@@ -90,6 +104,7 @@ let lastPaintCell: Vec2 | null = null;
 let brushSize: 1 | 2 | 3 | 4 = 1;
 let locationsExpanded = new Set<string>();
 let lastUsedLocationPath: string | undefined;
+const SHARE_BASE_URL = typeof window !== "undefined" ? window.location.origin : "";
 // Recent locations (client-side only)
 let recentLocations: string[] = [];
 try { const s = localStorage.getItem("recentLocations"); if (s) recentLocations = JSON.parse(s); } catch {}
@@ -681,7 +696,7 @@ function renderCharacterPanel() {
   if (!panel) return; // panel not present in DOM yet
   const tok = selectedTokenId ? tokens.get(selectedTokenId) : null;
   if (!tok) {
-    panel.innerHTML = '<div style="opacity:.7">Нет выбранного токена</div>';
+    panel.innerHTML = '<div class="char-header">Лист персонажа</div><div style="opacity:.7">Нет выбранного токена</div>';
     return;
   }
   const anyTok: any = tok as any;
@@ -690,20 +705,109 @@ function renderCharacterPanel() {
   const editable = canControl(tok);
   const tintNum: number = (typeof anyTok.tint === "number" ? anyTok.tint : 0x9aa0a6) & 0xffffff;
   const tintHex = `#${tintNum.toString(16).padStart(6, "0")}`;
+  const notes = typeof anyTok.notes === "string" ? anyTok.notes : "";
+  const formatNumber = (value: any) => {
+    const n = Number(value);
+    return Number.isFinite(n) ? String(n) : "";
+  };
+  const renderInput = (opts: { id: string; type: string; value: string; placeholder?: string; attrs?: string }) => {
+    const placeholder = opts.placeholder ? ` placeholder="${escapeHtml(opts.placeholder)}"` : "";
+    const extra = opts.attrs ? ` ${opts.attrs}` : "";
+    return `<input id="${opts.id}" class="char-input" type="${opts.type}" value="${escapeHtml(opts.value)}"${placeholder}${extra} />`;
+  };
+  const iconMarkup = (kind: string): string => {
+    if (kind.startsWith("stat-")) {
+      const code = kind.slice(5).toUpperCase();
+      return `<span class="char-icon char-icon--abbr">${escapeHtml(code)}</span>`;
+    }
+    switch (kind) {
+      case "name":
+        return `<span class="char-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 12a4 4 0 1 0-4-4 4 4 0 0 0 4 4Z" fill="currentColor" opacity="0.9"/><path d="M6.2 19c.6-2.5 2.8-4.5 5.8-4.5s5.2 2 5.8 4.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/></svg></span>`;
+      case "hp":
+        return `<span class="char-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19.5 6.2 13.7a4 4 0 0 1 0-5.6 4 4 0 0 1 5.6 0l.2.3.2-.3a4 4 0 0 1 5.6 0 4 4 0 0 1 0 5.6L12 19.5Z" fill="currentColor"/></svg></span>`;
+      case "ac":
+        return `<span class="char-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21c-4.4-1.9-7.5-5.1-7.5-9.3V6.4L12 3l7.5 3.4v5.3c0 4.2-3.1 7.4-7.5 9.3Z" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/><path d="M12 11.2v4.3" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg></span>`;
+      case "color":
+        return `<span class="char-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4.5a6.5 6.5 0 0 1 0 13h-.7a1.3 1.3 0 0 1-1.3-1.3 2.1 2.1 0 0 0-2.1-2.1h-.2A3.9 3.9 0 0 1 3.8 10 6.5 6.5 0 0 1 12 4.5Z" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="9.1" cy="9.3" r="1.1" fill="currentColor" opacity="0.55"/><circle cx="14" cy="8.2" r="1" fill="currentColor" opacity="0.35"/><circle cx="15.8" cy="11.2" r="1.1" fill="currentColor" opacity="0.45"/></svg></span>`;
+      case "vision":
+        return `<span class="char-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Z" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="12" r="2.4" fill="none" stroke="currentColor" stroke-width="1.2"/><circle cx="12" cy="12" r="1.1" fill="currentColor"/></svg></span>`;
+      default:
+        return `<span class="char-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3" fill="currentColor"/></svg></span>`;
+    }
+  };
+  const renderField = (cfg: { icon: string; label: string; input: string; hint?: string; variant?: "stat"; }) => {
+    const classes = ["char-field"];
+    if (cfg.variant === "stat") classes.push("char-field--stat");
+    const hintHtml = cfg.hint ? `<span class="char-hint">${escapeHtml(cfg.hint)}</span>` : "";
+    return `<div class="${classes.join(" ")}">${iconMarkup(cfg.icon)}<div class="char-field-body"><div class="char-label">${escapeHtml(cfg.label)}</div><div class="char-control">${cfg.input}${hintHtml}</div></div></div>`;
+  };
+  const profileFields = [
+    {
+      icon: "name",
+      label: "Имя",
+      input: renderInput({ id: "char-name", type: "text", value: tok.name ?? "", placeholder: "Имя" }),
+    },
+    {
+      icon: "color",
+      label: "Цвет",
+      input: renderInput({ id: "char-tint", type: "color", value: tintHex, attrs: 'aria-label="Цвет токена"' }),
+    },
+  ];
+  const combatFields = [
+    {
+      icon: "hp",
+      label: "HP",
+      input: renderInput({ id: "char-hp", type: "number", value: formatNumber(anyTok.hp), placeholder: "0", attrs: 'inputmode="numeric"' }),
+    },
+    {
+      icon: "ac",
+      label: "AC",
+      input: renderInput({ id: "char-ac", type: "number", value: formatNumber(anyTok.ac), placeholder: "0", attrs: 'inputmode="numeric"' }),
+    },
+  ];
+  const statKeys: Array<{ key: keyof NonNullable<Token["stats"]>; label: string }> = [
+    { key: "str", label: "STR" },
+    { key: "dex", label: "DEX" },
+    { key: "con", label: "CON" },
+    { key: "int", label: "INT" },
+    { key: "wis", label: "WIS" },
+    { key: "cha", label: "CHA" },
+  ];
+  const statsFields = statKeys.map(({ key, label }) => renderField({
+    icon: `stat-${key}`,
+    label,
+    input: renderInput({ id: `char-${key}`, type: "number", value: formatNumber((stats as any)[key]), placeholder: "-", attrs: 'inputmode="numeric"' }),
+    variant: "stat",
+  }));
+  const visionField = renderField({
+    icon: "vision",
+    label: "Видимость",
+    input: renderInput({ id: "char-vision-radius", type: "number", value: String(vr), attrs: 'inputmode="numeric" min="0" max="20"' }),
+    hint: "радиус (0-20)",
+  });
   panel.innerHTML = `
-    <div style="font-weight:600; margin-bottom:8px;">Лист персонажа</div>
-    <div style="display:grid; grid-template-columns: 100px 1fr; gap:6px; font-size:13px; align-items:center;">
-      <div>Имя</div><div><input id="char-name" type="text" value="${tok.name ?? ''}" placeholder="Имя" style="width:100%" /></div>
-      <div>HP</div><div><input id="char-hp" type="number" inputmode="numeric" value="${Number(anyTok.hp ?? '')}" placeholder="0" style="width:100%" /></div>
-      <div>AC</div><div><input id="char-ac" type="number" inputmode="numeric" value="${Number(anyTok.ac ?? '')}" placeholder="0" style="width:100%" /></div>
-      <div>Цвет</div><div><input id="char-tint" type="color" value="${tintHex}" style="width:100%" /></div>
-      <div>STR</div><div><input id="char-str" type="number" inputmode="numeric" value="${Number(stats.str ?? '')}" placeholder="-" style="width:100%" /></div>
-      <div>DEX</div><div><input id="char-dex" type="number" inputmode="numeric" value="${Number(stats.dex ?? '')}" placeholder="-" style="width:100%" /></div>
-      <div>CON</div><div><input id="char-con" type="number" inputmode="numeric" value="${Number(stats.con ?? '')}" placeholder="-" style="width:100%" /></div>
-      <div>INT</div><div><input id="char-int" type="number" inputmode="numeric" value="${Number(stats.int ?? '')}" placeholder="-" style="width:100%" /></div>
-      <div>WIS</div><div><input id="char-wis" type="number" inputmode="numeric" value="${Number(stats.wis ?? '')}" placeholder="-" style="width:100%" /></div>
-      <div>CHA</div><div><input id="char-cha" type="number" inputmode="numeric" value="${Number(stats.cha ?? '')}" placeholder="-" style="width:100%" /></div>
-      <div>Видимость</div><div><input id="char-vision-radius" type="number" inputmode="numeric" min="0" max="20" value="${vr}" style="width:100%" /> <span style="opacity:.7; font-size:12px; margin-left:4px;">радиус (0-20)</span></div>
+    <div class="char-header">Лист персонажа</div>
+    <div class="char-section">
+      <div class="char-section-title">Профиль</div>
+      ${profileFields.map(renderField).join("")}
+    </div>
+    <div class="char-section">
+      <div class="char-section-title">Боевые параметры</div>
+      ${combatFields.map(renderField).join("")}
+    </div>
+    <div class="char-section">
+      <div class="char-section-title">Характеристики</div>
+      <div class="char-stats-grid">
+        ${statsFields.join("")}
+      </div>
+    </div>
+    <div class="char-section">
+      <div class="char-section-title">Видимость</div>
+      ${visionField}
+    </div>
+    <div class="char-section char-notes-wrapper">
+      <label for="char-notes">Заметки</label>
+      <textarea id="char-notes" placeholder="Свободный текст...">${escapeHtml(notes)}</textarea>
     </div>
   `;
   // Enable/disable based on permissions
@@ -758,6 +862,13 @@ function renderCharacterPanel() {
       }
     }
   });
+  const notesEl = panel.querySelector("#char-notes") as HTMLTextAreaElement | null;
+  notesEl?.addEventListener("change", () => {
+    if (!editable) return;
+    const next = (notesEl.value || "").slice(0, 2000);
+    sendUpdateToken(tok.id, { notes: next });
+  });
+  if (notesEl) notesEl.disabled = !editable;
 }
 
 function drawAssets() {
@@ -1017,8 +1128,94 @@ function connect() {
   if (!statusEl) { statusEl = document.createElement("div"); statusEl.id = "status"; hud?.appendChild(statusEl); }
   let mapInfoEl = document.getElementById("map-info") as HTMLDivElement | null;
   if (!mapInfoEl) { mapInfoEl = document.createElement("div"); mapInfoEl.id = "map-info"; hud?.appendChild(mapInfoEl); }
-  statusEl.textContent = "WS: connecting...";
-  mapInfoEl.textContent = "Карта: —";
+  let shareButtonEl = document.getElementById("btn-share") as HTMLButtonElement | null;
+  let shareLink: string | null = null;
+  const buildShareLink = (): string | null => {
+    if (!SHARE_BASE_URL || !currentLocation?.id) return null;
+    try {
+      const url = new URL(window.location.pathname || "/", SHARE_BASE_URL);
+      url.searchParams.set("inv", "pl-local");
+      url.searchParams.set("loc", currentLocation.id);
+      return url.toString();
+    } catch (err) {
+      try { console.warn("[Share] Failed to build link", err); } catch {}
+      return null;
+    }
+  };
+  const refreshShareButton = () => {
+    if (!shareButtonEl) return;
+    shareLink = buildShareLink();
+    const hasLink = Boolean(shareLink);
+    shareButtonEl.disabled = !hasLink;
+    shareButtonEl.setAttribute("title", hasLink ? "Скопировать ссылку на карту" : "Ссылка недоступна");
+  };
+  const setStatus = (text: string, state: "connecting" | "connected" | "disconnected" | "error") => {
+    if (!statusEl) return;
+    statusEl.textContent = text;
+    statusEl.dataset.state = state;
+  };
+  const setMapName = (name: string | null | undefined) => {
+    if (!mapInfoEl) return;
+    const trimmed = (name ?? "").trim();
+    const value = trimmed.length ? trimmed : "—";
+    mapInfoEl.textContent = value;
+    mapInfoEl.setAttribute("title", value);
+    refreshShareButton();
+  };
+  setStatus("WS: connecting...", "connecting");
+  setMapName(null);
+  refreshShareButton();
+  shareButtonEl?.addEventListener("click", async (ev) => {
+    ev.preventDefault();
+    ev.stopPropagation();
+    const link = buildShareLink();
+    if (!link) {
+      refreshShareButton();
+      hudToast("Ссылка пока недоступна");
+      return;
+    }
+    shareLink = link;
+    const copyViaClipboard = async () => {
+      if (navigator?.clipboard?.writeText) {
+        await navigator.clipboard.writeText(link);
+        return true;
+      }
+      return false;
+    };
+    let copied = false;
+    try {
+      copied = await copyViaClipboard();
+    } catch {
+      copied = false;
+    }
+    if (!copied) {
+      try {
+        const textArea = document.createElement("textarea");
+        textArea.value = link;
+        textArea.style.position = "fixed";
+        textArea.style.opacity = "0";
+        document.body.appendChild(textArea);
+        textArea.select();
+        copied = document.execCommand("copy");
+        textArea.remove();
+      } catch {
+        copied = false;
+      }
+    }
+    if (!copied) {
+      try {
+        prompt("Скопируйте ссылку на карту:", link);
+        copied = true;
+      } catch {
+        copied = false;
+      }
+    }
+    if (copied) {
+      hudToast("Ссылка скопирована");
+    } else {
+      hudToast("Не удалось скопировать ссылку");
+    }
+  });
 
   const params = new URLSearchParams(location.search);
   const inv = params.get("inv") ?? "pl-local";
@@ -1041,7 +1238,7 @@ function connect() {
         currentLocation = msg.snapshot.location;
         // Update HUD map name and URL with location ID
         try {
-        (mapInfoEl as HTMLDivElement).textContent = `Карта: ${currentLocation?.name ?? "—"}`;
+        setMapName(currentLocation?.name);
         if (currentLocation?.id) {
           const url = new URL(window.location.href);
           url.searchParams.set("loc", currentLocation.id);
@@ -1120,7 +1317,7 @@ function connect() {
         currentLocation = snap.location;
         // Update HUD map name and URL with location ID
         try {
-        (mapInfoEl as HTMLDivElement).textContent = `Карта: ${currentLocation?.name ?? "—"}`;
+        setMapName(currentLocation?.name);
         if (currentLocation?.id) {
           const url = new URL(window.location.href);
           url.searchParams.set("loc", currentLocation.id);
@@ -1258,11 +1455,11 @@ function connect() {
       }
     });
     ws.addEventListener("close", (ev) => {
-      (statusEl as HTMLDivElement).textContent = "WS: disconnected";
+      setStatus("WS: disconnected", "disconnected");
       try { console.warn(`[WS][client] disconnected from :${port} code=${(ev as any)?.code}`); } catch {}
       setTimeout(() => { tryConnectSequence(); }, 1000);
     });
-    ws.addEventListener("error", () => { (statusEl as HTMLDivElement).textContent = "WS: error"; });
+    ws.addEventListener("error", () => { setStatus("WS: error", "error"); });
   };
 
   async function tryConnectSequence() {
@@ -1272,7 +1469,7 @@ function connect() {
       const port = currentPort;
       const wsUrl = `${protocol}://${host}:${port}/ws?inv=${encodeURIComponent(inv)}`;
       try { console.debug(`[WS][client] trying ${wsUrl}`); } catch {}
-      (statusEl as HTMLDivElement).textContent = `WS: connecting (:${port})...`;
+      setStatus(`WS: connecting (:${port})...`, "connecting");
       const ws = new WebSocket(wsUrl);
       socket = ws;
       const opened = await new Promise<boolean>((resolve) => {
@@ -1284,7 +1481,7 @@ function connect() {
         ws.addEventListener("close", fail, { once: true } as any);
       });
       if (opened) {
-        (statusEl as HTMLDivElement).textContent = "WS: connected";
+        setStatus("WS: connected", "connected");
         try { console.log(`[WS][client] connected on :${port}`); } catch {}
         const joinMsg: ClientToServer = { t: "join", name: "Player", invite: inv };
         ws.send(JSON.stringify(joinMsg));
@@ -1293,6 +1490,7 @@ function connect() {
         return;
       } else {
         try { console.warn(`[WS][client] failed to connect on :${port}`); } catch {}
+        setStatus("WS: offline, повтор подключения...", "error");
         currentPort = port + 1 > endPort ? startPort : (port + 1);
         await delay(500);
       }
@@ -1326,6 +1524,8 @@ function connect() {
   const btnNewFolder = document.getElementById("btn-new-folder") as HTMLButtonElement | null;
   const btnAddPlayer = document.getElementById("btn-add-player") as HTMLButtonElement | null;
   const btnAddNPC = document.getElementById("btn-add-npc") as HTMLButtonElement | null;
+  const btnUndo = document.getElementById("btn-undo") as HTMLButtonElement | null;
+  const btnRedo = document.getElementById("btn-redo") as HTMLButtonElement | null;
   const locationsTreeEl = document.getElementById("locations-tree") as HTMLDivElement | null;
   const btnBrush1 = document.getElementById("brush-1") as HTMLButtonElement | null;
   const btnBrush2 = document.getElementById("brush-2") as HTMLButtonElement | null;
@@ -1333,6 +1533,131 @@ function connect() {
   const btnBrush4 = document.getElementById("brush-4") as HTMLButtonElement | null;
   const btnRevealFog = document.getElementById("btn-tool-reveal-fog") as HTMLButtonElement | null;
   const btnEraseFog = document.getElementById("btn-tool-erase-fog") as HTMLButtonElement | null;
+  const locationsDrawerEl = document.getElementById("locations-drawer") as HTMLDivElement | null;
+  const locationsToggleBtn = document.getElementById("locations-toggle") as HTMLButtonElement | null;
+  const locationsCloseBtn = document.getElementById("locations-close") as HTMLButtonElement | null;
+  const dockButtons = Array.from(document.querySelectorAll<HTMLButtonElement>("#tool-dock .dock-btn"));
+
+  let activeToolPanel: HTMLElement | null = null;
+  let activeDockButton: HTMLButtonElement | null = null;
+
+  function closeToolPanels() {
+    if (activeToolPanel) {
+      activeToolPanel.classList.remove("open");
+      activeToolPanel = null;
+    }
+    if (activeDockButton) {
+      activeDockButton.classList.remove("open");
+      activeDockButton = null;
+    }
+  }
+
+  function positionPanelForButton(btn: HTMLButtonElement, panel: HTMLElement) {
+    const rect = btn.getBoundingClientRect();
+    panel.style.left = `${Math.round(rect.right + 14)}px`;
+    panel.style.top = `${Math.round(rect.top + rect.height / 2)}px`;
+  }
+
+  function toggleToolPanel(btn: HTMLButtonElement, panel: HTMLElement) {
+    if (activeToolPanel === panel) {
+      closeToolPanels();
+      return;
+    }
+    closeToolPanels();
+    positionPanelForButton(btn, panel);
+    panel.classList.add("open");
+    btn.classList.add("open");
+    activeToolPanel = panel;
+    activeDockButton = btn;
+  }
+
+  dockButtons.forEach((btn) => {
+    const panelId = btn.dataset.panel;
+    if (!panelId) return;
+    const panel = document.getElementById(panelId) as HTMLElement | null;
+    if (!panel) return;
+    btn.addEventListener("click", (ev) => {
+      ev.preventDefault();
+      ev.stopPropagation();
+      toggleToolPanel(btn, panel);
+    });
+  });
+
+  document.addEventListener("click", (ev) => {
+    const target = ev.target as Node | null;
+    if (activeToolPanel && target && !activeToolPanel.contains(target) && !activeDockButton?.contains(target as Node)) {
+      closeToolPanels();
+    }
+  });
+  window.addEventListener("resize", () => closeToolPanels());
+
+  let locationsDrawerOpen = false;
+  const setLocationsOpen = (open: boolean) => {
+    locationsDrawerOpen = open;
+    if (locationsDrawerEl) {
+      locationsDrawerEl.classList.toggle("open", open);
+      locationsDrawerEl.setAttribute("aria-hidden", open ? "false" : "true");
+    }
+    if (locationsToggleBtn) {
+      locationsToggleBtn.setAttribute("aria-expanded", open ? "true" : "false");
+    }
+    document.body.classList.toggle("locations-open", open);
+    if (open) closeToolPanels();
+  };
+  const toggleLocations = () => setLocationsOpen(!locationsDrawerOpen);
+  const closeLocations = () => setLocationsOpen(false);
+
+  locationsToggleBtn?.addEventListener("click", (ev) => {
+    ev.preventDefault();
+    ev.stopPropagation();
+    toggleLocations();
+  });
+  locationsCloseBtn?.addEventListener("click", (ev) => {
+    ev.preventDefault();
+    closeLocations();
+  });
+
+  document.addEventListener("click", (ev) => {
+    if (!locationsDrawerOpen) return;
+    const target = ev.target as Node | null;
+    if (locationsDrawerEl?.contains(target) || locationsToggleBtn?.contains(target as Node)) return;
+    closeLocations();
+  });
+
+  document.addEventListener("keydown", (ev) => {
+    if (ev.key === "Escape") {
+      if (locationsDrawerOpen) closeLocations();
+      if (activeToolPanel) closeToolPanels();
+    }
+  });
+
+  setLocationsOpen(false);
+
+  btnUndo?.addEventListener("click", (ev) => {
+    ev.preventDefault();
+    closeToolPanels();
+    hudToast("Undo пока не реализовано");
+  });
+  btnRedo?.addEventListener("click", (ev) => {
+    ev.preventDefault();
+    closeToolPanels();
+    hudToast("Redo пока не реализовано");
+  });
+
+  function updateDockSelection() {
+    const determineGroup = (): string => {
+      if (editorMode === "revealFog" || editorMode === "eraseFog") return "fog";
+      if (editorMode === "spawnToken" || editorMode === "eraseTokens" || selectedTokenKind) return "characters";
+      if (selectedFloorKind || editorMode === "eraseSpace") return "floors";
+      if (selectedAssetKind || editorMode === "eraseObjects") return "assets";
+      return "cursor";
+    };
+    const activeGroup = determineGroup();
+    dockButtons.forEach((btn) => {
+      const group = btn.dataset.group;
+      btn.classList.toggle("is-selected", group === activeGroup);
+    });
+  }
 
   function updateEditorUI() {
     const isDM = myRole === "DM";
@@ -1364,7 +1689,6 @@ function connect() {
     if (btnRevealFog) btnRevealFog.disabled = !isDM;
     if (btnEraseFog) btnEraseFog.disabled = !isDM;
     // selected states
-    btnCursor?.classList.toggle("selected", editorMode === "cursor");
     btnEraseTokens?.classList.toggle("selected", editorMode === "eraseTokens");
     btnEraseObjects?.classList.toggle("selected", editorMode === "eraseObjects");
     btnEraseSpace?.classList.toggle("selected", editorMode === "eraseSpace");
@@ -1387,17 +1711,27 @@ function connect() {
     btnBrush2?.classList.toggle("selected", brushSize === 2);
     btnBrush3?.classList.toggle("selected", brushSize === 3);
     btnBrush4?.classList.toggle("selected", brushSize === 4);
-    btnRevealFog?.classList.toggle("selected", editorMode === "revealFog");
-    btnEraseFog?.classList.toggle("selected", editorMode === "eraseFog");
-    // Token spawn selection state
-    btnAddPlayer?.classList.toggle("selected", editorMode === "spawnToken" && selectedTokenKind === "player");
-    btnAddNPC?.classList.toggle("selected", editorMode === "spawnToken" && selectedTokenKind === "npc");
-    if (btnAddPlayer) btnAddPlayer.disabled = !isDM;
-    if (btnAddNPC) btnAddNPC.disabled = !isDM;
+   btnRevealFog?.classList.toggle("selected", editorMode === "revealFog");
+   btnEraseFog?.classList.toggle("selected", editorMode === "eraseFog");
+   // Token spawn selection state
+   btnAddPlayer?.classList.toggle("selected", editorMode === "spawnToken" && selectedTokenKind === "player");
+   btnAddNPC?.classList.toggle("selected", editorMode === "spawnToken" && selectedTokenKind === "npc");
+   if (btnAddPlayer) btnAddPlayer.disabled = !isDM;
+   if (btnAddNPC) btnAddNPC.disabled = !isDM;
+    updateDockSelection();
   }
   updateEditorUI();
   // Editor tool buttons
-  btnCursor?.addEventListener("click", () => { editorMode = "cursor"; selectedAssetKind = null; selectedFloorKind = null; selectedTokenKind = null; updateEditorUI(); });
+  btnCursor?.addEventListener("click", (ev) => {
+    ev.preventDefault();
+    ev.stopPropagation();
+    closeToolPanels();
+    editorMode = "cursor";
+    selectedAssetKind = null;
+    selectedFloorKind = null;
+    selectedTokenKind = null;
+    updateEditorUI();
+  });
   btnEraseTokens?.addEventListener("click", () => { 
     editorMode = "eraseTokens"; 
     selectedAssetKind = null; 
@@ -1532,6 +1866,7 @@ function connect() {
           if (!socket || myRole !== "DM") return;
           const msg: ClientToServer = { t: "loadLocation", path: p };
           socket.send(JSON.stringify(msg));
+          closeLocations();
           addRecent(p);
         };
         sec.appendChild(row);
@@ -1613,6 +1948,7 @@ function connect() {
         if (!socket || myRole !== "DM") return;
         const msg: ClientToServer = { t: "loadLocation", path: node.path };
         socket.send(JSON.stringify(msg));
+        closeLocations();
         addRecent(node.path);
       };
       // Inline actions on the right: Move, Delete
@@ -1831,17 +2167,24 @@ minimap.cursor = "pointer";
 minimap.on("pointerdown", (ev: any) => ev.stopPropagation());
 let minimapSize = 180; // px
 function positionMinimap() {
-  // Keep minimap fully visible: shift left by right panel width (if present)
-  let rightInset = 12;
+  const margin = 24;
+  let offsetX = margin;
+  let offsetY = margin;
   try {
     const rp = document.getElementById("right-panel");
     if (rp) {
-      const w = Math.ceil(rp.getBoundingClientRect().width);
-      // include an extra small gap between panel and minimap
-      rightInset += w + 12;
+      const rect = rp.getBoundingClientRect();
+      const vw = window.innerWidth || app.screen.width;
+      const vh = window.innerHeight || app.screen.height;
+      if (rect.right + margin > vw) {
+        offsetX = Math.max(offsetX, rect.right + margin - vw);
+      }
+      if (rect.bottom + margin > vh) {
+        offsetY = Math.max(offsetY, rect.bottom + margin - vh);
+      }
     }
   } catch {}
-  minimap.position.set(app.screen.width - minimapSize - rightInset, app.screen.height - minimapSize - 12);
+  minimap.position.set(app.screen.width - minimapSize - offsetX, app.screen.height - minimapSize - offsetY);
 }
 positionMinimap();
 window.addEventListener("resize", positionMinimap);

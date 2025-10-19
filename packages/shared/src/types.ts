@@ -34,6 +34,7 @@ export interface Token {
   ac?: number;
   tint?: number;
   stats?: { str?: number; dex?: number; con?: number; int?: number; wis?: number; cha?: number; hp?: number; ac?: number };
+  notes?: string;
 }
 
 export interface Asset {

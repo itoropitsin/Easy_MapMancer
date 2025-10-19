@@ -5,118 +5,896 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>DnD Tabletop MVP</title>
     <style>
-      html, body, #app { height: 100%; margin: 0; background: #0b0e13; color: #e8eaed; font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto; }
-      #hud { position: fixed; top: 8px; right: 8px; left: auto; background: rgba(0,0,0,0.5); padding: 8px 10px; border-radius: 8px; font-size: 12px; z-index: 10; text-align: right; }
-      /* Left panel */
-      #left-panel { position: fixed; top: 12px; bottom: 12px; left: 12px; width: 220px; overflow: auto; background: rgba(0,0,0,0.6); padding: 12px; border-radius: 12px; box-shadow: 0 6px 20px rgba(0,0,0,0.3); backdrop-filter: blur(6px); }
-      /* Right panel: character sheet */
-      #right-panel { position: fixed; top: 12px; bottom: 12px; right: 12px; width: 240px; overflow: auto; background: rgba(0,0,0,0.6); padding: 12px; border-radius: 12px; box-shadow: 0 6px 20px rgba(0,0,0,0.3); backdrop-filter: blur(6px); display: grid; align-content: center; }
-      #right-panel .title { font-size: 12px; text-transform: uppercase; color: #9aa0a6; margin: 6px 2px 10px; letter-spacing: 0.04em; }
-      .panel-group { margin-bottom: 12px; }
-      .panel-title { font-size: 12px; text-transform: uppercase; color: #9aa0a6; margin: 6px 2px 6px; letter-spacing: 0.04em; }
-      .row { display: flex; flex-wrap: wrap; gap: 8px; }
-      button { background: #1f2937; color: #e8eaed; border: 1px solid #374151; border-radius: 8px; padding: 8px 10px; font-size: 13px; cursor: pointer; }
-      button:hover { background: #263142; }
-      button:disabled { opacity: 0.5; cursor: not-allowed; }
-      .selected { outline: 2px solid #8ab4f8; }
-      .brush button { flex: 1 0 45%; text-align: center; }
-      a { color: #8ab4f8; }
-      /* Locations list */
-      .loc-section-title { font-size: 11px; text-transform: uppercase; color: #9aa0a6; margin: 10px 6px 6px; letter-spacing: 0.04em; }
-      .loc-item { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 10px; cursor: pointer; }
-      .loc-item:hover { background: rgba(255,255,255,0.06); }
-      .loc-item.active { background: rgba(138,180,248,0.16); outline: 1px solid rgba(138,180,248,0.35); }
-      .loc-item .icon { width: 18px; text-align: center; opacity: 0.9; }
-      .loc-item .name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-      .twist { width: 16px; text-align: center; opacity: 0.8; margin-right: 2px; }
+      :root {
+        color-scheme: dark;
+        --surface-strong: rgba(15, 19, 28, 0.94);
+        --surface-soft: rgba(20, 27, 38, 0.85);
+        --surface-hover: rgba(96, 165, 250, 0.18);
+        --border-subtle: rgba(255, 255, 255, 0.08);
+        --text-muted: #9aa0a6;
+        --accent: #60a5fa;
+        --shadow: 0 18px 48px rgba(0, 0, 0, 0.35);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html,
+      body,
+      #app {
+        height: 100%;
+        margin: 0;
+        background: #0b0e13;
+        color: #e8eaed;
+        font-family: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      }
+
+      body {
+        overflow: auto;
+      }
+
+      a {
+        color: var(--accent);
+        text-decoration: none;
+      }
+
+      button {
+        background: var(--surface-soft);
+        color: #e8eaed;
+        border: 1px solid var(--border-subtle);
+        border-radius: 10px;
+        padding: 8px 12px;
+        font-size: 13px;
+        cursor: pointer;
+        transition: background 0.2s ease, border-color 0.2s ease, transform 0.15s ease, box-shadow 0.15s ease;
+      }
+
+      button:hover:not(:disabled) {
+        background: var(--surface-hover);
+        border-color: rgba(96, 165, 250, 0.45);
+      }
+
+      button:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+
+      button.selected {
+        background: rgba(96, 165, 250, 0.28);
+        border-color: rgba(96, 165, 250, 0.6);
+        box-shadow: 0 0 0 1px rgba(96, 165, 250, 0.35) inset;
+      }
+
+      .icon-button {
+        padding: 10px;
+        border-radius: 14px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 44px;
+        height: 44px;
+        background: rgba(17, 24, 33, 0.85);
+      }
+
+      .icon-button.small {
+        width: 36px;
+        height: 36px;
+        border-radius: 12px;
+        padding: 6px;
+      }
+
+      .icon-button svg {
+        width: 20px;
+        height: 20px;
+        fill: currentColor;
+      }
+
+      #hud {
+        position: fixed;
+        bottom: 24px;
+        left: 24px;
+        right: auto;
+        width: 260px;
+        background: var(--surface-strong);
+        border-radius: 16px;
+        padding: 12px 14px;
+        font-size: 12px;
+        line-height: 1.5;
+        z-index: 50;
+        box-shadow: var(--shadow);
+        border: 1px solid rgba(255, 255, 255, 0.05);
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        pointer-events: none;
+      }
+
+      #hud:empty {
+        display: none;
+      }
+
+      #top-bar {
+        position: fixed;
+        top: 18px;
+        left: 24px;
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        padding: 10px 16px;
+        background: var(--surface-strong);
+        border-radius: 18px;
+        box-shadow: var(--shadow);
+        border: 1px solid rgba(255, 255, 255, 0.06);
+        z-index: 60;
+        pointer-events: auto;
+        transition: left 0.28s ease;
+      }
+
+      body.locations-open #top-bar {
+        left: 330px;
+      }
+
+      .share-button {
+        position: fixed;
+        top: 18px;
+        right: 24px;
+        padding: 10px 18px;
+        border-radius: 18px;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        background: var(--surface-strong);
+        color: #e8eaed;
+        font-size: 13px;
+        font-weight: 500;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        cursor: pointer;
+        z-index: 70;
+        box-shadow: var(--shadow);
+        transition: background 0.2s ease, border-color 0.2s ease, transform 0.15s ease;
+      }
+
+      .share-button:hover:not(:disabled) {
+        background: rgba(96, 165, 250, 0.22);
+        border-color: rgba(96, 165, 250, 0.45);
+      }
+
+      .share-button:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+        box-shadow: none;
+      }
+
+      #top-bar .map-meta {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+      }
+
+      #map-info {
+        font-size: 15px;
+        font-weight: 600;
+        letter-spacing: 0.01em;
+        max-width: 260px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      #status {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 12px;
+        color: var(--text-muted);
+        padding: 4px 10px;
+        border-radius: 12px;
+        border: 1px solid rgba(255, 255, 255, 0.05);
+        background: rgba(255, 255, 255, 0.02);
+      }
+
+      #status::before {
+        content: "";
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: #f59e0b;
+        box-shadow: 0 0 12px rgba(245, 158, 11, 0.5);
+      }
+
+      #status[data-state="connected"] {
+        color: #6ee7b7;
+        border-color: rgba(110, 231, 183, 0.25);
+      }
+
+      #status[data-state="connected"]::before {
+        background: #34d399;
+        box-shadow: 0 0 12px rgba(52, 211, 153, 0.5);
+      }
+
+      #status[data-state="disconnected"],
+      #status[data-state="error"] {
+        color: #fca5a5;
+        border-color: rgba(248, 113, 113, 0.25);
+      }
+
+      #status[data-state="disconnected"]::before,
+      #status[data-state="error"]::before {
+        background: #f87171;
+        box-shadow: 0 0 12px rgba(248, 113, 113, 0.45);
+      }
+
+      #locations-drawer {
+        position: fixed;
+        top: 18px;
+        bottom: 18px;
+        left: 18px;
+        width: 288px;
+        background: var(--surface-strong);
+        border-radius: 20px;
+        padding: 18px;
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+        box-shadow: var(--shadow);
+        border: 1px solid rgba(255, 255, 255, 0.05);
+        transform: translateX(-120%);
+        transition: transform 0.28s ease;
+        z-index: 55;
+        overflow: hidden;
+      }
+
+      #locations-drawer.open {
+        transform: translateX(0);
+      }
+
+      .drawer-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+
+      .drawer-title {
+        font-size: 14px;
+        font-weight: 600;
+        letter-spacing: 0.02em;
+      }
+
+      .drawer-actions {
+        display: grid;
+        gap: 10px;
+      }
+
+      .drawer-actions button {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        justify-content: flex-start;
+        width: 100%;
+        font-size: 13px;
+      }
+
+      .drawer-actions button .icon {
+        font-size: 16px;
+      }
+
+      .drawer-scroll {
+        flex: 1;
+        overflow: auto;
+        padding-right: 6px;
+      }
+
+      .loc-section-title {
+        font-size: 11px;
+        text-transform: uppercase;
+        color: var(--text-muted);
+        margin: 12px 0 8px;
+        letter-spacing: 0.08em;
+      }
+
+      .loc-item {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 10px 12px;
+        border-radius: 12px;
+        cursor: pointer;
+        transition: background 0.2s ease, transform 0.15s ease;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      .loc-item:hover {
+        background: rgba(148, 163, 184, 0.14);
+      }
+
+      .loc-item.active {
+        background: rgba(96, 165, 250, 0.2);
+        outline: 1px solid rgba(96, 165, 250, 0.45);
+      }
+
+      .loc-item .icon {
+        width: 18px;
+        text-align: center;
+        opacity: 0.85;
+      }
+
+      .loc-item .name {
+        flex: 1;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      .twist {
+        width: 16px;
+        text-align: center;
+        opacity: 0.75;
+        margin-right: 4px;
+        cursor: pointer;
+      }
+
+      #tool-zone {
+        position: fixed;
+        top: 50%;
+        left: 24px;
+        transform: translateY(-50%);
+        display: flex;
+        flex-direction: column;
+        gap: 18px;
+        z-index: 45;
+        pointer-events: none;
+      }
+
+      body.locations-open #tool-zone {
+        left: 330px;
+      }
+
+      #tool-dock,
+      #undo-stack {
+        pointer-events: auto;
+      }
+
+      #tool-dock {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        padding: 12px 8px;
+        border-radius: 18px;
+        background: var(--surface-strong);
+        border: 1px solid rgba(255, 255, 255, 0.05);
+        box-shadow: var(--shadow);
+      }
+
+      #tool-dock .dock-btn {
+        position: relative;
+        transition: transform 0.15s ease;
+      }
+
+      #tool-dock .dock-btn::after {
+        content: attr(data-label);
+        position: absolute;
+        left: calc(100% + 10px);
+        top: 50%;
+        transform: translateY(-50%);
+        background: rgba(17, 24, 39, 0.92);
+        padding: 4px 10px;
+        border-radius: 10px;
+        font-size: 12px;
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.15s ease;
+        white-space: nowrap;
+        border: 1px solid rgba(255, 255, 255, 0.06);
+      }
+
+      #tool-dock .dock-btn:hover::after {
+        opacity: 1;
+      }
+
+      #tool-dock .dock-btn.open {
+        background: rgba(96, 165, 250, 0.26);
+        border-color: rgba(96, 165, 250, 0.45);
+      }
+
+      #tool-dock .dock-btn.is-selected {
+        background: rgba(96, 165, 250, 0.35);
+        border-color: rgba(96, 165, 250, 0.65);
+        box-shadow: 0 0 0 1px rgba(96, 165, 250, 0.45) inset;
+        color: #dbeafe;
+      }
+
+      #undo-stack {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        align-items: center;
+      }
+
+      #undo-stack button {
+        width: 44px;
+        height: 44px;
+        border-radius: 14px;
+      }
+
+      #tool-panels .tool-popover {
+        position: fixed;
+        min-width: 260px;
+        max-width: 320px;
+        background: var(--surface-strong);
+        border-radius: 16px;
+        padding: 18px;
+        border: 1px solid rgba(255, 255, 255, 0.06);
+        box-shadow: var(--shadow);
+        display: none;
+        transform: translateY(-50%);
+        z-index: 48;
+      }
+
+      #tool-panels .tool-popover.open {
+        display: block;
+      }
+
+      .panel-group {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+
+      .panel-title {
+        font-size: 12px;
+        text-transform: uppercase;
+        color: var(--text-muted);
+        letter-spacing: 0.08em;
+      }
+
+      .panel-subtitle {
+        font-size: 11px;
+        text-transform: uppercase;
+        color: var(--text-muted);
+        letter-spacing: 0.06em;
+        margin-top: 6px;
+      }
+
+      .row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+
+      .row button {
+        flex: 1 0 45%;
+        text-align: center;
+      }
+
+      .brush .row button {
+        flex: 1 0 40%;
+      }
+
+      #right-panel {
+        position: fixed;
+        top: 50%;
+        right: 24px;
+        transform: translateY(-50%);
+        width: 232px;
+        max-height: calc(100vh - 160px);
+        background: var(--surface-strong);
+        padding: 16px;
+        border-radius: 20px;
+        box-shadow: var(--shadow);
+        border: 1px solid rgba(255, 255, 255, 0.05);
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+        overflow: auto;
+      }
+
+      .char-header {
+        font-weight: 600;
+        font-size: 15px;
+        margin-bottom: 8px;
+        letter-spacing: 0.01em;
+      }
+
+      .char-section {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        margin-bottom: 14px;
+      }
+
+      .char-section:last-of-type {
+        margin-bottom: 0;
+      }
+
+      .char-section-title {
+        font-size: 11px;
+        text-transform: uppercase;
+        color: var(--text-muted);
+        letter-spacing: 0.08em;
+        margin-bottom: 2px;
+      }
+
+      .char-field {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        background: rgba(255, 255, 255, 0.02);
+        border: 1px solid rgba(255, 255, 255, 0.04);
+        border-radius: 14px;
+        padding: 9px 10px;
+      }
+
+      .char-field--stat {
+        padding: 7px 8px;
+      }
+
+      .char-icon {
+        width: 29px;
+        height: 29px;
+        border-radius: 9px;
+        background: rgba(96, 165, 250, 0.14);
+        border: 1px solid rgba(96, 165, 250, 0.26);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        color: #bfdbfe;
+        flex-shrink: 0;
+      }
+
+      .char-icon svg {
+        width: 16px;
+        height: 16px;
+        display: block;
+      }
+
+      .char-icon--abbr {
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.08em;
+        color: #d1d5db;
+      }
+
+      .char-field-body {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        flex: 1;
+        min-width: 0;
+        flex-wrap: wrap;
+        justify-content: space-between;
+      }
+
+      .char-field--stat .char-field-body {
+        gap: 6px;
+      }
+
+      .char-label {
+        font-size: 12px;
+        color: #e8eaed;
+        opacity: 0.88;
+        flex: 0 0 auto;
+        min-width: 64px;
+      }
+
+      .char-field--stat .char-label {
+        width: auto;
+        font-weight: 600;
+        letter-spacing: 0.04em;
+        font-size: 11px;
+      }
+
+      .char-control {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex: 1 1 120px;
+        justify-content: flex-end;
+      }
+
+      .char-input {
+        flex: 1;
+        min-width: 0;
+        background: rgba(15, 23, 42, 0.6);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 7px;
+        padding: 6px 8px;
+        color: #e8eaed;
+        font-size: 12px;
+      }
+
+      .char-input:disabled {
+        opacity: 0.55;
+        cursor: not-allowed;
+      }
+
+      input.char-input[type="color"] {
+        padding: 0;
+        height: 30px;
+        width: 48px;
+        min-width: 48px;
+        border-radius: 8px;
+        background: rgba(15, 23, 42, 0.4);
+        border: 1px solid rgba(255, 255, 255, 0.14);
+        cursor: pointer;
+      }
+
+      input.char-input[type="number"]::-webkit-outer-spin-button,
+      input.char-input[type="number"]::-webkit-inner-spin-button {
+        margin: 0;
+      }
+
+      .char-hint {
+        font-size: 11px;
+        color: var(--text-muted);
+        letter-spacing: 0.02em;
+      }
+
+      .char-stats-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 8px;
+      }
+
+      .char-notes-wrapper {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+
+      .char-notes-wrapper textarea {
+        width: 100%;
+        height: 110px;
+        background: rgba(15, 23, 42, 0.6);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 10px;
+        padding: 10px;
+        color: #e8eaed;
+        font-size: 12px;
+        resize: none;
+        line-height: 1.4;
+      }
+
+      .char-notes-wrapper textarea:disabled {
+        opacity: 0.55;
+        cursor: not-allowed;
+      }
+
+      .char-notes-wrapper label {
+        font-size: 11px;
+        text-transform: uppercase;
+        color: var(--text-muted);
+        letter-spacing: 0.08em;
+      }
+
+      #right-panel > *:last-child {
+        margin-bottom: 0;
+      }
+
+      #right-panel .title {
+        font-size: 13px;
+        text-transform: uppercase;
+        color: var(--text-muted);
+        letter-spacing: 0.08em;
+      }
+
+      #emoji-modal {
+        display: none;
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.55);
+        z-index: 1000;
+        align-items: center;
+        justify-content: center;
+      }
+
+      #emoji-modal .modal {
+        background: #111827;
+        border: 1px solid #374151;
+        border-radius: 16px;
+        padding: 16px;
+        width: min(520px, 90vw);
+        max-height: 72vh;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+
+      #emoji-modal input {
+        flex: 1;
+        padding: 10px 12px;
+        border-radius: 10px;
+        background: #1f2937;
+        color: #e8eaed;
+        border: 1px solid #374151;
+        font-size: 14px;
+      }
+
+      #emoji-grid {
+        overflow: auto;
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(44px, 1fr));
+        gap: 6px;
+        padding: 4px;
+      }
+
+      @media (max-width: 1200px) {
+        #right-panel {
+          display: none;
+        }
+      }
     </style>
   </head>
   <body>
     <div id="app"></div>
-    <div id="hud">
-      <div><b>Управление</b>: перетаскивайте токен мышью (Drag & Drop).</div>
-      <div>Параметр приглашения: <code>?inv=dm-local</code> (Мастер) или <code>?inv=pl-local</code> (Игрок)</div>
+    <div id="hud"></div>
+    <header id="top-bar">
+      <button id="locations-toggle" class="icon-button" aria-label="Открыть список карт" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M4 5.5a1.5 1.5 0 0 1 1.5-1.5h13A1.5 1.5 0 0 1 20 5.5V8a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V5.5ZM4 11a1 1 0 0 1 1-1h14a1 1 0 0 1 0 2H5a1 1 0 0 1-1-1Zm0 4a1 1 0 0 1 1-1h9.5a1 1 0 0 1 0 2H5a1 1 0 0 1-1-1Z" />
+        </svg>
+      </button>
+      <div class="map-meta">
+        <div id="map-info" title="Текущая карта">—</div>
+        <div id="status" data-state="connecting">WS: connecting…</div>
+      </div>
+    </header>
+    <button id="btn-share" class="share-button" aria-label="Поделиться картой">Share</button>
+    <aside id="locations-drawer" aria-hidden="true">
+      <div class="drawer-header">
+        <div class="drawer-title">Карты</div>
+        <button id="locations-close" class="icon-button small" aria-label="Скрыть список карт">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="m8.22 8.22a.75.75 0 0 1 1.06 0L12 10.94l2.72-2.72a.75.75 0 1 1 1.06 1.06L13.06 12l2.72 2.72a.75.75 0 1 1-1.06 1.06L12 13.06l-2.72 2.72a.75.75 0 0 1-1.06-1.06L10.94 12 8.22 9.28a.75.75 0 0 1 0-1.06Z" />
+          </svg>
+        </button>
+      </div>
+      <div class="drawer-actions">
+        <button id="btn-new-map" title="Создать новую пустую карту">
+          <span class="icon">🗺️</span>
+          <span>Новая карта</span>
+        </button>
+        <button id="btn-new-folder" title="Создать папку">
+          <span class="icon">📁</span>
+          <span>Новая папка</span>
+        </button>
+      </div>
+      <div id="locations-tree" class="drawer-scroll" style="font-size:13px; line-height:1.5;"></div>
+    </aside>
+    <div id="tool-zone">
+      <nav id="tool-dock">
+        <button id="btn-tool-cursor" class="icon-button dock-btn" data-label="Курсор" data-group="cursor" aria-label="Курсор (перемещение)">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M6 4a.8.8 0 0 1 .9-.8l11.5 6.4a.8.8 0 0 1-.1 1.5l-3.8 1.1 1.2 4.6a.8.8 0 0 1-1.3.8l-2.9-1.9-1.7 2.8a.7.7 0 0 1-1.3-.2L6 4Z" fill="currentColor" />
+          </svg>
+        </button>
+        <button class="icon-button dock-btn" data-panel="panel-brush" data-label="Кисть" data-group="brush" aria-label="Настройки кисти">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M16.1 4.2 20 8.1a2.4 2.4 0 0 1 0 3.4l-8.5 8.5-5.5 1.7 1.7-5.5 8.5-8.5a2.4 2.4 0 0 1 3.4 0Z" fill="currentColor" />
+            <path d="M4.9 19.6c0-1.4 1-2.6 2.3-2.9l3.9-1-1 3.9c-.3 1.3.8 2.4 2.1 2.1-.6.8-2 1.3-3.1 1.2-1.5-.2-2.8-1.6-2.8-3.3Z" fill="currentColor" opacity="0.85" />
+          </svg>
+        </button>
+        <button class="icon-button dock-btn" data-panel="panel-fog" data-label="Туман" data-group="fog" aria-label="Туман войны">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M7.8 18.5A3.8 3.8 0 0 1 4 14.7c0-1.6 1-3.1 2.5-3.6a5.1 5.1 0 0 1 9.8-1.5 4 4 0 0 1 .9 7.8H7.8Z" />
+          </svg>
+        </button>
+        <button class="icon-button dock-btn" data-panel="panel-characters" data-label="Персонажи" data-group="characters" aria-label="Персонажи">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M12 12.5a4.25 4.25 0 1 0-3.5-6.7A4.25 4.25 0 0 0 12 12.5ZM7 13.8A4 4 0 0 0 3 17.8v2.2a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-2.2a4 4 0 0 0-4-4h-10Z" />
+          </svg>
+        </button>
+        <button class="icon-button dock-btn" data-panel="panel-assets" data-label="Ассеты" data-group="assets" aria-label="Ассеты">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <rect x="4" y="6" width="16" height="12" rx="2" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" fill="none" />
+            <path d="M4 10h16" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" />
+            <path d="M12 10v4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" />
+            <path d="M9 14h6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" />
+          </svg>
+        </button>
+        <button class="icon-button dock-btn" data-panel="panel-floors" data-label="Пол" data-group="floors" aria-label="Пол и покрытия">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M4.5 4h15A2.5 2.5 0 0 1 22 6.5v11A2.5 2.5 0 0 1 19.5 20h-15A2.5 2.5 0 0 1 2 17.5v-11A2.5 2.5 0 0 1 4.5 4Zm0 1.5A1 1 0 0 0 3.5 6.5v11a1 1 0 0 0 1 1h15a1 1 0 0 0 1-1v-11a1 1 0 0 0-1-1h-15Zm2.5 7h10a1 1 0 1 1 0 2h-10a1 1 0 0 1 0-2Z" />
+          </svg>
+        </button>
+      </nav>
+      <div id="undo-stack">
+        <button id="btn-undo" class="icon-button" title="Отменить предыдущее действие" aria-label="Отменить">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M5.2 9.7 9 5.9a.75.75 0 1 1 1.06 1.06l-2.22 2.2H14a5.25 5.25 0 0 1 0 10.5H6.75a.75.75 0 0 1 0-1.5H14a3.75 3.75 0 0 0 0-7.5H7.84l2.22 2.2A.75.75 0 0 1 9 14.5L5.2 10.7a1 1 0 0 1 0-1Z" />
+          </svg>
+        </button>
+        <button id="btn-redo" class="icon-button" title="Повторить действие" aria-label="Повторить">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M18.8 9.7 15 5.9a.75.75 0 1 0-1.06 1.06l2.22 2.2H10a5.25 5.25 0 0 0 0 10.5h7.25a.75.75 0 0 0 0-1.5H10a3.75 3.75 0 0 1 0-7.5h6.16l-2.22 2.2A.75.75 0 0 0 15 14.5l3.8-3.8a1 1 0 0 0 0-1Z" />
+          </svg>
+        </button>
+      </div>
     </div>
-    <div id="left-panel">
-      <div class="panel-group" id="tools">
-        <div class="panel-title">Инструменты</div>
-        <div class="row">
-          <button id="btn-tool-cursor" title="Курсор (перемещение)">Курсор</button>
+    <div id="tool-panels">
+      <div id="panel-brush" class="tool-popover">
+        <div class="panel-group brush" id="brush">
+          <div class="panel-title">Кисть</div>
+          <div class="row">
+            <button id="brush-1">1x1</button>
+            <button id="brush-2">2x2</button>
+            <button id="brush-3">3x3</button>
+            <button id="brush-4">4x4</button>
+          </div>
         </div>
       </div>
-      <div class="panel-group brush" id="brush">
-        <div class="panel-title">Кисть</div>
-        <div class="row">
-          <button id="brush-1">1x1</button>
-          <button id="brush-2">2x2</button>
-          <button id="brush-3">3x3</button>
-          <button id="brush-4">4x4</button>
+      <div id="panel-fog" class="tool-popover">
+        <div class="panel-group" id="fog">
+          <div class="panel-title">Туман войны</div>
+          <div class="row">
+            <button id="btn-tool-reveal-fog" title="Открыть туман войны">Открыть туман</button>
+            <button id="btn-tool-erase-fog" title="Скрыть туманом">Скрыть туманом</button>
+          </div>
         </div>
       </div>
-      <div class="panel-group" id="fog">
-        <div class="panel-title">Туман войны</div>
-        <div class="row">
-          <button id="btn-tool-reveal-fog" title="Открыть туман войны (видимо)">Открыть туман</button>
-          <button id="btn-tool-erase-fog" title="Скрыть туманом (стереть)">Скрыть туманом</button>
+      <div id="panel-characters" class="tool-popover">
+        <div class="panel-group" id="characters">
+          <div class="panel-title">Персонажи</div>
+          <div class="row">
+            <button id="btn-tool-erase-tokens" title="Ластик персонажей">🧽 Ластик персонажей</button>
+            <button id="btn-add-player" title="Добавить игрока">🧙 Игрок</button>
+            <button id="btn-add-npc" title="Добавить NPC">🧟 NPC</button>
+          </div>
         </div>
       </div>
-      <div class="panel-group" id="characters">
-        <div class="panel-title">Персонажи</div>
-        <div class="row">
-          <button id="btn-tool-erase-tokens" title="Ластик персонажей (удаляет токены)">🧽 Ластик персонажей</button>
-          <button id="btn-add-player" title="Добавить игрока">🧙 Игрок</button>
-          <button id="btn-add-npc" title="Добавить NPC">🧟 NPC</button>
+      <div id="panel-assets" class="tool-popover">
+        <div class="panel-group" id="assets">
+          <div class="panel-title">Ассеты</div>
+          <div class="row">
+            <button id="btn-tool-erase-objects" title="Ластик ассетов">🧽 Ластик ассетов</button>
+          </div>
+          <div class="panel-title panel-subtitle">Предметы</div>
+          <div class="row">
+            <button class="asset" id="asset-tree" title="Дерево">🌳 Дерево</button>
+            <button class="asset" id="asset-rock" title="Камень">🪨 Камень</button>
+            <button class="asset" id="asset-bush" title="Куст">🌿 Куст</button>
+            <button class="asset" id="asset-chest" title="Сундук">📦 Сундук</button>
+            <button class="asset" id="asset-sword" title="Меч">🗡️ Меч</button>
+            <button class="asset" id="asset-bow" title="Лук">🏹 Лук</button>
+            <button class="asset" id="asset-coins" title="Монеты">🪙 Монеты</button>
+            <button class="asset" id="asset-other" title="Другие эмодзи">✨ Другое</button>
+          </div>
+          <div class="panel-title panel-subtitle">Здания</div>
+          <div class="row">
+            <button class="asset" id="asset-wall" title="Стена">🧱 Стена</button>
+            <button class="asset" id="asset-window" title="Окно">🪟 Окно</button>
+            <button class="asset" id="asset-door" title="Дверь">🚪 Дверь</button>
+          </div>
         </div>
       </div>
-      <div class="panel-group" id="assets">
-        <div class="panel-title">Ассеты</div>
-        <div class="row">
-          <button id="btn-tool-erase-objects" title="Ластик ассетов (стирает ассеты)">🧽 Ластик ассетов</button>
-          <button class="asset" id="asset-tree" title="Дерево">🌳 Дерево</button>
-          <button class="asset" id="asset-rock" title="Камень">🪨 Камень</button>
-          <button class="asset" id="asset-bush" title="Куст">🌿 Куст</button>
-          <button class="asset" id="asset-wall" title="Стена">🧱 Стена</button>
-          <button class="asset" id="asset-window" title="Окно">🪟 Окно</button>
-          <button class="asset" id="asset-door" title="Дверь">🚪 Дверь</button>
-          <button class="asset" id="asset-chest" title="Сундук">📦 Сундук</button>
-          <button class="asset" id="asset-sword" title="Меч">🗡️ Меч</button>
-          <button class="asset" id="asset-bow" title="Лук">🏹 Лук</button>
-          <button class="asset" id="asset-coins" title="Монеты">🪙 Монеты</button>
-          <button class="asset" id="asset-other" title="Другие эмодзи">✨ Другое</button>
+      <div id="panel-floors" class="tool-popover">
+        <div class="panel-group" id="floors">
+          <div class="panel-title">Пол</div>
+          <div class="row">
+            <button id="btn-tool-erase-space" title="Ластик пола">🧽 Ластик пола</button>
+            <button class="asset" id="floor-stone" title="Пол: камень">🧱 Камень</button>
+            <button class="asset" id="floor-wood" title="Пол: дерево">🪵 Дерево</button>
+            <button class="asset" id="floor-water" title="Пол: вода">💧 Вода</button>
+            <button class="asset" id="floor-sand" title="Пол: песок">🏖️ Песок</button>
+          </div>
         </div>
-      </div>
-      <div class="panel-group" id="floors">
-        <div class="panel-title">Пол</div>
-        <div class="row">
-          <button id="btn-tool-erase-space" title="Ластик пола (удаляет пол и объекты)">🧽 Ластик пола</button>
-          <button class="asset" id="floor-stone" title="Пол: камень">🧱 Камень</button>
-          <button class="asset" id="floor-wood" title="Пол: дерево">🪵 Дерево</button>
-          <button class="asset" id="floor-water" title="Пол: вода">💧 Вода</button>
-          <button class="asset" id="floor-sand" title="Пол: песок">🏖️ Песок</button>
-        </div>
-      </div>
-      <div class="panel-group" id="locations-panel">
-        <div class="panel-title">Локации (сервер)</div>
-        <div class="row" style="margin-bottom:6px;">
-          <button id="btn-new-map" title="Создать новую пустую карту">🗺️ Новая карта</button>
-          <button id="btn-new-folder" title="Создать папку">📁 Новая папка</button>
-        </div>
-        <div id="locations-tree" style="font-size:13px; line-height:1.5;"></div>
       </div>
     </div>
-    <div id="right-panel">
+    <aside id="right-panel">
       <div class="title">Лист персонажа</div>
       <div style="opacity:.7">Нет выбранного токена</div>
-    </div>
-    <!-- Emoji picker modal -->
-    <div id="emoji-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.55); z-index:1000; align-items:center; justify-content:center;">
-      <div style="background:#111827; border:1px solid #374151; border-radius:12px; padding:12px; width:min(520px, 90vw); max-height:70vh; display:flex; flex-direction:column; gap:8px;">
-        <div style="display:flex; gap:8px; align-items:center;">
-          <input id="emoji-search" placeholder="Поиск эмодзи..." style="flex:1; padding:8px 10px; border-radius:8px; background:#1f2937; color:#e8eaed; border:1px solid #374151;" />
-          <button id="emoji-close">Закрыть</button>
+    </aside>
+    <div id="emoji-modal">
+      <div class="modal">
+        <div style="display:flex; gap:10px; align-items:center;">
+          <input id="emoji-search" placeholder="Поиск эмодзи..." />
+          <button id="emoji-close" class="icon-button small" title="Закрыть">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="m8.22 8.22a.75.75 0 0 1 1.06 0L12 10.94l2.72-2.72a.75.75 0 1 1 1.06 1.06L13.06 12l2.72 2.72a.75.75 0 1 1-1.06 1.06L12 13.06l-2.72 2.72a.75.75 0 0 1-1.06-1.06L10.94 12 8.22 9.28a.75.75 0 0 1 0-1.06Z" />
+            </svg>
+          </button>
         </div>
-        <div id="emoji-grid" style="overflow:auto; display:grid; grid-template-columns: repeat(auto-fill, minmax(44px, 1fr)); gap:6px; padding:4px;">
-        </div>
+        <div id="emoji-grid"></div>
       </div>
     </div>
 
