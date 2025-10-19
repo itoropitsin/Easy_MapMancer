@@ -303,6 +303,10 @@ function onMessage(client: ClientRec, data: any) {
   if (!msg || typeof msg !== "object" || !("t" in msg)) return;
 
   switch (msg.t) {
+    case "ping": {
+      send(client.socket, { t: "pong" });
+      break;
+    }
     case "spawnToken": {
       if (client.role !== "DM") return;
       const kind = (msg as any).kind === "npc" ? "npc" : "player";

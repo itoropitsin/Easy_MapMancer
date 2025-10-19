@@ -328,6 +328,10 @@ function onMessage(client, data) {
     if (!msg || typeof msg !== "object" || !("t" in msg))
         return;
     switch (msg.t) {
+        case "ping": {
+            send(client.socket, { t: "pong" });
+            break;
+        }
         case "spawnToken": {
             if (client.role !== "DM")
                 return;

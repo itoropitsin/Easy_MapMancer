@@ -547,6 +547,76 @@ drawWalls();
 drawObjects();
 
 let socket: WebSocket | null = null;
+let pendingSocket: WebSocket | null = null;
+let connectionAttemptCounter = 0;
+let activeAttemptId = 0;
+const HEARTBEAT_INTERVAL_MS = 8000;
+const HEARTBEAT_TIMEOUT_MS = 5000;
+const PING_PAYLOAD = JSON.stringify({ t: "ping" as const });
+let heartbeatInterval: number | null = null;
+let heartbeatTimeout: number | null = null;
+let heartbeatAwaitingPong = false;
+let heartbeatAttemptId = 0;
+let awaitingInitialPong = false;
+let lastConnectedPort: number | null = null;
+let reconnectTimer: number | null = null;
+let preferredPort: number | null = null;
+
+function stopHeartbeat(attemptId?: number) {
+  if (typeof attemptId === "number" && attemptId !== heartbeatAttemptId) return;
+  if (heartbeatInterval !== null) {
+    window.clearInterval(heartbeatInterval);
+    heartbeatInterval = null;
+  }
+  if (heartbeatTimeout !== null) {
+    window.clearTimeout(heartbeatTimeout);
+    heartbeatTimeout = null;
+  }
+  heartbeatAwaitingPong = false;
+  awaitingInitialPong = false;
+  if (typeof attemptId !== "number" || heartbeatAttemptId === attemptId) {
+    heartbeatAttemptId = 0;
+  }
+}
+
+function startHeartbeat(ws: WebSocket, attemptId: number) {
+  stopHeartbeat();
+  heartbeatAttemptId = attemptId;
+  heartbeatAwaitingPong = false;
+  awaitingInitialPong = true;
+  const sendPing = () => {
+    if (attemptId !== activeAttemptId) return;
+    if (socket !== ws || ws.readyState !== WebSocket.OPEN) {
+      stopHeartbeat(attemptId);
+      return;
+    }
+    if (heartbeatAwaitingPong) {
+      try { console.warn(`[WS][client] heartbeat missed on attempt ${attemptId}, forcing reconnect`); } catch {}
+      stopHeartbeat(attemptId);
+      try { ws.close(); } catch {}
+      return;
+    }
+    heartbeatAwaitingPong = true;
+    try {
+      ws.send(PING_PAYLOAD);
+    } catch (err) {
+      heartbeatAwaitingPong = false;
+      try { console.warn(`[WS][client] failed to send ping: ${String((err as any)?.message || err)}`); } catch {}
+      stopHeartbeat(attemptId);
+      try { ws.close(); } catch {}
+      return;
+    }
+    if (heartbeatTimeout !== null) window.clearTimeout(heartbeatTimeout);
+    heartbeatTimeout = window.setTimeout(() => {
+      if (!heartbeatAwaitingPong || attemptId !== heartbeatAttemptId) return;
+      try { console.warn(`[WS][client] heartbeat timeout on attempt ${attemptId}`); } catch {}
+      stopHeartbeat(attemptId);
+      try { ws.close(); } catch {}
+    }, HEARTBEAT_TIMEOUT_MS);
+  };
+  sendPing();
+  heartbeatInterval = window.setInterval(sendPing, HEARTBEAT_INTERVAL_MS);
+}
 type DragState = { tokenId: ID; sprite: Container; offset: Vec2 } | null;
 let dragging: DragState = null;
 
@@ -1259,10 +1329,35 @@ function connect() {
   let connecting = false;
   const delay = (ms: number) => new Promise<void>(r => setTimeout(r, ms));
 
-  const attachHandlers = (ws: WebSocket, port: number) => {
+  const attachHandlers = (ws: WebSocket, port: number, attemptId: number) => {
+    let handshakeComplete = false;
+    let handshakeTimer: ReturnType<typeof setTimeout> | null = setTimeout(() => {
+      if (attemptId !== activeAttemptId || handshakeComplete) return;
+      try { console.warn(`[WS][client] handshake timeout on :${port}`); } catch {}
+      setStatus("WS: handshake timeout", "error");
+      if (pendingSocket === ws) pendingSocket = null;
+      stopHeartbeat(attemptId);
+      try { ws.close(); } catch {}
+    }, 5000);
+    const clearHandshakeTimer = () => {
+      if (handshakeTimer) {
+        clearTimeout(handshakeTimer);
+        handshakeTimer = null;
+      }
+    };
     ws.addEventListener("message", (ev) => {
+      if (attemptId !== activeAttemptId) return;
       const msg: ServerToClient = JSON.parse(ev.data);
       if (msg.t === "welcome") {
+        handshakeComplete = true;
+        clearHandshakeTimer();
+        pendingSocket = null;
+        socket = ws;
+        preferredPort = port;
+        currentPort = port;
+        lastConnectedPort = port;
+        setStatus(`WS: проверка соединения (:${port})...`, "connecting");
+        startHeartbeat(ws, attemptId);
         playerId = msg.playerId;
         myRole = msg.role;
         // store location/seed
@@ -1331,7 +1426,28 @@ function connect() {
         renderCharacterPanel();
         // Ask server for locations list after initial sync
         try { requestLocationsList(); } catch {}
-      } else if ((msg as any).t === "saveData") {
+        return;
+      }
+      if (!handshakeComplete) {
+        try { console.warn(`[WS][client] ignoring message before welcome: ${String((msg as any)?.t ?? "unknown")}`); } catch {}
+        return;
+      }
+      if (msg.t === "pong") {
+        if (heartbeatAttemptId === attemptId) {
+          heartbeatAwaitingPong = false;
+          if (heartbeatTimeout !== null) {
+            window.clearTimeout(heartbeatTimeout);
+            heartbeatTimeout = null;
+          }
+          if (awaitingInitialPong) {
+            awaitingInitialPong = false;
+            const suffix = lastConnectedPort != null ? ` (:${lastConnectedPort})` : "";
+            setStatus(`WS: connected${suffix}`, "connected");
+          }
+        }
+        return;
+      }
+      if ((msg as any).t === "saveData") {
         const data = (msg as any).snapshot;
         const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
         const a = document.createElement("a");
@@ -1486,45 +1602,87 @@ function connect() {
       }
     });
     ws.addEventListener("close", (ev) => {
+      if (attemptId !== activeAttemptId) return;
+      clearHandshakeTimer();
+      if (socket === ws) socket = null;
+      if (pendingSocket === ws) pendingSocket = null;
+      stopHeartbeat(attemptId);
+      if (socket === null) lastConnectedPort = null;
       setStatus("WS: disconnected", "disconnected");
       try { console.warn(`[WS][client] disconnected from :${port} code=${(ev as any)?.code}`); } catch {}
-      setTimeout(() => { tryConnectSequence(); }, 1000);
+      if (reconnectTimer !== null) window.clearTimeout(reconnectTimer);
+      reconnectTimer = window.setTimeout(() => {
+        reconnectTimer = null;
+        tryConnectSequence();
+      }, 1000);
     });
-    ws.addEventListener("error", () => { setStatus("WS: error", "error"); });
+    ws.addEventListener("error", () => {
+      if (attemptId !== activeAttemptId) return;
+      clearHandshakeTimer();
+      if (socket === ws) socket = null;
+      if (pendingSocket === ws) pendingSocket = null;
+      stopHeartbeat(attemptId);
+      if (socket === null) lastConnectedPort = null;
+      setStatus("WS: error", "error");
+    });
   };
 
   async function tryConnectSequence() {
+    if (reconnectTimer !== null) {
+      window.clearTimeout(reconnectTimer);
+      reconnectTimer = null;
+    }
     if (connecting) return;
     connecting = true;
+    if (preferredPort != null) {
+      currentPort = preferredPort;
+    }
     while (true) {
       const port = currentPort;
       const wsUrl = `${protocol}://${host}:${port}/ws?inv=${encodeURIComponent(inv)}`;
       try { console.debug(`[WS][client] trying ${wsUrl}`); } catch {}
+      const attemptId = ++connectionAttemptCounter;
+      activeAttemptId = attemptId;
       setStatus(`WS: connecting (:${port})...`, "connecting");
       const ws = new WebSocket(wsUrl);
-      socket = ws;
+      pendingSocket = ws;
       const opened = await new Promise<boolean>((resolve) => {
         let done = false;
-        const ok = () => { if (done) return; done = true; resolve(true); };
-        const fail = () => { if (done) return; done = true; resolve(false); };
+        const finish = (value: boolean) => { if (done) return; done = true; resolve(value); };
+        const ok = () => {
+          if (attemptId !== activeAttemptId) { finish(false); return; }
+          finish(true);
+        };
+        const fail = () => {
+          if (attemptId !== activeAttemptId) { finish(false); return; }
+          finish(false);
+        };
         ws.addEventListener("open", ok, { once: true } as any);
         ws.addEventListener("error", fail, { once: true } as any);
         ws.addEventListener("close", fail, { once: true } as any);
       });
-      if (opened) {
-        setStatus("WS: connected", "connected");
+      if (opened && attemptId === activeAttemptId) {
         try { console.log(`[WS][client] connected on :${port}`); } catch {}
         const joinMsg: ClientToServer = { t: "join", name: "Player", invite: inv };
-        ws.send(JSON.stringify(joinMsg));
-        attachHandlers(ws, port);
+        try { ws.send(JSON.stringify(joinMsg)); } catch {}
+        attachHandlers(ws, port, attemptId);
         connecting = false;
         return;
-      } else {
-        try { console.warn(`[WS][client] failed to connect on :${port}`); } catch {}
-        setStatus("WS: offline, повтор подключения...", "error");
-        currentPort = port + 1 > endPort ? startPort : (port + 1);
-        await delay(500);
       }
+      if (attemptId !== activeAttemptId) {
+        try { ws.close(); } catch {}
+        continue;
+      }
+      try { console.warn(`[WS][client] failed to connect on :${port}`); } catch {}
+      if (pendingSocket === ws) pendingSocket = null;
+      setStatus("WS: offline, повтор подключения...", "error");
+      try { ws.close(); } catch {}
+      if (preferredPort == null) {
+        currentPort = port + 1 > endPort ? startPort : (port + 1);
+      } else {
+        currentPort = preferredPort;
+      }
+      await delay(500);
     }
   }
 

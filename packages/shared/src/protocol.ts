@@ -2,6 +2,7 @@ import type { ID, Vec2, Role, GameSnapshot, FloorKind, LocationTreeNode, Token }
 
 export type ClientToServer =
   | { t: "join"; name?: string; invite?: string }
+  | { t: "ping" }
   | { t: "moveToken"; tokenId: ID; pos: Vec2; levelId: ID }
   // DM can spawn tokens explicitly
   | { t: "spawnToken"; kind: "player" | "npc"; levelId?: ID; pos?: Vec2; owner?: ID }
@@ -27,6 +28,7 @@ export type ClientToServer =
 
 export type ServerToClient =
   | { t: "welcome"; playerId: ID; role: Role; snapshot: GameSnapshot }
+  | { t: "pong" }
   | { t: "statePatch"; events: any[] }
   | { t: "saveData"; snapshot: GameSnapshot }
   | { t: "reset"; snapshot: GameSnapshot }

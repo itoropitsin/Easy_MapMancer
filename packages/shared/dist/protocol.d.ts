@@ -4,6 +4,8 @@ export type ClientToServer = {
     name?: string;
     invite?: string;
 } | {
+    t: "ping";
+} | {
     t: "moveToken";
     tokenId: ID;
     pos: Vec2;
@@ -83,6 +85,8 @@ export type ServerToClient = {
     playerId: ID;
     role: Role;
     snapshot: GameSnapshot;
+} | {
+    t: "pong";
 } | {
     t: "statePatch";
     events: any[];
