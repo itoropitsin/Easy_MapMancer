@@ -49,6 +49,7 @@ export interface Token {
         hp?: number;
         ac?: number;
     };
+    notes?: string;
 }
 export interface Asset {
     id: ID;

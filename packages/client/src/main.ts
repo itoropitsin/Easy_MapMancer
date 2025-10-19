@@ -703,8 +703,6 @@ function renderCharacterPanel() {
   const stats = anyTok.stats || {};
   const vr = Math.max(0, Math.min(20, Number(anyTok.vision?.radius ?? 0) || 0));
   const editable = canControl(tok);
-  const tintNum: number = (typeof anyTok.tint === "number" ? anyTok.tint : 0x9aa0a6) & 0xffffff;
-  const tintHex = `#${tintNum.toString(16).padStart(6, "0")}`;
   const notes = typeof anyTok.notes === "string" ? anyTok.notes : "";
   const formatNumber = (value: any) => {
     const n = Number(value);
@@ -727,33 +725,29 @@ function renderCharacterPanel() {
         return `<span class="char-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19.5 6.2 13.7a4 4 0 0 1 0-5.6 4 4 0 0 1 5.6 0l.2.3.2-.3a4 4 0 0 1 5.6 0 4 4 0 0 1 0 5.6L12 19.5Z" fill="currentColor"/></svg></span>`;
       case "ac":
         return `<span class="char-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21c-4.4-1.9-7.5-5.1-7.5-9.3V6.4L12 3l7.5 3.4v5.3c0 4.2-3.1 7.4-7.5 9.3Z" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/><path d="M12 11.2v4.3" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg></span>`;
-      case "color":
-        return `<span class="char-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4.5a6.5 6.5 0 0 1 0 13h-.7a1.3 1.3 0 0 1-1.3-1.3 2.1 2.1 0 0 0-2.1-2.1h-.2A3.9 3.9 0 0 1 3.8 10 6.5 6.5 0 0 1 12 4.5Z" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="9.1" cy="9.3" r="1.1" fill="currentColor" opacity="0.55"/><circle cx="14" cy="8.2" r="1" fill="currentColor" opacity="0.35"/><circle cx="15.8" cy="11.2" r="1.1" fill="currentColor" opacity="0.45"/></svg></span>`;
       case "vision":
         return `<span class="char-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Z" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="12" r="2.4" fill="none" stroke="currentColor" stroke-width="1.2"/><circle cx="12" cy="12" r="1.1" fill="currentColor"/></svg></span>`;
       default:
         return `<span class="char-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3" fill="currentColor"/></svg></span>`;
     }
   };
-  const renderField = (cfg: { icon: string; label: string; input: string; hint?: string; variant?: "stat"; }) => {
+  type FieldVariant = "stat";
+  type FieldConfig = { icon: string; label: string; input: string; hint?: string; variant?: FieldVariant; hideLabel?: boolean };
+  const renderField = (cfg: FieldConfig) => {
     const classes = ["char-field"];
     if (cfg.variant === "stat") classes.push("char-field--stat");
     const hintHtml = cfg.hint ? `<span class="char-hint">${escapeHtml(cfg.hint)}</span>` : "";
-    return `<div class="${classes.join(" ")}">${iconMarkup(cfg.icon)}<div class="char-field-body"><div class="char-label">${escapeHtml(cfg.label)}</div><div class="char-control">${cfg.input}${hintHtml}</div></div></div>`;
+    const labelHtml = cfg.hideLabel ? "" : `<div class="char-label">${escapeHtml(cfg.label)}</div>`;
+    return `<div class="${classes.join(" ")}">${iconMarkup(cfg.icon)}${labelHtml}<div class="char-control">${cfg.input}${hintHtml}</div></div>`;
   };
-  const profileFields = [
+  const profileFields: FieldConfig[] = [
     {
       icon: "name",
       label: "Имя",
       input: renderInput({ id: "char-name", type: "text", value: tok.name ?? "", placeholder: "Имя" }),
     },
-    {
-      icon: "color",
-      label: "Цвет",
-      input: renderInput({ id: "char-tint", type: "color", value: tintHex, attrs: 'aria-label="Цвет токена"' }),
-    },
   ];
-  const combatFields = [
+  const combatFields: FieldConfig[] = [
     {
       icon: "hp",
       label: "HP",
@@ -776,8 +770,9 @@ function renderCharacterPanel() {
   const statsFields = statKeys.map(({ key, label }) => renderField({
     icon: `stat-${key}`,
     label,
-    input: renderInput({ id: `char-${key}`, type: "number", value: formatNumber((stats as any)[key]), placeholder: "-", attrs: 'inputmode="numeric"' }),
+    input: renderInput({ id: `char-${key}`, type: "number", value: formatNumber((stats as any)[key]), placeholder: "-", attrs: `inputmode="numeric" aria-label="${label}"` }),
     variant: "stat",
+    hideLabel: true,
   }));
   const visionField = renderField({
     icon: "vision",
@@ -789,11 +784,15 @@ function renderCharacterPanel() {
     <div class="char-header">Лист персонажа</div>
     <div class="char-section">
       <div class="char-section-title">Профиль</div>
-      ${profileFields.map(renderField).join("")}
+      <div class="char-fields-grid char-fields-grid--two">
+        ${profileFields.map(renderField).join("")}
+      </div>
     </div>
     <div class="char-section">
       <div class="char-section-title">Боевые параметры</div>
-      ${combatFields.map(renderField).join("")}
+      <div class="char-fields-grid char-fields-grid--two">
+        ${combatFields.map(renderField).join("")}
+      </div>
     </div>
     <div class="char-section">
       <div class="char-section-title">Характеристики</div>
@@ -803,7 +802,9 @@ function renderCharacterPanel() {
     </div>
     <div class="char-section">
       <div class="char-section-title">Видимость</div>
-      ${visionField}
+      <div class="char-fields-grid">
+        ${visionField}
+      </div>
     </div>
     <div class="char-section char-notes-wrapper">
       <label for="char-notes">Заметки</label>
@@ -813,7 +814,7 @@ function renderCharacterPanel() {
   // Enable/disable based on permissions
   const q = (sel: string) => panel.querySelector(sel) as HTMLInputElement | null;
   const setDisabled = (el: HTMLInputElement | null) => { if (el) el.disabled = !editable; };
-  ["#char-name", "#char-hp", "#char-ac", "#char-tint", "#char-str", "#char-dex", "#char-con", "#char-int", "#char-wis", "#char-cha", "#char-vision-radius"].forEach(id => setDisabled(q(id)));
+  ["#char-name", "#char-hp", "#char-ac", "#char-str", "#char-dex", "#char-con", "#char-int", "#char-wis", "#char-cha", "#char-vision-radius"].forEach(id => setDisabled(q(id)));
   // Helpers
   const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
   const parseNum = (el: HTMLInputElement, lo?: number, hi?: number) => {
@@ -830,13 +831,6 @@ function renderCharacterPanel() {
   hpEl?.addEventListener("change", () => { if (!editable) return; const v = parseNum(hpEl, 0, 999); if (v != null) sendUpdateToken(tok.id, { hp: v }); });
   const acEl = q("#char-ac");
   acEl?.addEventListener("change", () => { if (!editable) return; const v = parseNum(acEl, 0, 99); if (v != null) sendUpdateToken(tok.id, { ac: v }); });
-  const tintEl = q("#char-tint");
-  tintEl?.addEventListener("change", () => {
-    if (!editable) return;
-    const hex = (tintEl.value || "").trim();
-    const n = parseInt(hex.replace(/^#/, ""), 16);
-    if (Number.isFinite(n)) sendUpdateToken(tok.id, { tint: (n & 0xffffff) });
-  });
   const statIds: Array<[keyof NonNullable<Token["stats"]>, string]> = [["str", "#char-str"], ["dex", "#char-dex"], ["con", "#char-con"], ["int", "#char-int"], ["wis", "#char-wis"], ["cha", "#char-cha"]];
   for (const [k, sel] of statIds) {
     const el = q(sel);

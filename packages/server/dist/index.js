@@ -464,6 +464,12 @@ function onMessage(client, data) {
                         tok.stats[k] = Math.max(0, Math.min(999, Math.round(v)));
                 }
             }
+            if (typeof patch.notes === "string") {
+                tok.notes = patch.notes.slice(0, 2000);
+            }
+            else if (patch.notes === null) {
+                delete tok.notes;
+            }
             if (patch.vision && typeof patch.vision === "object") {
                 const vr = Math.max(0, Math.min(20, Math.round(patch.vision.radius ?? (tok.vision?.radius ?? 8))));
                 const ang = patch.vision.angle ?? (tok.vision?.angle ?? 360);
