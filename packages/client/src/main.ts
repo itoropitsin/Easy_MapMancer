@@ -36,7 +36,7 @@ function drawObjects() {
   return;
 }
 
-import { Application, Graphics, Container, Text, Circle } from "pixi.js";
+import { Application, Graphics, Container, Text, Circle, Rectangle } from "pixi.js";
 import type {
   ID,
   Vec2,
@@ -262,6 +262,12 @@ app.stage.addChild(uiLayer);
 // Pixi v8: set eventMode to receive interaction events
 // @ts-ignore - eventMode exists in Pixi v8 types
 (app.stage as any).eventMode = "static";
+const stageHitArea = new Rectangle(0, 0, app.screen.width, app.screen.height);
+app.stage.hitArea = stageHitArea;
+function updateStageHitArea() {
+  stageHitArea.width = app.screen.width;
+  stageHitArea.height = app.screen.height;
+}
 
 // Floor layer
 const floor = new Graphics();
@@ -501,7 +507,17 @@ function drawGrid() {
 drawFloor();
 drawGrid();
 drawFog();
-window.addEventListener("resize", () => { drawFloor(); drawGrid(); drawWalls(); drawObjects(); drawAssets(); drawFog(); drawMinimap(); positionMinimap(); });
+window.addEventListener("resize", () => {
+  updateStageHitArea();
+  drawFloor();
+  drawGrid();
+  drawWalls();
+  drawObjects();
+  drawAssets();
+  drawFog();
+  drawMinimap();
+  positionMinimap();
+});
 
 const tokenLayer = new Container();
 tokenLayer.zIndex = 500;
@@ -2156,9 +2172,20 @@ app.stage.on("pointerupoutside", endPan);
 const MIN_ZOOM = 0.5, MAX_ZOOM = 2.5, ZOOM_STEP = 0.1;
 const canvasEl: HTMLCanvasElement = (app as any).view || (app as any).canvas;
 canvasEl.addEventListener("wheel", (ev) => {
+  const isPinchZoom = ev.ctrlKey;
+  const deltaMagnitude = Math.hypot(ev.deltaX, ev.deltaY);
+  const isTrackpadPan = !isPinchZoom && ev.deltaMode === WheelEvent.DOM_DELTA_PIXEL && deltaMagnitude < 40;
+  if (isTrackpadPan) {
+    ev.preventDefault();
+    world.position.set(world.position.x - ev.deltaX, world.position.y - ev.deltaY);
+    drawFloor(); drawGrid(); drawWalls(); drawObjects(); drawAssets(); drawFog(); drawMinimap();
+    return;
+  }
   ev.preventDefault();
   const oldS = world.scale.x || 1;
-  let s = oldS + (-Math.sign(ev.deltaY)) * ZOOM_STEP;
+  const direction = ev.deltaY !== 0 ? -Math.sign(ev.deltaY) : ev.deltaX !== 0 ? -Math.sign(ev.deltaX) : 0;
+  if (!direction) return;
+  let s = oldS + direction * ZOOM_STEP;
   s = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, s));
   if (s === oldS) return;
   const sx = ev.clientX; const sy = ev.clientY;
