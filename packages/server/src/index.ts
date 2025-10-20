@@ -296,6 +296,8 @@ async function writeLastUsed(relPath: string) {
 
 
 async function buildLocationsTree(): Promise<LocationTreeNode[]> {
+  const seenLocationIds = new Set<string>();
+  
   async function walk(dirRel: string): Promise<LocationTreeNode[]> {
     const dirAbs = withinDataRoot(dirRel) ?? DATA_ROOT;
     const entries = await fs.readdir(dirAbs, { withFileTypes: true }).catch(() => []);
@@ -312,6 +314,7 @@ async function buildLocationsTree(): Promise<LocationTreeNode[]> {
         const fileAbs = withinDataRoot(rel)!;
         try { console.debug(`[LOC][server] scanning file: ${rel}`); } catch {}
         let locationName: string | undefined;
+        let locationId: string | undefined;
         let include = false;
         try {
           const snap = await readJSON<GameSnapshot>(fileAbs);
@@ -319,6 +322,13 @@ async function buildLocationsTree(): Promise<LocationTreeNode[]> {
           const hasValidLocation = !!loc && typeof loc.name === "string" && typeof loc.id === "string" && Array.isArray(loc.levels);
           if (hasValidLocation) {
             locationName = loc.name;
+            locationId = loc.id;
+            // Check for duplicate location IDs
+            if (seenLocationIds.has(locationId!)) {
+              console.warn(`[LOC][server] Duplicate location ID detected: ${locationId} in file ${rel}. Skipping duplicate.`);
+              continue;
+            }
+            seenLocationIds.add(locationId!);
             include = true;
           }
         } catch (e: any) {
@@ -334,7 +344,7 @@ async function buildLocationsTree(): Promise<LocationTreeNode[]> {
         }
         if (include) {
           files.push({ type: "file", name: ent.name.replace(/\.json$/i, ""), path: rel, locationName });
-          try { console.debug(`[LOC][server] include file: ${rel} (name="${locationName}")`); } catch {}
+          try { console.debug(`[LOC][server] include file: ${rel} (name="${locationName}", id="${locationId}")`); } catch {}
         } else {
           try { console.debug(`[LOC][server] skip file: ${rel} (no valid location)`); } catch {}
         }

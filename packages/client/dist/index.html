@@ -30,6 +30,14 @@
         font-family: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
       }
 
+      /* Настройки для четкого отображения canvas при масштабировании */
+      #app canvas {
+        image-rendering: pixelated;  /* Четкое отображение пиксельной графики */
+        image-rendering: -moz-crisp-edges;  /* Firefox */
+        image-rendering: crisp-edges;  /* Стандарт */
+        image-rendering: -webkit-optimize-contrast;  /* Safari */
+      }
+
       body {
         overflow: auto;
       }
@@ -132,7 +140,7 @@
       }
 
       body.locations-open #top-bar {
-        left: 330px;
+        left: 362px;
       }
 
       #top-right-controls {
@@ -373,7 +381,7 @@
         top: 18px;
         bottom: 18px;
         left: 18px;
-        width: 288px;
+        width: 320px;
         background: var(--surface-strong);
         border-radius: 20px;
         padding: 18px;
@@ -445,8 +453,7 @@
         cursor: pointer;
         transition: background 0.2s ease, transform 0.15s ease;
         white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
+        min-width: 0;
       }
 
       .loc-item:hover {
@@ -466,8 +473,57 @@
 
       .loc-item .name {
         flex: 1;
-        overflow: hidden;
-        text-overflow: ellipsis;
+        min-width: 0;
+      }
+
+      .loc-item .actions {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        flex-shrink: 0;
+        margin-left: 8px;
+        opacity: 0;
+        transition: opacity 0.2s ease;
+      }
+
+      .loc-item:hover .actions {
+        opacity: 1;
+      }
+
+      .loc-item .action-btn {
+        opacity: 0.85;
+        user-select: none;
+        cursor: pointer;
+        font-size: 14px;
+        line-height: 1;
+        padding: 2px;
+        border-radius: 4px;
+        transition: opacity 0.2s ease, background-color 0.2s ease;
+      }
+
+      .loc-item .action-btn:hover {
+        opacity: 1;
+        background-color: rgba(255, 255, 255, 0.1);
+      }
+
+      .loc-item .action-btn.starred {
+        opacity: 1;
+        color: #fbbf24;
+      }
+
+      .loc-item.dragging {
+        opacity: 0.5;
+        transform: scale(0.95);
+      }
+
+      .loc-item.drag-over {
+        background: rgba(96, 165, 250, 0.3);
+        border: 2px dashed rgba(96, 165, 250, 0.6);
+      }
+
+      .loc-item.drag-over-folder {
+        background: rgba(96, 165, 250, 0.2);
+        border: 2px solid rgba(96, 165, 250, 0.6);
       }
 
       .twist {
@@ -480,7 +536,7 @@
 
       #tool-zone {
         position: fixed;
-        top: 50%;
+        top: 40%;
         left: 24px;
         transform: translateY(-50%);
         display: flex;
@@ -491,7 +547,7 @@
       }
 
       body.locations-open #tool-zone {
-        left: 330px;
+        left: 362px;
       }
 
       #tool-dock,
@@ -958,9 +1014,78 @@
         padding: 4px;
       }
 
+      /* Адаптивные медиа-запросы для разных размеров экрана */
       @media (max-width: 1200px) {
         #right-panel {
           display: none;
+        }
+      }
+      
+      /* MacBook и маленькие экраны */
+      @media (max-width: 1440px) and (max-height: 900px) {
+        #tool-zone {
+          top: 30%;
+          left: 16px;
+        }
+        
+        #top-bar {
+          left: 16px;
+          top: 12px;
+        }
+        
+        #top-right-controls {
+          right: 16px;
+          top: 12px;
+        }
+        
+        #right-panel {
+          right: 16px;
+          top: 70px;
+          bottom: clamp(180px, 24vh, 200px);
+          width: 300px;
+        }
+        
+        #bottom-asset-menu {
+          height: 180px;
+          right: 50vw; /* Максимум до середины экрана */
+        }
+        
+        body {
+          padding-bottom: 180px;
+        }
+      }
+      
+      /* Очень маленькие экраны (MacBook Air и подобные) */
+      @media (max-width: 1280px) and (max-height: 800px) {
+        #tool-zone {
+          top: 25%;
+          left: 12px;
+        }
+        
+        #top-bar {
+          left: 12px;
+          top: 8px;
+        }
+        
+        #top-right-controls {
+          right: 12px;
+          top: 8px;
+        }
+        
+        #right-panel {
+          right: 12px;
+          top: 60px;
+          bottom: clamp(160px, 22vh, 180px);
+          width: 280px;
+        }
+        
+        #bottom-asset-menu {
+          height: 160px;
+          right: 50vw; /* Максимум до середины экрана */
+        }
+        
+        body {
+          padding-bottom: 160px;
         }
       }
       
@@ -1014,8 +1139,8 @@
         position: fixed;
         bottom: 0;
         left: 0;
-        right: 600px; /* Much narrower - leave more space for map */
-        height: 160px; /* Reduced height */
+        right: 50vw; /* Максимум до середины экрана */
+        height: 220px; /* Increased height to accommodate 2 rows */
         background: var(--surface-strong);
         border-top: 1px solid var(--border-subtle);
         z-index: 1000;
@@ -1054,10 +1179,12 @@
       }
 
       #asset-category-tabs {
-        display: flex;
+        display: grid;
+        grid-template-columns: repeat(9, 1fr); /* 9 columns for 2 rows */
+        grid-template-rows: repeat(2, 1fr); /* 2 rows */
         gap: 2px; /* Reduced gap */
-        overflow-x: auto;
         flex-shrink: 0;
+        max-height: 60px; /* Limit height to ensure 2 rows fit */
       }
 
       .asset-category-tab {
@@ -1103,8 +1230,9 @@
 
       .asset-grid {
         display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(70px, 1fr)); /* Slightly larger min width */
+        grid-template-columns: repeat(8, 1fr); /* Fixed 8 columns for 2 rows of 4 items each */
         gap: 3px; /* Further reduced gap */
+        max-height: 120px; /* Limit height to ensure 2 rows fit */
       }
 
       .asset-item {
@@ -1158,10 +1286,10 @@
 
       /* Adjust main content to account for bottom menu */
       body {
-        padding-bottom: 160px;
+        padding-bottom: 220px;
       }
     </style>
-    <script type="module" crossorigin src="/assets/index-Bjv2uLRv.js"></script>
+    <script type="module" crossorigin src="/assets/index-HW6IsArx.js"></script>
   </head>
   <body>
     <div id="app"></div>

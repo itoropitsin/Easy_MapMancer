@@ -111,6 +111,10 @@ const SHARE_BASE_URL = typeof window !== "undefined" ? window.location.origin : 
 let recentLocations: string[] = [];
 try { const s = localStorage.getItem("recentLocations"); if (s) recentLocations = JSON.parse(s); } catch {}
 
+// Starred locations (client-side only)
+let starredLocations: string[] = [];
+try { const s = localStorage.getItem("starredLocations"); if (s) starredLocations = JSON.parse(s); } catch {}
+
 // Available character icons
 const CHARACTER_ICONS = {
   players: [
@@ -129,10 +133,39 @@ const CHARACTER_ICONS = {
   ]
 };
 function saveRecents() { try { localStorage.setItem("recentLocations", JSON.stringify(recentLocations.slice(0, 10))); } catch {} }
+function saveStarred() { try { localStorage.setItem("starredLocations", JSON.stringify(starredLocations)); } catch {} }
+
 function addRecent(path: string | undefined) {
   if (!path) return;
   recentLocations = [path, ...recentLocations.filter(p => p !== path)].slice(0, 10);
   saveRecents();
+}
+
+function toggleStarred(path: string) {
+  console.log(`[DEBUG] toggleStarred called with path:`, path);
+  console.log(`[DEBUG] Current starred locations:`, starredLocations);
+  const idx = starredLocations.indexOf(path);
+  if (idx >= 0) {
+    starredLocations.splice(idx, 1);
+    console.log(`[DEBUG] Removed from starred:`, path);
+  } else {
+    starredLocations.push(path);
+    console.log(`[DEBUG] Added to starred:`, path);
+  }
+  saveStarred();
+  console.log(`[DEBUG] New starred locations:`, starredLocations);
+  // Refresh the locations tree to update star states
+  requestLocationsList();
+}
+
+function isStarred(path: string): boolean {
+  return starredLocations.includes(path);
+}
+
+function requestLocationsList() {
+  if (!socket) return;
+  const msg: ClientToServer = { t: "listLocations" };
+  socket.send(JSON.stringify(msg));
 }
 // Track whether the last pointerdown actually applied an action (to avoid duplicate pointertap handling)
 let lastPointerDownDidAct = false;
@@ -267,7 +300,12 @@ function setFloorOverride(level: ID, pos: Vec2, kind: FloorKind | null) {
 }
 
 const app = new Application();
-await app.init({ background: "#0b0e13", antialias: true, resizeTo: window });
+await app.init({ 
+  background: "#0b0e13", 
+  antialias: false,  // Отключаем сглаживание для четкого отображения пиксельной графики
+  resolution: window.devicePixelRatio || 1,  // Используем нативное разрешение экрана
+  resizeTo: window 
+});
 document.getElementById("app")!.appendChild(app.canvas);
 
 // Prevent browser's default context menu on the canvas
@@ -3156,10 +3194,113 @@ function connect() {
     socket.send(JSON.stringify(msg));
   });
 
-  function requestLocationsList() {
-    if (!socket) return;
-    const msg: ClientToServer = { t: "listLocations" };
-    socket.send(JSON.stringify(msg));
+
+  // Drag and drop state
+  let draggedElement: HTMLElement | null = null;
+  let draggedNode: LocationTreeNode | null = null;
+
+  function setupDragAndDropHandlers(element: HTMLElement, node: LocationTreeNode) {
+    // Only allow drag for DM role
+    if (myRole !== "DM") return;
+
+    // Make files draggable
+    if (node.type === "file") {
+      element.draggable = true;
+      
+      element.addEventListener("dragstart", (e) => {
+        draggedElement = element;
+        draggedNode = node;
+        element.classList.add("dragging");
+        e.dataTransfer!.effectAllowed = "move";
+        e.dataTransfer!.setData("text/plain", node.path);
+      });
+
+      element.addEventListener("dragend", () => {
+        element.classList.remove("dragging");
+        // Clear all drag-over classes
+        document.querySelectorAll(".loc-item").forEach(el => {
+          el.classList.remove("drag-over", "drag-over-folder");
+        });
+        draggedElement = null;
+        draggedNode = null;
+      });
+    }
+
+    // Make folders drop targets
+    if (node.type === "folder") {
+      element.addEventListener("dragover", (e) => {
+        e.preventDefault();
+        e.dataTransfer!.dropEffect = "move";
+        element.classList.add("drag-over-folder");
+      });
+
+      element.addEventListener("dragleave", (e) => {
+        // Only remove class if we're actually leaving the element
+        if (!element.contains(e.relatedTarget as Node)) {
+          element.classList.remove("drag-over-folder");
+        }
+      });
+
+      element.addEventListener("drop", (e) => {
+        e.preventDefault();
+        element.classList.remove("drag-over-folder");
+        
+        if (!draggedNode || !socket) return;
+        
+        // Don't allow dropping a folder into itself or its children
+        if (draggedNode.type === "folder" && node.path.startsWith(draggedNode.path + "/")) {
+          hudToast("Cannot move folder into itself or its subfolders");
+          return;
+        }
+        
+        // Don't allow dropping a file into its current folder
+        if (draggedNode.type === "file") {
+          const currentFolder = draggedNode.path.substring(0, draggedNode.path.lastIndexOf("/"));
+          if (currentFolder === node.path) {
+            return; // Already in this folder
+          }
+        }
+        
+        // Move the item to the target folder
+        const msg: ClientToServer = { 
+          t: "moveLocation", 
+          from: draggedNode.path, 
+          toFolder: node.path 
+        };
+        socket.send(JSON.stringify(msg));
+      });
+    }
+
+    // Make files drop targets too (for moving to root)
+    if (node.type === "file") {
+      element.addEventListener("dragover", (e) => {
+        e.preventDefault();
+        e.dataTransfer!.dropEffect = "move";
+        element.classList.add("drag-over");
+      });
+
+      element.addEventListener("dragleave", (e) => {
+        if (!element.contains(e.relatedTarget as Node)) {
+          element.classList.remove("drag-over");
+        }
+      });
+
+      element.addEventListener("drop", (e) => {
+        e.preventDefault();
+        element.classList.remove("drag-over");
+        
+        if (!draggedNode || !socket) return;
+        
+        // Move to root (same level as this file)
+        const parentPath = node.path.substring(0, node.path.lastIndexOf("/"));
+        const msg: ClientToServer = { 
+          t: "moveLocation", 
+          from: draggedNode.path, 
+          toFolder: parentPath || "" 
+        };
+        socket.send(JSON.stringify(msg));
+      });
+    }
   }
 
   function renderLocationsTree(tree: LocationTreeNode[], lastUsed?: string) {
@@ -3191,6 +3332,45 @@ function connect() {
       saveRecents();
     }
 
+    // Starred section
+    console.log(`[DEBUG] Starred locations:`, starredLocations);
+    if (starredLocations.length) {
+      const sec = document.createElement("div");
+      const h = document.createElement("div"); h.className = "loc-section-title"; h.textContent = "Starred"; sec.appendChild(h);
+      for (const p of starredLocations) {
+        const n = pathMap.get(p);
+        if (!n) continue; // Skip if location no longer exists
+        const baseLabel = n.locationName ? `${n.locationName} (${n.name})` : n.name;
+        const row = createLocItem(baseLabel, "⭐", p === lastUsed);
+        row.title = p;
+        
+        // Add actions
+        const actions = row.querySelector(".actions") as HTMLElement;
+        if (actions) {
+          // Add star button (always starred in this section)
+          const starBtn = document.createElement("span");
+          starBtn.className = "action-btn starred";
+          starBtn.textContent = "★";
+          starBtn.title = "Remove from starred";
+          starBtn.onclick = (e: MouseEvent) => {
+            e.stopPropagation();
+            toggleStarred(p);
+          };
+          actions.appendChild(starBtn);
+        }
+        
+        row.onclick = () => {
+          if (!socket || myRole !== "DM") return;
+          const msg: ClientToServer = { t: "loadLocation", path: p };
+          socket.send(JSON.stringify(msg));
+          closeLocations();
+          addRecent(p);
+        };
+        sec.appendChild(row);
+      }
+      locationsTreeEl.appendChild(sec);
+    }
+
     // Recent section (limit to 3)
     if (recentLocations.length) {
       const sec = document.createElement("div");
@@ -3198,9 +3378,25 @@ function connect() {
       for (const p of recentLocations.slice(0, 3)) {
         const n = pathMap.get(p);
         const baseLabel = n ? (n.locationName ? `${n.locationName} (${n.name})` : n.name) : p;
-        const label = baseLabel + (p === lastUsed ? " ★" : "");
+        const label = baseLabel;
         const row = createLocItem(label, "🕘", p === lastUsed);
         row.title = p;
+        
+        // Add actions
+        const actions = row.querySelector(".actions") as HTMLElement;
+        if (actions) {
+          // Add star button
+          const starBtn = document.createElement("span");
+          starBtn.className = `action-btn ${isStarred(p) ? 'starred' : ''}`;
+          starBtn.textContent = "★";
+          starBtn.title = isStarred(p) ? "Remove from starred" : "Add to starred";
+          starBtn.onclick = (e: MouseEvent) => {
+            e.stopPropagation();
+            toggleStarred(p);
+          };
+          actions.appendChild(starBtn);
+        }
+        
         row.onclick = () => {
           if (!socket || myRole !== "DM") return;
           const msg: ClientToServer = { t: "loadLocation", path: p };
@@ -3227,29 +3423,17 @@ function connect() {
       const row = document.createElement("div");
       row.className = "loc-item";
       row.style.paddingLeft = `${8 + depth * 12}px`;
+      row.setAttribute("data-path", node.path);
+      row.setAttribute("data-type", "folder");
+      
       const twist = document.createElement("span"); twist.textContent = open ? "▾" : "▸"; twist.className = "twist";
       const icon = document.createElement("span"); icon.className = "icon"; icon.textContent = "📁";
       const name = document.createElement("span"); name.className = "name"; name.textContent = node.name;
       row.appendChild(twist); row.appendChild(icon); row.appendChild(name);
       const spacer = document.createElement("span"); spacer.style.flex = "1"; row.appendChild(spacer);
-      // Actions: create subfolder
-      const btnAdd = document.createElement("span");
-      btnAdd.title = "New folder inside";
-      btnAdd.textContent = "+";
-      btnAdd.style.opacity = "0.85";
-      btnAdd.style.marginLeft = "6px";
-      btnAdd.style.userSelect = "none";
-      btnAdd.onclick = (e) => {
-        e.stopPropagation();
-        if (!socket || myRole !== "DM") return;
-        const name = prompt("New folder name:", "folder");
-        if (!name) return;
-        const base = node.path.endsWith("/") ? node.path.slice(0, -1) : node.path;
-        const rel = `${base}/${name}`;
-        const msg: ClientToServer = { t: "createFolder", path: rel };
-        socket.send(JSON.stringify(msg));
-      };
-      row.appendChild(btnAdd);
+      
+      // No longer adding subfolder creation button - only use the top button
+      
       // Action: rename folder (pencil)
       const btnRename = document.createElement("span");
       btnRename.title = "Rename folder";
@@ -3269,6 +3453,10 @@ function connect() {
         socket.send(JSON.stringify(msg));
       };
       row.appendChild(btnRename);
+      
+      // Add drag and drop handlers for folders
+      setupDragAndDropHandlers(row, node);
+      
       const toggle = () => { if (open) locationsExpanded.delete(node.path); else locationsExpanded.add(node.path); requestLocationsList(); };
       row.onclick = toggle; twist.onclick = (e) => { e.stopPropagation(); toggle(); };
       container.appendChild(row);
@@ -3280,9 +3468,12 @@ function connect() {
       return container;
     } else {
       const title = node.locationName ? `${node.locationName} (${node.name})` : node.name;
-      const row = createLocItem(title + (node.path === lastUsed ? " ★" : ""), "📄", node.path === lastUsed);
+      const row = createLocItem(title, "📄", node.path === lastUsed);
       row.style.paddingLeft = `${8 + depth * 12}px`;
       row.title = node.path;
+      row.setAttribute("data-path", node.path);
+      row.setAttribute("data-type", "file");
+      
       row.onclick = () => {
         if (!socket || myRole !== "DM") return;
         const msg: ClientToServer = { t: "loadLocation", path: node.path };
@@ -3290,29 +3481,39 @@ function connect() {
         closeLocations();
         addRecent(node.path);
       };
-      // Inline actions on the right: Move, Delete
-      const spacer = document.createElement("span"); spacer.style.flex = "1"; row.appendChild(spacer);
-      const mkAction = (label: string, title: string, handler: (e: MouseEvent) => void) => {
-        const s = document.createElement("span"); s.textContent = label; s.title = title; s.style.opacity = "0.85"; s.style.marginLeft = "6px"; s.style.userSelect = "none"; s.onclick = handler; return s;
-      };
-      const onMove = (e: MouseEvent) => {
-        e.stopPropagation();
-        if (!socket || myRole !== "DM") return;
-        const dest = prompt("Move to folder (path relative to root, empty = root):", "");
-        if (dest == null) return;
-        const toFolder = dest.replace(/\\+/g, "/").replace(/^\/+|\/+$/g, "");
-        const msg: ClientToServer = { t: "moveLocation", from: node.path, toFolder };
-        socket.send(JSON.stringify(msg));
-      };
-      const onDelete = (e: MouseEvent) => {
-        e.stopPropagation();
-        if (!socket || myRole !== "DM") return;
-        if (!confirm(`Delete location ${title}?`)) return;
-        const msg: ClientToServer = { t: "deleteLocation", path: node.path };
-        socket.send(JSON.stringify(msg));
-      };
-      row.appendChild(mkAction("↪", "Move", onMove));
-      row.appendChild(mkAction("🗑", "Delete", onDelete));
+      
+      // Add actions to the actions container
+      const actions = row.querySelector(".actions") as HTMLElement;
+      if (actions) {
+        // Add star button
+        const starBtn = document.createElement("span");
+        starBtn.className = `action-btn ${isStarred(node.path) ? 'starred' : ''}`;
+        starBtn.textContent = "★";
+        starBtn.title = isStarred(node.path) ? "Remove from starred" : "Add to starred";
+        starBtn.onclick = (e: MouseEvent) => {
+          e.stopPropagation();
+          toggleStarred(node.path);
+        };
+        actions.appendChild(starBtn);
+        
+        // Add delete button
+        const deleteBtn = document.createElement("span");
+        deleteBtn.className = "action-btn";
+        deleteBtn.textContent = "🗑";
+        deleteBtn.title = "Delete";
+        deleteBtn.onclick = (e: MouseEvent) => {
+          e.stopPropagation();
+          if (!socket || myRole !== "DM") return;
+          if (!confirm(`Delete location ${title}?`)) return;
+          const msg: ClientToServer = { t: "deleteLocation", path: node.path };
+          socket.send(JSON.stringify(msg));
+        };
+        actions.appendChild(deleteBtn);
+      }
+      
+      // Add drag and drop handlers for files
+      setupDragAndDropHandlers(row, node);
+      
       return row;
     }
   }
@@ -3322,7 +3523,13 @@ function connect() {
     row.className = "loc-item" + (active ? " active" : "");
     const icon = document.createElement("span"); icon.className = "icon"; icon.textContent = iconChar;
     const name = document.createElement("span"); name.className = "name"; name.textContent = label;
-    row.appendChild(icon); row.appendChild(name);
+    const spacer = document.createElement("span"); spacer.style.flex = "1"; 
+    const actions = document.createElement("div"); actions.className = "actions";
+    
+    row.appendChild(icon); 
+    row.appendChild(name); 
+    row.appendChild(spacer);
+    row.appendChild(actions);
     return row;
   }
   // Update buttons after welcome determines role
@@ -3353,126 +3560,126 @@ function initializeBottomAssetMenu() {
     fire: [
       { id: 'fire', emoji: '🔥', name: 'Fire' },
       { id: 'torch', emoji: '🕯️', name: 'Torch' },
-      { id: 'candle', emoji: '🕯️', name: 'Свеча' },
-      { id: 'lantern', emoji: '🏮', name: 'Фонарь' },
-      { id: 'campfire', emoji: '🔥', name: 'Костер' }
+      { id: 'candle', emoji: '🕯️', name: 'Candle' },
+      { id: 'lantern', emoji: '🏮', name: 'Lantern' },
+      { id: 'campfire', emoji: '🔥', name: 'Campfire' }
     ],
     weapons: [
       { id: 'sword', emoji: '🗡️', name: 'Sword' },
       { id: 'bow', emoji: '🏹', name: 'Bow' },
-      { id: 'axe', emoji: '🪓', name: 'Топор' },
-      { id: 'spear', emoji: '🔱', name: 'Копье' },
-      { id: 'mace', emoji: '⚔️', name: 'Булава' },
-      { id: 'dagger', emoji: '🗡️', name: 'Кинжал' },
-      { id: 'crossbow', emoji: '🏹', name: 'Арбалет' },
-      { id: 'shield', emoji: '🛡️', name: 'Щит' }
+      { id: 'axe', emoji: '🪓', name: 'Axe' },
+      { id: 'spear', emoji: '🔱', name: 'Spear' },
+      { id: 'mace', emoji: '⚔️', name: 'Mace' },
+      { id: 'dagger', emoji: '🗡️', name: 'Dagger' },
+      { id: 'crossbow', emoji: '🏹', name: 'Crossbow' },
+      { id: 'shield', emoji: '🛡️', name: 'Shield' }
     ],
     armor: [
-      { id: 'helmet', emoji: '⛑️', name: 'Шлем' },
-      { id: 'armor', emoji: '🛡️', name: 'Доспех' },
-      { id: 'boots', emoji: '👢', name: 'Сапоги' },
-      { id: 'gloves', emoji: '🧤', name: 'Перчатки' }
+      { id: 'helmet', emoji: '⛑️', name: 'Helmet' },
+      { id: 'armor', emoji: '🛡️', name: 'Armor' },
+      { id: 'boots', emoji: '👢', name: 'Boots' },
+      { id: 'gloves', emoji: '🧤', name: 'Gloves' }
     ],
     containers: [
       { id: 'chest', emoji: '📦', name: 'Chest' },
-      { id: 'barrel', emoji: '🛢️', name: 'Бочка' },
-      { id: 'crate', emoji: '📦', name: 'Ящик' },
-      { id: 'bag', emoji: '🎒', name: 'Мешок' },
-      { id: 'basket', emoji: '🧺', name: 'Корзина' },
-      { id: 'pot', emoji: '🍯', name: 'Горшок' }
+      { id: 'barrel', emoji: '🛢️', name: 'Barrel' },
+      { id: 'crate', emoji: '📦', name: 'Crate' },
+      { id: 'bag', emoji: '🎒', name: 'Bag' },
+      { id: 'basket', emoji: '🧺', name: 'Basket' },
+      { id: 'pot', emoji: '🍯', name: 'Pot' }
     ],
     kitchen: [
-      { id: 'cauldron', emoji: '🍲', name: 'Котел' },
-      { id: 'pan', emoji: '🍳', name: 'Сковорода' },
-      { id: 'plate', emoji: '🍽️', name: 'Тарелка' },
-      { id: 'cup', emoji: '☕', name: 'Чашка' },
-      { id: 'bottle', emoji: '🍾', name: 'Бутылка' },
-      { id: 'knife', emoji: '🔪', name: 'Нож' },
-      { id: 'fork', emoji: '🍴', name: 'Вилка' },
-      { id: 'spoon', emoji: '🥄', name: 'Ложка' }
+      { id: 'cauldron', emoji: '🍲', name: 'Cauldron' },
+      { id: 'pan', emoji: '🍳', name: 'Pan' },
+      { id: 'plate', emoji: '🍽️', name: 'Plate' },
+      { id: 'cup', emoji: '☕', name: 'Cup' },
+      { id: 'bottle', emoji: '🍾', name: 'Bottle' },
+      { id: 'knife', emoji: '🔪', name: 'Knife' },
+      { id: 'fork', emoji: '🍴', name: 'Fork' },
+      { id: 'spoon', emoji: '🥄', name: 'Spoon' }
     ],
     food: [
       { id: 'bread', emoji: '🍞', name: 'Bread' },
       { id: 'apple', emoji: '🍎', name: 'Apple' },
-      { id: 'meat', emoji: '🥩', name: 'Мясо' },
-      { id: 'fish', emoji: '🐟', name: 'Рыба' },
-      { id: 'cheese', emoji: '🧀', name: 'Сыр' },
-      { id: 'cake', emoji: '🍰', name: 'Торт' },
-      { id: 'pie', emoji: '🥧', name: 'Пирог' },
-      { id: 'soup', emoji: '🍲', name: 'Суп' },
-      { id: 'wine', emoji: '🍷', name: 'Вино' },
-      { id: 'beer', emoji: '🍺', name: 'Пиво' }
+      { id: 'meat', emoji: '🥩', name: 'Meat' },
+      { id: 'fish', emoji: '🐟', name: 'Fish' },
+      { id: 'cheese', emoji: '🧀', name: 'Cheese' },
+      { id: 'cake', emoji: '🍰', name: 'Cake' },
+      { id: 'pie', emoji: '🥧', name: 'Pie' },
+      { id: 'soup', emoji: '🍲', name: 'Soup' },
+      { id: 'wine', emoji: '🍷', name: 'Wine' },
+      { id: 'beer', emoji: '🍺', name: 'Beer' }
     ],
     clothing: [
-      { id: 'hat', emoji: '🎩', name: 'Шляпа' },
-      { id: 'cloak', emoji: '🧥', name: 'Плащ' },
-      { id: 'shirt', emoji: '👕', name: 'Рубашка' },
-      { id: 'pants', emoji: '👖', name: 'Брюки' },
-      { id: 'dress', emoji: '👗', name: 'Платье' },
-      { id: 'shoes', emoji: '👟', name: 'Обувь' },
-      { id: 'belt', emoji: '👔', name: 'Ремень' }
+      { id: 'hat', emoji: '🎩', name: 'Hat' },
+      { id: 'cloak', emoji: '🧥', name: 'Cloak' },
+      { id: 'shirt', emoji: '👕', name: 'Shirt' },
+      { id: 'pants', emoji: '👖', name: 'Pants' },
+      { id: 'dress', emoji: '👗', name: 'Dress' },
+      { id: 'shoes', emoji: '👟', name: 'Shoes' },
+      { id: 'belt', emoji: '👔', name: 'Belt' }
     ],
     animals: [
-      { id: 'cat', emoji: '🐱', name: 'Кот' },
-      { id: 'dog', emoji: '🐕', name: 'Собака' },
-      { id: 'horse', emoji: '🐴', name: 'Лошадь' },
-      { id: 'bird', emoji: '🐦', name: 'Птица' },
-      { id: 'owl', emoji: '🦉', name: 'Сова' },
-      { id: 'rat', emoji: '🐀', name: 'Крыса' },
-      { id: 'spider', emoji: '🕷️', name: 'Паук' },
-      { id: 'snake', emoji: '🐍', name: 'Змея' },
-      { id: 'frog', emoji: '🐸', name: 'Лягушка' },
-      { id: 'butterfly', emoji: '🦋', name: 'Бабочка' },
-      { id: 'bee', emoji: '🐝', name: 'Пчела' },
-      { id: 'fish_animal', emoji: '🐠', name: 'Рыба' }
+      { id: 'cat', emoji: '🐱', name: 'Cat' },
+      { id: 'dog', emoji: '🐕', name: 'Dog' },
+      { id: 'horse', emoji: '🐴', name: 'Horse' },
+      { id: 'bird', emoji: '🐦', name: 'Bird' },
+      { id: 'owl', emoji: '🦉', name: 'Owl' },
+      { id: 'rat', emoji: '🐀', name: 'Rat' },
+      { id: 'spider', emoji: '🕷️', name: 'Spider' },
+      { id: 'snake', emoji: '🐍', name: 'Snake' },
+      { id: 'frog', emoji: '🐸', name: 'Frog' },
+      { id: 'butterfly', emoji: '🦋', name: 'Butterfly' },
+      { id: 'bee', emoji: '🐝', name: 'Bee' },
+      { id: 'fish_animal', emoji: '🐠', name: 'Fish' }
     ],
     insects: [
-      { id: 'ant', emoji: '🐜', name: 'Муравей' },
-      { id: 'fly', emoji: '🪰', name: 'Муха' },
-      { id: 'mosquito', emoji: '🦟', name: 'Комар' },
-      { id: 'beetle', emoji: '🪲', name: 'Жук' },
-      { id: 'dragonfly', emoji: '🦟', name: 'Стрекоза' }
+      { id: 'ant', emoji: '🐜', name: 'Ant' },
+      { id: 'fly', emoji: '🪰', name: 'Fly' },
+      { id: 'mosquito', emoji: '🦟', name: 'Mosquito' },
+      { id: 'beetle', emoji: '🪲', name: 'Beetle' },
+      { id: 'dragonfly', emoji: '🦟', name: 'Dragonfly' }
     ],
     treasure: [
-      { id: 'coins', emoji: '🪙', name: 'Монеты' },
-      { id: 'gem', emoji: '💎', name: 'Драгоценность' },
-      { id: 'ring', emoji: '💍', name: 'Кольцо' },
-      { id: 'necklace', emoji: '📿', name: 'Ожерелье' },
-      { id: 'crown', emoji: '👑', name: 'Корона' },
-      { id: 'treasure', emoji: '💰', name: 'Сокровище' }
+      { id: 'coins', emoji: '🪙', name: 'Coins' },
+      { id: 'gem', emoji: '💎', name: 'Gem' },
+      { id: 'ring', emoji: '💍', name: 'Ring' },
+      { id: 'necklace', emoji: '📿', name: 'Necklace' },
+      { id: 'crown', emoji: '👑', name: 'Crown' },
+      { id: 'treasure', emoji: '💰', name: 'Treasure' }
     ],
     magic: [
-      { id: 'book', emoji: '📖', name: 'Книга' },
-      { id: 'scroll', emoji: '📜', name: 'Свиток' },
-      { id: 'potion', emoji: '🧪', name: 'Зелье' },
-      { id: 'crystal', emoji: '🔮', name: 'Кристалл' },
-      { id: 'wand', emoji: '🪄', name: 'Посох' },
-      { id: 'orb', emoji: '🔮', name: 'Сфера' }
+      { id: 'book', emoji: '📖', name: 'Book' },
+      { id: 'scroll', emoji: '📜', name: 'Scroll' },
+      { id: 'potion', emoji: '🧪', name: 'Potion' },
+      { id: 'crystal', emoji: '🔮', name: 'Crystal' },
+      { id: 'wand', emoji: '🪄', name: 'Wand' },
+      { id: 'orb', emoji: '🔮', name: 'Orb' }
     ],
     tools: [
-      { id: 'hammer', emoji: '🔨', name: 'Молоток' },
-      { id: 'pickaxe', emoji: '⛏️', name: 'Кирка' },
-      { id: 'shovel', emoji: '🪣', name: 'Лопата' },
-      { id: 'rope', emoji: '🪢', name: 'Веревка' },
-      { id: 'key', emoji: '🗝️', name: 'Ключ' },
-      { id: 'lock', emoji: '🔒', name: 'Замок' }
+      { id: 'hammer', emoji: '🔨', name: 'Hammer' },
+      { id: 'pickaxe', emoji: '⛏️', name: 'Pickaxe' },
+      { id: 'shovel', emoji: '🪣', name: 'Shovel' },
+      { id: 'rope', emoji: '🪢', name: 'Rope' },
+      { id: 'key', emoji: '🗝️', name: 'Key' },
+      { id: 'lock', emoji: '🔒', name: 'Lock' }
     ],
     furniture: [
-      { id: 'chair', emoji: '🪑', name: 'Стул' },
-      { id: 'table', emoji: '🪑', name: 'Стол' },
-      { id: 'bed', emoji: '🛏️', name: 'Кровать' },
-      { id: 'stool', emoji: '🪑', name: 'Табурет' },
-      { id: 'bench', emoji: '🪑', name: 'Скамья' }
+      { id: 'chair', emoji: '🪑', name: 'Chair' },
+      { id: 'table', emoji: '🪑', name: 'Table' },
+      { id: 'bed', emoji: '🛏️', name: 'Bed' },
+      { id: 'stool', emoji: '🪑', name: 'Stool' },
+      { id: 'bench', emoji: '🪑', name: 'Bench' }
     ],
     paths: [
-      { id: 'path', emoji: '🛤️', name: 'Дорожка' },
-      { id: 'bridge', emoji: '🌉', name: 'Мост' },
-      { id: 'stairs', emoji: '🪜', name: 'Лестница' }
+      { id: 'path', emoji: '🛤️', name: 'Path' },
+      { id: 'bridge', emoji: '🌉', name: 'Bridge' },
+      { id: 'stairs', emoji: '🪜', name: 'Stairs' }
     ],
     buildings: [
-      { id: 'wall', emoji: '🧱', name: 'Стена' },
-      { id: 'window', emoji: '🪟', name: 'Окно' },
-      { id: 'door', emoji: '🚪', name: 'Дверь' }
+      { id: 'wall', emoji: '🧱', name: 'Wall' },
+      { id: 'window', emoji: '🪟', name: 'Window' },
+      { id: 'door', emoji: '🚪', name: 'Door' }
     ]
   };
 
@@ -3566,23 +3773,23 @@ function initializeBottomAssetMenu() {
 
   function getCategoryDisplayName(category: string): string {
     const names: { [key: string]: string } = {
-      nature: 'Природа и растения',
-      fire: 'Огонь и освещение',
-      weapons: 'Оружие',
-      armor: 'Доспехи',
-      containers: 'Сундуки и контейнеры',
-      kitchen: 'Кухонные принадлежности',
-      food: 'Еда и продукты',
-      clothing: 'Одежда',
-      animals: 'Животные',
-      insects: 'Насекомые',
-      treasure: 'Драгоценности и монеты',
-      magic: 'Книги и магия',
-      tools: 'Инструменты',
-      furniture: 'Мебель',
-      paths: 'Дорожки и тропы',
-      buildings: 'Здания',
-      other: 'Разное'
+      nature: 'Nature & Plants',
+      fire: 'Fire & Lighting',
+      weapons: 'Weapons',
+      armor: 'Armor',
+      containers: 'Chests & Containers',
+      kitchen: 'Kitchen Items',
+      food: 'Food & Drinks',
+      clothing: 'Clothing',
+      animals: 'Animals',
+      insects: 'Insects',
+      treasure: 'Treasure & Coins',
+      magic: 'Books & Magic',
+      tools: 'Tools',
+      furniture: 'Furniture',
+      paths: 'Paths & Trails',
+      buildings: 'Buildings',
+      other: 'Miscellaneous'
     };
     return names[category] || category;
   }
@@ -3788,33 +3995,59 @@ app.stage.on("pointerup", endPan);
 app.stage.on("pointerupoutside", endPan);
 
 // Zoom with wheel, focus on cursor
-const MIN_ZOOM = 0.5, MAX_ZOOM = 2.5, ZOOM_STEP = 0.1;
+const MIN_ZOOM = 0.25, MAX_ZOOM = 4.0, ZOOM_STEP = 0.05;  // Увеличиваем диапазон и делаем шаги более точными
 const canvasEl: HTMLCanvasElement = (app as any).view || (app as any).canvas;
 canvasEl.addEventListener("wheel", (ev) => {
   const isPinchZoom = ev.ctrlKey;
   const deltaMagnitude = Math.hypot(ev.deltaX, ev.deltaY);
-  const isTrackpadPan = !isPinchZoom && ev.deltaMode === WheelEvent.DOM_DELTA_PIXEL && deltaMagnitude < 40;
+  
+  // Улучшенная логика определения жестов трекпада
+  const isTrackpadPan = !isPinchZoom && 
+    ev.deltaMode === WheelEvent.DOM_DELTA_PIXEL && 
+    deltaMagnitude < 60 &&  // Увеличиваем порог для более плавного панорамирования
+    Math.abs(ev.deltaY) > Math.abs(ev.deltaX) * 2;  // Вертикальные жесты для панорамирования
+  
+  const isTrackpadZoom = !isPinchZoom && 
+    ev.deltaMode === WheelEvent.DOM_DELTA_PIXEL && 
+    deltaMagnitude >= 60;  // Большие жесты для масштабирования
+  
   if (isTrackpadPan) {
     ev.preventDefault();
     world.position.set(world.position.x - ev.deltaX, world.position.y - ev.deltaY);
     drawFloor(); drawGrid(); drawWalls(); drawObjects(); drawAssets(); drawFog(); drawMinimap();
     return;
   }
-  ev.preventDefault();
-  const oldS = world.scale.x || 1;
-  const direction = ev.deltaY !== 0 ? -Math.sign(ev.deltaY) : ev.deltaX !== 0 ? -Math.sign(ev.deltaX) : 0;
-  if (!direction) return;
-  let s = oldS + direction * ZOOM_STEP;
-  s = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, s));
-  if (s === oldS) return;
-  const sx = ev.clientX; const sy = ev.clientY;
-  // world coords under cursor before zoom
-  const wx = (sx - world.position.x) / oldS;
-  const wy = (sy - world.position.y) / oldS;
-  world.scale.set(s);
-  // adjust position so the same world point stays under cursor
-  world.position.set(sx - wx * s, sy - wy * s);
-  drawFloor(); drawGrid(); drawWalls(); drawObjects(); drawAssets(); drawFog(); drawMinimap();
+  
+  // Масштабирование (трекпад или колесо мыши)
+  if (isTrackpadZoom || isPinchZoom || ev.deltaMode !== WheelEvent.DOM_DELTA_PIXEL) {
+    ev.preventDefault();
+    const oldS = world.scale.x || 1;
+    
+    // Для трекпада используем более плавное масштабирование
+    let zoomFactor = 1.0;
+    if (isTrackpadZoom) {
+      // Более плавное масштабирование для трекпада
+      zoomFactor = 1 + (ev.deltaY * 0.01);
+    } else {
+      // Обычное масштабирование для колеса мыши
+      const direction = ev.deltaY !== 0 ? -Math.sign(ev.deltaY) : ev.deltaX !== 0 ? -Math.sign(ev.deltaX) : 0;
+      if (!direction) return;
+      zoomFactor = 1 + direction * ZOOM_STEP;
+    }
+    
+    let s = oldS * zoomFactor;
+    s = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, s));
+    if (Math.abs(s - oldS) < 0.001) return;
+    
+    const sx = ev.clientX; const sy = ev.clientY;
+    // world coords under cursor before zoom
+    const wx = (sx - world.position.x) / oldS;
+    const wy = (sy - world.position.y) / oldS;
+    world.scale.set(s);
+    // adjust position so the same world point stays under cursor
+    world.position.set(sx - wx * s, sy - wy * s);
+    drawFloor(); drawGrid(); drawWalls(); drawObjects(); drawAssets(); drawFog(); drawMinimap();
+  }
 }, { passive: false });
 
 // ------ Minimap ------
@@ -3826,32 +4059,83 @@ minimap.eventMode = "static";
 // @ts-ignore
 minimap.cursor = "pointer";
 minimap.on("pointerdown", (ev: any) => ev.stopPropagation());
+minimap.zIndex = 1000;  // Устанавливаем высокий z-index для миникарты
 let minimapSize = 180; // px
 function positionMinimap() {
-  const margin = 24;
-  let offsetX = margin;
-  let offsetY = margin;
+  const vw = window.innerWidth || app.screen.width;
+  const vh = window.innerHeight || app.screen.height;
+  
+  // Адаптивный размер миникарты в зависимости от размера экрана
+  let adaptiveMinimapSize = minimapSize;
+  if (vw < 1280 || vh < 800) {
+    adaptiveMinimapSize = 140; // Меньше для маленьких экранов
+  } else if (vw < 1440 || vh < 900) {
+    adaptiveMinimapSize = 160; // Средний размер для MacBook
+  }
+  
+  const margin = 16; // Фиксированный отступ
+  
+  // Простая логика: всегда в правом нижнем углу
+  let x = vw - adaptiveMinimapSize - margin;
+  let y = vh - adaptiveMinimapSize - margin;
+  
+  // Проверяем только правую панель для горизонтального позиционирования
   try {
     const rp = document.getElementById("right-panel");
-    if (rp) {
+    if (rp && rp.style.display !== 'none') {
       const rect = rp.getBoundingClientRect();
-      const vw = window.innerWidth || app.screen.width;
-      const vh = window.innerHeight || app.screen.height;
-      if (rect.right + margin > vw) {
-        offsetX = Math.max(offsetX, rect.right + margin - vw);
-      }
-      if (rect.bottom + margin > vh) {
-        offsetY = Math.max(offsetY, rect.bottom + margin - vh);
+      if (rect.left < x + adaptiveMinimapSize) {
+        // Если правая панель перекрывает миникарту, сдвигаем её влево
+        x = rect.left - adaptiveMinimapSize - margin;
       }
     }
   } catch {}
-  minimap.position.set(app.screen.width - minimapSize - offsetX, app.screen.height - minimapSize - offsetY);
+  
+  // Убеждаемся, что миникарта не выходит за границы экрана
+  x = Math.max(margin, x);
+  y = Math.max(margin, y);
+  
+  minimap.position.set(x, y);
+  minimap.visible = true;
+  minimap.alpha = 1.0;
+  
+  // Отладочная информация
+  console.log(`Minimap positioned at: x=${x}, y=${y}, size=${adaptiveMinimapSize}, screen=${vw}x${vh}`);
+  console.log(`Minimap visible: ${minimap.visible}, alpha: ${minimap.alpha}, zIndex: ${minimap.zIndex}`);
 }
 positionMinimap();
 window.addEventListener("resize", positionMinimap);
 
+// Дополнительно вызываем позиционирование миникарты при изменении видимости панелей
+const observer = new MutationObserver(() => {
+  positionMinimap();
+});
+
+// Наблюдаем за изменениями в панелях
+try {
+  const rightPanel = document.getElementById("right-panel");
+  const bottomPanel = document.getElementById("bottom-asset-menu");
+  
+  if (rightPanel) observer.observe(rightPanel, { attributes: true, attributeFilter: ['style'] });
+  if (bottomPanel) observer.observe(bottomPanel, { attributes: true, attributeFilter: ['style'] });
+} catch {}
+
 function drawMinimap() {
   minimap.clear();
+  minimap.visible = true;  // Убеждаемся, что миникарта видима
+  minimap.alpha = 1.0;     // Убеждаемся, что миникарта не прозрачная
+  
+  const vw = window.innerWidth || app.screen.width;
+  const vh = window.innerHeight || app.screen.height;
+  
+  // Используем тот же адаптивный размер, что и в positionMinimap
+  let adaptiveMinimapSize = minimapSize;
+  if (vw < 1280 || vh < 800) {
+    adaptiveMinimapSize = 140;
+  } else if (vw < 1440 || vh < 900) {
+    adaptiveMinimapSize = 160;
+  }
+  
   const s = world.scale.x || 1;
   // Compute camera center tile
   const camWX = (-world.position.x) / s + app.screen.width / (2 * s);
@@ -3863,9 +4147,9 @@ function drawMinimap() {
   const half = Math.floor(regionTiles / 2);
   const startGX = camGX - half;
   const startGY = camGY - half;
-  const scale = minimapSize / regionTiles;
+  const scale = adaptiveMinimapSize / regionTiles;
   // Background
-  minimap.rect(0, 0, minimapSize, minimapSize).fill({ color: 0x0b0e13, alpha: 0.9 }).stroke({ color: 0x111827, width: 2 });
+  minimap.rect(0, 0, adaptiveMinimapSize, adaptiveMinimapSize).fill({ color: 0x0b0e13, alpha: 0.9 }).stroke({ color: 0x111827, width: 2 });
   // Highlight ground tiles based on existing floors
   for (let j = 0; j < regionTiles; j++) {
     for (let i = 0; i < regionTiles; i++) {
@@ -3896,14 +4180,18 @@ function drawMinimap() {
   for (const t of tokens.values()) {
     const rx = (t.pos.x - startGX + 0.5) * scale;
     const ry = (t.pos.y - startGY + 0.5) * scale;
-    if (rx < 0 || ry < 0 || rx > minimapSize || ry > minimapSize) continue;
+    if (rx < 0 || ry < 0 || rx > adaptiveMinimapSize || ry > adaptiveMinimapSize) continue;
     minimap.circle(rx, ry, Math.max(2, scale * 0.2)).fill(t.id === myTokenId ? 0x8ab4f8 : 0x9aa0a6);
   }
   // Viewport rectangle
   const vb = getVisibleBounds();
   const vx = (vb.startGX - startGX) * scale;
   const vy = (vb.startGY - startGY) * scale;
-  const vw = vb.tilesX * scale;
-  const vh = vb.tilesY * scale;
-  minimap.rect(vx, vy, vw, vh).stroke({ color: 0xffffff, width: 1, alpha: 0.8 });
+  const vwRect = vb.tilesX * scale;
+  const vhRect = vb.tilesY * scale;
+  minimap.rect(vx, vy, vwRect, vhRect).stroke({ color: 0xffffff, width: 1, alpha: 0.8 });
+  
+  // Отладочная информация
+  console.log(`Minimap drawn: tokens=${tokens.size}, regionTiles=${regionTiles}, scale=${scale}, size=${adaptiveMinimapSize}`);
+  console.log(`Minimap position: x=${minimap.position.x}, y=${minimap.position.y}, visible=${minimap.visible}`);
 }

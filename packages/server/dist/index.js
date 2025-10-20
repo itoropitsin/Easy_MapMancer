@@ -297,6 +297,7 @@ async function writeLastUsed(relPath) {
     await writeJSON(LAST_USED_FILE, { path: relPath });
 }
 async function buildLocationsTree() {
+    const seenLocationIds = new Set();
     async function walk(dirRel) {
         const dirAbs = withinDataRoot(dirRel) ?? DATA_ROOT;
         const entries = await fs.readdir(dirAbs, { withFileTypes: true }).catch(() => []);
@@ -319,6 +320,7 @@ async function buildLocationsTree() {
                 }
                 catch { }
                 let locationName;
+                let locationId;
                 let include = false;
                 try {
                     const snap = await readJSON(fileAbs);
@@ -326,6 +328,13 @@ async function buildLocationsTree() {
                     const hasValidLocation = !!loc && typeof loc.name === "string" && typeof loc.id === "string" && Array.isArray(loc.levels);
                     if (hasValidLocation) {
                         locationName = loc.name;
+                        locationId = loc.id;
+                        // Check for duplicate location IDs
+                        if (seenLocationIds.has(locationId)) {
+                            console.warn(`[LOC][server] Duplicate location ID detected: ${locationId} in file ${rel}. Skipping duplicate.`);
+                            continue;
+                        }
+                        seenLocationIds.add(locationId);
                         include = true;
                     }
                 }
@@ -345,7 +354,7 @@ async function buildLocationsTree() {
                 if (include) {
                     files.push({ type: "file", name: ent.name.replace(/\.json$/i, ""), path: rel, locationName });
                     try {
-                        console.debug(`[LOC][server] include file: ${rel} (name="${locationName}")`);
+                        console.debug(`[LOC][server] include file: ${rel} (name="${locationName}", id="${locationId}")`);
                     }
                     catch { }
                 }
