@@ -313,6 +313,48 @@ app.canvas.addEventListener("contextmenu", (e) => {
   e.preventDefault();
 });
 
+// Prevent browser navigation gestures on trackpad
+app.canvas.addEventListener("gesturestart", (e) => {
+  e.preventDefault();
+});
+
+app.canvas.addEventListener("gesturechange", (e) => {
+  e.preventDefault();
+});
+
+app.canvas.addEventListener("gestureend", (e) => {
+  e.preventDefault();
+});
+
+// Prevent swipe navigation gestures
+app.canvas.addEventListener("touchstart", (e) => {
+  e.preventDefault();
+}, { passive: false });
+
+app.canvas.addEventListener("touchmove", (e) => {
+  e.preventDefault();
+}, { passive: false });
+
+app.canvas.addEventListener("touchend", (e) => {
+  e.preventDefault();
+}, { passive: false });
+
+// Additional protection against browser navigation
+app.canvas.addEventListener("wheel", (e) => {
+  // Prevent browser back/forward navigation on horizontal scroll
+  if (Math.abs(e.deltaX) > Math.abs(e.deltaY)) {
+    e.preventDefault();
+  }
+}, { passive: false });
+
+// Prevent browser navigation on key combinations
+document.addEventListener("keydown", (e) => {
+  // Prevent Alt+Left/Right navigation
+  if (e.altKey && (e.key === "ArrowLeft" || e.key === "ArrowRight")) {
+    e.preventDefault();
+  }
+});
+
 const world = new Container();
 world.sortableChildren = true;
 app.stage.addChild(world);
@@ -709,8 +751,6 @@ window.addEventListener("resize", () => {
   drawObjects();
   drawAssets();
   drawFog();
-  drawMinimap();
-  positionMinimap();
 });
 
 // Walls & objects layers
@@ -2247,7 +2287,6 @@ function connect() {
         drawAssets();
         drawTokens();
         centerOnMyToken();
-        drawMinimap(); positionMinimap();
         // update UI state based on role
         try { (updateEditorUI as any)(); } catch {}
         // update user menu
@@ -2345,7 +2384,6 @@ function connect() {
         drawAssets();
         drawTokens();
         centerOnMyToken();
-        drawMinimap(); positionMinimap();
         drawFog();
         renderCharacterPanel();
         // ensure locations list is refreshed after switching/creating maps
@@ -2430,7 +2468,6 @@ function connect() {
         drawGrid();
         drawWalls();
         drawFog();
-        drawMinimap();
       } else if (msg.t === "locationsTree") {
         try {
           const hasDemo = (() => {
@@ -2484,8 +2521,6 @@ function connect() {
         drawAssets();
         drawTokens();
         drawFog();
-        drawMinimap();
-        positionMinimap();
         renderCharacterPanel();
       } else if ((msg as any).t === "error") {
         // show error toast for server-side failures
@@ -3856,7 +3891,7 @@ function centerOn(v: Vec2) {
   const cx = app.screen.width / 2 - pos.x * s;
   const cy = app.screen.height / 2 - pos.y * s;
   world.position.set(cx, cy);
-  drawFloor(); drawGrid(); drawWalls(); drawObjects(); drawAssets(); drawFog(); drawMinimap();
+  drawFloor(); drawGrid(); drawWalls(); drawObjects(); drawAssets(); drawFog();
 }
 
 function centerOnMyToken() {
@@ -3877,18 +3912,12 @@ function centerOnMyToken() {
 type PanState = { startX: number; startY: number; worldX: number; worldY: number } | null;
 let panning: PanState = null;
 // Start panning when pressing on stage background (tokens stopPropagation already)
-function isOverMinimap(x: number, y: number) {
-  const mx = minimap.position.x, my = minimap.position.y;
-  return x >= mx && y >= my && x <= mx + minimapSize && y <= my + minimapSize;
-}
 
 app.stage.on("pointerdown", (e: any) => {
   // ignore if token drag already initiated
   if (dragging) return;
   // only left button
   if (typeof e.button === "number" && e.button !== 0) return;
-  // ignore clicks over minimap
-  if (isOverMinimap(e.global.x, e.global.y)) return;
   const p = world.toLocal(e.global);
   const cell = snapToGrid(p.x, p.y);
   if (myRole === "DM") {
@@ -3931,9 +3960,6 @@ app.stage.on("pointerdown", (e: any) => {
 });
 // Fallback for single-click taps to reliably apply 1x1 (and other) brush actions even if pointerdown didn't apply
 app.stage.on("pointertap", (e: any) => {
-  // If a drag was initiated or click is over minimap, ignore
-  if (dragging) return;
-  if (isOverMinimap(e.global.x, e.global.y)) return;
   if (myRole !== "DM") return;
   // Only handle paint tool here to avoid duplicating other actions; also avoid duplicates if pointerdown already acted
   if (editorMode !== "paint" || !selectedFloorKind || lastPointerDownDidAct) return;
@@ -3978,7 +4004,7 @@ app.stage.on("pointermove", (e: any) => {
   const dx = e.global.x - panning.startX;
   const dy = e.global.y - panning.startY;
   world.position.set(panning.worldX + dx, panning.worldY + dy);
-  drawFloor(); drawGrid(); drawWalls(); drawObjects(); drawAssets(); drawFog(); drawMinimap();
+  drawFloor(); drawGrid(); drawWalls(); drawObjects(); drawAssets(); drawFog();
 });
 function endPan() {
   if (painting) {
@@ -4005,7 +4031,7 @@ canvasEl.addEventListener("wheel", (ev) => {
   const isTrackpadPan = !isPinchZoom && 
     ev.deltaMode === WheelEvent.DOM_DELTA_PIXEL && 
     deltaMagnitude < 60 &&  // Увеличиваем порог для более плавного панорамирования
-    Math.abs(ev.deltaY) > Math.abs(ev.deltaX) * 2;  // Вертикальные жесты для панорамирования
+    (Math.abs(ev.deltaY) > Math.abs(ev.deltaX) * 2 || Math.abs(ev.deltaX) > Math.abs(ev.deltaY) * 2);  // Поддержка как вертикального, так и горизонтального панорамирования
   
   const isTrackpadZoom = !isPinchZoom && 
     ev.deltaMode === WheelEvent.DOM_DELTA_PIXEL && 
@@ -4014,7 +4040,7 @@ canvasEl.addEventListener("wheel", (ev) => {
   if (isTrackpadPan) {
     ev.preventDefault();
     world.position.set(world.position.x - ev.deltaX, world.position.y - ev.deltaY);
-    drawFloor(); drawGrid(); drawWalls(); drawObjects(); drawAssets(); drawFog(); drawMinimap();
+    drawFloor(); drawGrid(); drawWalls(); drawObjects(); drawAssets(); drawFog();
     return;
   }
   
@@ -4046,152 +4072,8 @@ canvasEl.addEventListener("wheel", (ev) => {
     world.scale.set(s);
     // adjust position so the same world point stays under cursor
     world.position.set(sx - wx * s, sy - wy * s);
-    drawFloor(); drawGrid(); drawWalls(); drawObjects(); drawAssets(); drawFog(); drawMinimap();
+    drawFloor(); drawGrid(); drawWalls(); drawObjects(); drawAssets(); drawFog();
   }
 }, { passive: false });
 
-// ------ Minimap ------
-const minimap = new Graphics();
-uiLayer.addChild(minimap);
-// enable pointer capture for minimap to prevent background panning when interacting with it
-// @ts-ignore
-minimap.eventMode = "static";
-// @ts-ignore
-minimap.cursor = "pointer";
-minimap.on("pointerdown", (ev: any) => ev.stopPropagation());
-minimap.zIndex = 1000;  // Устанавливаем высокий z-index для миникарты
-let minimapSize = 180; // px
-function positionMinimap() {
-  const vw = window.innerWidth || app.screen.width;
-  const vh = window.innerHeight || app.screen.height;
-  
-  // Адаптивный размер миникарты в зависимости от размера экрана
-  let adaptiveMinimapSize = minimapSize;
-  if (vw < 1280 || vh < 800) {
-    adaptiveMinimapSize = 140; // Меньше для маленьких экранов
-  } else if (vw < 1440 || vh < 900) {
-    adaptiveMinimapSize = 160; // Средний размер для MacBook
-  }
-  
-  const margin = 16; // Фиксированный отступ
-  
-  // Простая логика: всегда в правом нижнем углу
-  let x = vw - adaptiveMinimapSize - margin;
-  let y = vh - adaptiveMinimapSize - margin;
-  
-  // Проверяем только правую панель для горизонтального позиционирования
-  try {
-    const rp = document.getElementById("right-panel");
-    if (rp && rp.style.display !== 'none') {
-      const rect = rp.getBoundingClientRect();
-      if (rect.left < x + adaptiveMinimapSize) {
-        // Если правая панель перекрывает миникарту, сдвигаем её влево
-        x = rect.left - adaptiveMinimapSize - margin;
-      }
-    }
-  } catch {}
-  
-  // Убеждаемся, что миникарта не выходит за границы экрана
-  x = Math.max(margin, x);
-  y = Math.max(margin, y);
-  
-  minimap.position.set(x, y);
-  minimap.visible = true;
-  minimap.alpha = 1.0;
-  
-  // Отладочная информация
-  console.log(`Minimap positioned at: x=${x}, y=${y}, size=${adaptiveMinimapSize}, screen=${vw}x${vh}`);
-  console.log(`Minimap visible: ${minimap.visible}, alpha: ${minimap.alpha}, zIndex: ${minimap.zIndex}`);
-}
-positionMinimap();
-window.addEventListener("resize", positionMinimap);
 
-// Дополнительно вызываем позиционирование миникарты при изменении видимости панелей
-const observer = new MutationObserver(() => {
-  positionMinimap();
-});
-
-// Наблюдаем за изменениями в панелях
-try {
-  const rightPanel = document.getElementById("right-panel");
-  const bottomPanel = document.getElementById("bottom-asset-menu");
-  
-  if (rightPanel) observer.observe(rightPanel, { attributes: true, attributeFilter: ['style'] });
-  if (bottomPanel) observer.observe(bottomPanel, { attributes: true, attributeFilter: ['style'] });
-} catch {}
-
-function drawMinimap() {
-  minimap.clear();
-  minimap.visible = true;  // Убеждаемся, что миникарта видима
-  minimap.alpha = 1.0;     // Убеждаемся, что миникарта не прозрачная
-  
-  const vw = window.innerWidth || app.screen.width;
-  const vh = window.innerHeight || app.screen.height;
-  
-  // Используем тот же адаптивный размер, что и в positionMinimap
-  let adaptiveMinimapSize = minimapSize;
-  if (vw < 1280 || vh < 800) {
-    adaptiveMinimapSize = 140;
-  } else if (vw < 1440 || vh < 900) {
-    adaptiveMinimapSize = 160;
-  }
-  
-  const s = world.scale.x || 1;
-  // Compute camera center tile
-  const camWX = (-world.position.x) / s + app.screen.width / (2 * s);
-  const camWY = (-world.position.y) / s + app.screen.height / (2 * s);
-  const camGX = Math.floor(camWX / CELL);
-  const camGY = Math.floor(camWY / CELL);
-  // Region around camera
-  const regionTiles = 60; // tiles across
-  const half = Math.floor(regionTiles / 2);
-  const startGX = camGX - half;
-  const startGY = camGY - half;
-  const scale = adaptiveMinimapSize / regionTiles;
-  // Background
-  minimap.rect(0, 0, adaptiveMinimapSize, adaptiveMinimapSize).fill({ color: 0x0b0e13, alpha: 0.9 }).stroke({ color: 0x111827, width: 2 });
-  // Highlight ground tiles based on existing floors
-  for (let j = 0; j < regionTiles; j++) {
-    for (let i = 0; i < regionTiles; i++) {
-      const gx = startGX + i; const gy = startGY + j;
-      if (!isGround(gx, gy)) continue;
-      const x = i * scale, y = j * scale;
-      minimap.rect(x, y, scale, scale).fill({ color: 0x374151, alpha: 0.25 });
-    }
-  }
-  // Walls (sampled like main, but masked to ground tiles)
-  const seed = currentSeed || "demo-seed"; const hs = hashString(seed);
-  const wallColor = 0x374151;
-  for (let j = 0; j <= regionTiles; j++) {
-    for (let i = 0; i <= regionTiles; i++) {
-      const gx = startGX + i; const gy = startGY + j;
-      const h = hash2D(gx, gy, hs);
-      if ((h & 0x1f) === 0 && isGround(gx, gy) && isGround(gx, gy - 1)) {
-        const x0 = i * scale, y0 = j * scale;
-        minimap.moveTo(x0, y0).lineTo(x0 + scale, y0).stroke({ color: wallColor, width: 1 });
-      }
-      if (((h >>> 5) & 0x1f) === 0 && isGround(gx, gy) && isGround(gx - 1, gy)) {
-        const x0 = i * scale, y0 = j * scale;
-        minimap.moveTo(x0, y0).lineTo(x0, y0 + scale).stroke({ color: wallColor, width: 1 });
-      }
-    }
-  }
-  // Tokens
-  for (const t of tokens.values()) {
-    const rx = (t.pos.x - startGX + 0.5) * scale;
-    const ry = (t.pos.y - startGY + 0.5) * scale;
-    if (rx < 0 || ry < 0 || rx > adaptiveMinimapSize || ry > adaptiveMinimapSize) continue;
-    minimap.circle(rx, ry, Math.max(2, scale * 0.2)).fill(t.id === myTokenId ? 0x8ab4f8 : 0x9aa0a6);
-  }
-  // Viewport rectangle
-  const vb = getVisibleBounds();
-  const vx = (vb.startGX - startGX) * scale;
-  const vy = (vb.startGY - startGY) * scale;
-  const vwRect = vb.tilesX * scale;
-  const vhRect = vb.tilesY * scale;
-  minimap.rect(vx, vy, vwRect, vhRect).stroke({ color: 0xffffff, width: 1, alpha: 0.8 });
-  
-  // Отладочная информация
-  console.log(`Minimap drawn: tokens=${tokens.size}, regionTiles=${regionTiles}, scale=${scale}, size=${adaptiveMinimapSize}`);
-  console.log(`Minimap position: x=${minimap.position.x}, y=${minimap.position.y}, visible=${minimap.visible}`);
-}
