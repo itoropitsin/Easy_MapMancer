@@ -1,4 +1,4 @@
-import type { ID, Vec2, Role, GameSnapshot, FloorKind, LocationTreeNode, Token } from "./types";
+import type { ID, Vec2, Role, GameSnapshot, FloorKind, LocationTreeNode, Token, FogMode, ActionSnapshot } from "./types";
 
 export type ClientToServer =
   | { t: "join"; name?: string; invite?: string; preferredRole?: Role }
@@ -31,7 +31,10 @@ export type ClientToServer =
   | { t: "reorderAsset"; assetId: ID; direction: "top" | "up" | "down" | "bottom" }
   | { t: "toggleTokenHidden"; tokenId: ID }
   | { t: "toggleAssetHidden"; assetId: ID }
-  | { t: "switchRole"; role: Role };
+  | { t: "switchRole"; role: Role }
+  | { t: "setFogMode"; fogMode: FogMode }
+  | { t: "undo" }
+  | { t: "redo" };
 
 export type ServerToClient =
   | { t: "welcome"; playerId: ID; role: Role; snapshot: GameSnapshot }
@@ -43,4 +46,6 @@ export type ServerToClient =
   // locations list response
   | { t: "locationsTree"; tree: LocationTreeNode[]; lastUsedPath?: string }
   | { t: "savedOk"; path: string }
-  | { t: "roleChanged"; role: Role };
+  | { t: "roleChanged"; role: Role }
+  | { t: "undoRedoState"; undoStack: ActionSnapshot[]; redoStack: ActionSnapshot[] }
+  | { t: "gameStateRestored" };

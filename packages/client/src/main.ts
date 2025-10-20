@@ -48,7 +48,8 @@ import type {
   ClientToServer,
   LocationTreeNode,
   Event,
-  GameSnapshot
+  GameSnapshot,
+  FogMode
 } from "@dnd/shared";
 
 // Small top-level toast helper for reuse outside connect()
@@ -89,6 +90,7 @@ const tokens = new Map<ID, Token>();
 let currentLocation: Location | null = null;
 let currentSeed: string | null = null;
 let myRole: "DM" | "PLAYER" | null = null;
+let fogMode: FogMode = "automatic"; // режим открытия тумана войны
 const revealedByLevel: Map<ID, Set<string>> = new Map();
 const assets = new Map<ID, Asset>();
 type EditorMode = "cursor" | "paint" | "eraseObjects" | "eraseSpace" | "revealFog" | "eraseFog" | "eraseTokens" | "spawnToken";
@@ -841,6 +843,19 @@ function showContextMenu(x: number, y: number, target: { type: "token"; id: ID }
   `;
   menu.appendChild(separator);
   
+  // Add dead toggle option (only for tokens, only for DM)
+  if (myRole === "DM" && contextMenuTarget.type === "token") {
+    const token = tokens.get(contextMenuTarget.id);
+    const isDead = (token as any)?.dead;
+    
+    addItem(`${isDead ? "❤️" : "💀"} ${isDead ? "Воскресить" : "Убить"}`, () => {
+      if (!socket || !contextMenuTarget) return;
+      const msg: ClientToServer = { t: "updateToken", tokenId: contextMenuTarget.id, patch: { dead: !isDead } };
+      console.log(`[CLIENT] Sending updateToken dead:`, msg);
+      socket.send(JSON.stringify(msg));
+    });
+  }
+  
   // Add hidden toggle option (only for DM)
   if (myRole === "DM") {
     const isHidden = contextMenuTarget.type === "token" 
@@ -957,10 +972,42 @@ function drawTokens() {
     const ring = new Graphics();
     const ringColor = isMine ? 0x8ab4f8 : 0x9aa0a6;
     ring.circle(0, 0, CELL * 0.46).stroke({ color: ringColor, width: 2, alpha: 0.8 });
+    
+    // Add background overlay for health status
+    const backgroundOverlay = new Graphics();
+    const hp = (tok as any).hp || 0;
+    const isDead = (tok as any).dead;
+    
+    if (isDead) {
+      // Black background for dead characters
+      backgroundOverlay.circle(0, 0, CELL * 0.48).fill({ color: 0x000000, alpha: 0.6 });
+    } else if (hp === 0) {
+      // Red background for characters with 0 HP
+      backgroundOverlay.circle(0, 0, CELL * 0.48).fill({ color: 0xff0000, alpha: 0.6 });
+    }
+    
     // Check if token is hidden for DM
     const isHidden = (tok as any).hidden && myRole === "DM";
     
+    // Add skull icon for dead characters
+    let skullIcon: Text | null = null;
+    if (isDead) {
+      skullIcon = new Text({
+        text: "💀",
+        style: {
+          fontFamily: "Apple Color Emoji, Segoe UI Emoji, Noto Color Emoji, Inter, system-ui",
+          fontSize: Math.floor(CELL * 0.3),
+          stroke: 0x202124,
+          strokeThickness: 1,
+        }
+      } as any);
+      (skullIcon as any).anchor?.set?.(1, 0);
+      skullIcon.position.set(CELL * 0.35, -CELL * 0.35);
+    }
+    
     // Compose
+    // @ts-ignore
+    node.addChild(backgroundOverlay);
     // @ts-ignore
     node.addChild(ring);
     // @ts-ignore
@@ -968,6 +1015,10 @@ function drawTokens() {
     if (label) {
       // @ts-ignore
       node.addChild(label);
+    }
+    if (skullIcon) {
+      // @ts-ignore
+      node.addChild(skullIcon);
     }
     
     // Add eye icon for hidden tokens (only visible to DM)
@@ -1154,6 +1205,14 @@ function renderCharacterPanel() {
       label: "AC",
       input: renderInput({ id: "char-ac", type: "number", value: formatNumber(anyTok.ac), placeholder: "0", attrs: 'inputmode="numeric"' }),
     },
+    {
+      icon: "dead",
+      label: "Dead",
+      input: `<label class="char-checkbox-label">
+        <input id="char-dead" type="checkbox" ${anyTok.dead ? 'checked' : ''} />
+        <span class="char-checkbox-text">Мертв</span>
+      </label>`,
+    },
   ];
   const statKeys: Array<{ key: keyof NonNullable<Token["stats"]>; label: string }> = [
     { key: "str", label: "STR" },
@@ -1210,7 +1269,7 @@ function renderCharacterPanel() {
   // Enable/disable based on permissions
   const q = (sel: string) => panel.querySelector(sel) as HTMLInputElement | null;
   const setDisabled = (el: HTMLInputElement | null) => { if (el) el.disabled = !editable; };
-  ["#char-name", "#char-hp", "#char-ac", "#char-str", "#char-dex", "#char-con", "#char-int", "#char-wis", "#char-cha", "#char-vision-radius"].forEach(id => setDisabled(q(id)));
+  ["#char-name", "#char-hp", "#char-ac", "#char-str", "#char-dex", "#char-con", "#char-int", "#char-wis", "#char-cha", "#char-vision-radius", "#char-dead"].forEach(id => setDisabled(q(id)));
   // Helpers
   const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
   const parseNum = (el: HTMLInputElement, lo?: number, hi?: number) => {
@@ -1259,6 +1318,12 @@ function renderCharacterPanel() {
     sendUpdateToken(tok.id, { notes: next });
   });
   if (notesEl) notesEl.disabled = !editable;
+  
+  const deadEl = q("#char-dead");
+  deadEl?.addEventListener("change", () => {
+    if (!editable) return;
+    sendUpdateToken(tok.id, { dead: deadEl.checked });
+  });
 }
 
 function drawAssets() {
@@ -1552,7 +1617,7 @@ function drawFog() {
       const k = `${gx},${gy}`;
       if (isGround(gx, gy) && !revealed.has(k)) {
         // DM: semi-transparent overlay to allow editing through fog
-        fogTiles.rect(gx * CELL, gy * CELL, CELL, CELL).fill({ color: 0x000000, alpha: 0.3 });
+        fogTiles.rect(gx * CELL, gy * CELL, CELL, CELL).fill({ color: 0x000000, alpha: 0.6 });
       }
     }
   }
@@ -1595,6 +1660,8 @@ function revealByVisionForToken(ws: WebSocket, t: any) {
   if (t.levelId !== levelId) return; // only reveal on current level
   // Only player tokens should auto-reveal fog; NPCs must not
   if ((t as any).kind === "npc") return;
+  // Only auto-reveal if fog mode is automatic
+  if (fogMode !== "automatic") return;
   const r = getTokenVisionRadius(t);
   if (r > 0) sendRevealLOS(ws, t.pos, r);
 }
@@ -1736,6 +1803,7 @@ function connect() {
     ws.addEventListener("message", (ev) => {
       if (attemptId !== activeAttemptId) return;
       const msg: ServerToClient = JSON.parse(ev.data);
+      console.log(`[CLIENT] Received message:`, msg.t, msg);
       if (msg.t === "welcome") {
         handshakeComplete = true;
         clearHandshakeTimer();
@@ -1750,6 +1818,7 @@ function connect() {
         myRole = msg.role;
         // store location/seed
         currentLocation = msg.snapshot.location;
+        fogMode = currentLocation?.fogMode ?? "automatic";
         // Update HUD map name and URL with location ID
         try {
         setMapName(currentLocation?.name);
@@ -1853,6 +1922,7 @@ function connect() {
         playerId = playerId; // unchanged
         myRole = myRole; // unchanged
         currentLocation = snap.location;
+        fogMode = currentLocation?.fogMode ?? "automatic";
         // Update HUD map name and URL with location ID
         try {
         setMapName(currentLocation?.name);
@@ -1905,6 +1975,8 @@ function connect() {
         // ensure locations list is refreshed after switching/creating maps
         try { requestLocationsList(); } catch {}
       } else if (msg.t === "statePatch") {
+        console.log(`[CLIENT] Received statePatch with ${msg.events.length} events`);
+        console.log(`[CLIENT] Event types:`, msg.events.map(e => e.type));
         for (const e of msg.events) {
           if (e.type === "tokenSpawned") {
             tokens.set(e.token.id, e.token);
@@ -1929,6 +2001,9 @@ function connect() {
           } else if ((e as any).type === "fogObscured") {
             const set = getRevealed((e as any).levelId as ID);
             for (const c of (e as any).cells) set.delete(cellKey(c));
+          } else if ((e as any).type === "fogModeChanged") {
+            fogMode = (e as any).fogMode as FogMode;
+            updateFogModeUI();
           } else if ((e as any).type === "assetPlaced") {
             const a = (e as any).asset as Asset;
             assets.set(a.id, a);
@@ -1941,9 +2016,20 @@ function connect() {
             const id = (e as any).assetId as ID;
             assets.delete(id);
             drawAssets();
+          } else if ((e as any).type === "assetMoved") {
+            const a = (e as any).asset as Asset;
+            console.log(`[CLIENT] Asset moved: ${a.id} to (${a.pos.x}, ${a.pos.y})`);
+            assets.set(a.id, a);
+            drawAssets(); // Redraw to reflect position changes
           } else if ((e as any).type === "floorPainted") {
             const ev = e as any as { levelId: ID; pos: Vec2; kind: FloorKind | null };
             setFloorOverride(ev.levelId, ev.pos, ev.kind ?? null);
+          } else if ((e as any).type === "undoPerformed") {
+            console.log(`[CLIENT] Undo performed, refreshing display`);
+            // The gameStateRestored event will handle the full refresh
+          } else if ((e as any).type === "redoPerformed") {
+            console.log(`[CLIENT] Redo performed, refreshing display`);
+            // The gameStateRestored event will handle the full refresh
           } else if ((e as any).type === "tokenUpdated") {
             const anyE: any = e as any;
             if (anyE.token) {
@@ -1999,6 +2085,25 @@ function connect() {
         try { (updateEditorUI as any)(); } catch {}
         try { (updateUserMenu as any)(); } catch {}
         hudToast(`Роль изменена на: ${myRole === "DM" ? "Администратор" : "Игрок"}`);
+      } else if (msg.t === "undoRedoState") {
+        console.log(`[CLIENT] Received undoRedoState:`, (msg as any).undoStack.length, (msg as any).redoStack.length);
+        updateUndoRedoButtons((msg as any).undoStack, (msg as any).redoStack);
+      } else if (msg.t === "gameStateRestored") {
+        console.log(`[CLIENT] Received gameStateRestored, refreshing display`);
+        console.log(`[CLIENT] Current assets count: ${assets.size}`);
+        console.log(`[CLIENT] Current tokens count: ${tokens.size}`);
+        console.log(`[CLIENT] Current floors count: ${floors.size}`);
+        // Refresh all visual elements after state restoration
+        drawFloor();
+        drawGrid();
+        drawWalls();
+        drawObjects();
+        drawAssets();
+        drawTokens();
+        drawFog();
+        drawMinimap();
+        positionMinimap();
+        renderCharacterPanel();
       } else if ((msg as any).t === "error") {
         // show error toast for server-side failures
         try { hudToast(`Ошибка: ${(msg as any).message || "неизвестная ошибка"}`); } catch {}
@@ -2385,12 +2490,26 @@ function connect() {
   btnUndo?.addEventListener("click", (ev) => {
     ev.preventDefault();
     closeToolPanels();
-    hudToast("Undo пока не реализовано");
+    console.log(`[CLIENT] Undo button clicked, role: ${myRole}, socket: ${!!socket}`);
+    if (socket && myRole === "DM") {
+      const msg: ClientToServer = { t: "undo" };
+      console.log(`[CLIENT] Sending undo message:`, msg);
+      socket.send(JSON.stringify(msg));
+    } else {
+      hudToast("Только DM может отменять действия");
+    }
   });
   btnRedo?.addEventListener("click", (ev) => {
     ev.preventDefault();
     closeToolPanels();
-    hudToast("Redo пока не реализовано");
+    console.log(`[CLIENT] Redo button clicked, role: ${myRole}, socket: ${!!socket}`);
+    if (socket && myRole === "DM") {
+      const msg: ClientToServer = { t: "redo" };
+      console.log(`[CLIENT] Sending redo message:`, msg);
+      socket.send(JSON.stringify(msg));
+    } else {
+      hudToast("Только DM может повторять действия");
+    }
   });
 
   function updateDockSelection() {
@@ -2406,6 +2525,13 @@ function connect() {
       const group = btn.dataset.group;
       btn.classList.toggle("is-selected", group === activeGroup);
     });
+  }
+
+  function updateFogModeUI() {
+    const fogModeToggle = document.getElementById("fog-mode-toggle") as HTMLInputElement | null;
+    if (fogModeToggle) {
+      fogModeToggle.checked = fogMode === "manual";
+    }
   }
 
   function updateEditorUI() {
@@ -2487,6 +2613,8 @@ function connect() {
     if (btnEraseFog) btnEraseFog.disabled = !isDM;
     if (btnAddPlayer) btnAddPlayer.disabled = !isDM;
     if (btnAddNPC) btnAddNPC.disabled = !isDM;
+    if (btnUndo) btnUndo.disabled = !isDM;
+    if (btnRedo) btnRedo.disabled = !isDM;
     
     // Reset editor mode if switching to player role
     if (!isDM && (editorMode === "paint" || editorMode === "eraseObjects" || editorMode === "eraseSpace" || editorMode === "eraseTokens" || editorMode === "spawnToken" || editorMode === "revealFog" || editorMode === "eraseFog")) {
@@ -2537,7 +2665,29 @@ function connect() {
     drawTokens();
     drawFog();
   }
+
+  function updateUndoRedoButtons(undoStack: any[], redoStack: any[]) {
+    const isDM = myRole === "DM";
+    
+    // Update undo button
+    if (btnUndo) {
+      btnUndo.disabled = !isDM || undoStack.length === 0;
+      btnUndo.title = undoStack.length > 0 
+        ? `Отменить: ${undoStack[undoStack.length - 1]?.description || "предыдущее действие"}` 
+        : "Отменить предыдущее действие";
+    }
+    
+    // Update redo button
+    if (btnRedo) {
+      btnRedo.disabled = !isDM || redoStack.length === 0;
+      btnRedo.title = redoStack.length > 0 
+        ? `Повторить: ${redoStack[redoStack.length - 1]?.description || "отмененное действие"}` 
+        : "Повторить действие";
+    }
+  }
+
   updateEditorUI();
+  updateFogModeUI();
   // Editor tool buttons
   btnCursor?.addEventListener("click", (ev) => {
     ev.preventDefault();
@@ -2583,6 +2733,16 @@ function connect() {
   btnEraseFog?.addEventListener("click", () => { editorMode = "eraseFog"; selectedAssetKind = null; selectedFloorKind = null; updateEditorUI(); });
   btnRevealFog?.addEventListener("click", () => { selectedTokenKind = null; });
   btnEraseFog?.addEventListener("click", () => { selectedTokenKind = null; });
+  
+  // Fog mode toggle handler
+  const fogModeToggle = document.getElementById("fog-mode-toggle") as HTMLInputElement | null;
+  fogModeToggle?.addEventListener("change", () => {
+    if (!socket || myRole !== "DM") return;
+    const newMode: FogMode = fogModeToggle.checked ? "manual" : "automatic";
+    const msg: ClientToServer = { t: "setFogMode", fogMode: newMode };
+    socket.send(JSON.stringify(msg));
+  });
+  
   btnAddPlayer?.addEventListener("click", () => {
     if (!socket || myRole !== "DM") return;
     selectedTokenKind = "player";
@@ -2805,7 +2965,7 @@ function connect() {
     return row;
   }
   // Update buttons after welcome determines role
-  const observer = new MutationObserver(() => updateEditorUI());
+  const observer = new MutationObserver(() => { updateEditorUI(); updateFogModeUI(); });
   observer.observe(document.body, { subtree: true, childList: true });
 }
 

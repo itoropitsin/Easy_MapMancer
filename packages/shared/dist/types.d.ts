@@ -20,6 +20,7 @@ export interface Location {
     name: string;
     levels: Level[];
     settings?: Record<string, unknown>;
+    fogMode?: FogMode;
 }
 export interface Token {
     id: ID;
@@ -52,6 +53,7 @@ export interface Token {
     notes?: string;
     zIndex?: number;
     hidden?: boolean;
+    dead?: boolean;
 }
 export interface Asset {
     id: ID;
@@ -66,6 +68,7 @@ export interface Asset {
     hidden?: boolean;
 }
 export type FloorKind = "stone" | "wood" | "water" | "sand" | "grass";
+export type FogMode = "automatic" | "manual";
 export type Event = {
     type: "tokenMoved";
     tokenId: ID;
@@ -88,6 +91,9 @@ export type Event = {
     type: "fogObscured";
     levelId: ID;
     cells: Vec2[];
+} | {
+    type: "fogModeChanged";
+    fogMode: FogMode;
 } | {
     type: "assetPlaced";
     asset: Asset;
@@ -120,4 +126,17 @@ export interface LocationTreeNode {
     path: string;
     children?: LocationTreeNode[];
     locationName?: string;
+}
+export interface ActionSnapshot {
+    id: string;
+    timestamp: number;
+    actionType: string;
+    beforeState: Partial<GameSnapshot>;
+    afterState: Partial<GameSnapshot>;
+    description: string;
+}
+export interface UndoRedoState {
+    undoStack: ActionSnapshot[];
+    redoStack: ActionSnapshot[];
+    maxStackSize: number;
 }

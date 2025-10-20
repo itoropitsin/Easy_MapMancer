@@ -18,6 +18,7 @@ export interface Location {
   name: string;
   levels: Level[];
   settings?: Record<string, unknown>;
+  fogMode?: FogMode; // режим открытия тумана войны
 }
 
 export interface Token {
@@ -37,6 +38,7 @@ export interface Token {
   notes?: string;
   zIndex?: number; // rendering layer order within same cell
   hidden?: boolean; // if true, only DM can see this token
+  dead?: boolean; // if true, character is dead
 }
 
 export interface Asset {
@@ -55,6 +57,8 @@ export interface Asset {
 
 export type FloorKind = "stone" | "wood" | "water" | "sand" | "grass";
 
+export type FogMode = "automatic" | "manual";
+
 export type Event =
   | { type: "tokenMoved"; tokenId: ID; pos: Vec2; levelId: ID }
   | { type: "tokenSpawned"; token: Token }
@@ -62,6 +66,7 @@ export type Event =
   | { type: "tokenRemoved"; tokenId: ID }
   | { type: "fogRevealed"; levelId: ID; cells: Vec2[] }
   | { type: "fogObscured"; levelId: ID; cells: Vec2[] }
+  | { type: "fogModeChanged"; fogMode: FogMode }
   | { type: "assetPlaced"; asset: Asset }
   | { type: "assetUpdated"; asset: Asset }
   | { type: "assetRemoved"; assetId: ID }
@@ -82,4 +87,20 @@ export interface LocationTreeNode {
   children?: LocationTreeNode[]; // for folders
   // Optional additional display name taken from snapshot.location.name for file nodes
   locationName?: string;
+}
+
+// Undo/Redo system types
+export interface ActionSnapshot {
+  id: string;
+  timestamp: number;
+  actionType: string;
+  beforeState: Partial<GameSnapshot>;
+  afterState: Partial<GameSnapshot>;
+  description: string;
+}
+
+export interface UndoRedoState {
+  undoStack: ActionSnapshot[];
+  redoStack: ActionSnapshot[];
+  maxStackSize: number;
 }

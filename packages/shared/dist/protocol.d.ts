@@ -1,4 +1,4 @@
-import type { ID, Vec2, Role, GameSnapshot, FloorKind, LocationTreeNode, Token } from "./types";
+import type { ID, Vec2, Role, GameSnapshot, FloorKind, LocationTreeNode, Token, FogMode, ActionSnapshot } from "./types";
 export type ClientToServer = {
     t: "join";
     name?: string;
@@ -105,6 +105,13 @@ export type ClientToServer = {
 } | {
     t: "switchRole";
     role: Role;
+} | {
+    t: "setFogMode";
+    fogMode: FogMode;
+} | {
+    t: "undo";
+} | {
+    t: "redo";
 };
 export type ServerToClient = {
     t: "welcome";
@@ -135,4 +142,10 @@ export type ServerToClient = {
 } | {
     t: "roleChanged";
     role: Role;
+} | {
+    t: "undoRedoState";
+    undoStack: ActionSnapshot[];
+    redoStack: ActionSnapshot[];
+} | {
+    t: "gameStateRestored";
 };

@@ -7,7 +7,7 @@ import { WebSocketServer } from "ws";
 import type { Server as HTTPServer } from "node:http";
 import type { IncomingMessage } from "node:http";
 import type { ServerResponse } from "node:http";
-import type { ServerToClient, ClientToServer, Location, Level, Token, Vec2, Role, ID, Event, Asset, FloorKind, LocationTreeNode, GameSnapshot } from "@dnd/shared";
+import type { ServerToClient, ClientToServer, Location, Level, Token, Vec2, Role, ID, Event, Asset, FloorKind, LocationTreeNode, GameSnapshot, FogMode, ActionSnapshot, UndoRedoState } from "@dnd/shared";
 
 const PORT = Number(process.env.PORT || 8080);
 const __filename = fileURLToPath(import.meta.url);
@@ -62,15 +62,19 @@ function applySnapshot(snap: GameSnapshot) {
     if (!a || !a.id) continue;
     state.assets.set(a.id, a);
   }
+  console.log(`[SERVER] applySnapshot: clearing fog, current fog levels: ${state.fog.size}`);
   state.fog.clear();
   // rebuild fog from snapshot events if present
   const events = Array.isArray(payload.events) ? (payload.events as Event[]) : [];
+  console.log(`[SERVER] Loading snapshot with ${events.length} events`);
   for (const e of events) {
     if ((e as any).type === "fogRevealed") {
       const s = getFogSet((e as any).levelId);
+      console.log(`[SERVER] Restoring fog for level ${(e as any).levelId}, ${(e as any).cells.length} cells`);
       for (const c of (e as any).cells) s.add(cellKey(c));
     }
   }
+  console.log(`[SERVER] applySnapshot: after restoration, fog levels: ${state.fog.size}`);
   state.floors.clear();
   const floors = Array.isArray(payload.floors)
     ? (payload.floors as { levelId: ID; pos: Vec2; kind: FloorKind }[])
@@ -101,6 +105,29 @@ function applySnapshot(snap: GameSnapshot) {
     }
     (payload as any).floors = merged;
   }
+  
+  // Auto-reveal fog for player tokens after loading
+  const isAutomaticMode = !state.location?.fogMode || state.location.fogMode === "automatic";
+  if (isAutomaticMode) {
+    console.log(`[SERVER] Auto-revealing fog for player tokens in automatic mode`);
+    for (const token of state.tokens.values()) {
+      const isNPC = (token as any).kind === "npc";
+      if (!isNPC) {
+        const vr = Math.max(0, Math.min(20, Math.round((token.vision as any)?.radius ?? 0)));
+        if (vr > 0) {
+          const fog = getFogSet(token.levelId);
+          const cells = cellsInRadius(token.pos, vr);
+          console.log(`[SERVER] Auto-revealing fog for token ${token.id} at (${token.pos.x}, ${token.pos.y}), ${cells.length} cells`);
+          for (const c of cells) {
+            const k = cellKey(c);
+            if (!fog.has(k)) {
+              fog.add(k);
+            }
+          }
+        }
+      }
+    }
+  }
 }
 
 interface GameState {
@@ -110,6 +137,7 @@ interface GameState {
   fog: Map<ID, Set<string>>; // levelId -> set of "x,y"
   assets: Map<ID, Asset>;
   floors: Map<ID, Map<string, FloorKind>>; // levelId -> ("x,y" -> kind)
+  undoRedo: UndoRedoState;
 }
 
 const DEFAULT_FLOOR_KIND: FloorKind = "stone";
@@ -167,6 +195,11 @@ const state: GameState = {
   fog: new Map(),
   assets: new Map(),
   floors: new Map(),
+  undoRedo: {
+    undoStack: [],
+    redoStack: [],
+    maxStackSize: 50
+  }
 };
 
 ensureDefaultFloorsForAllLevels();
@@ -326,9 +359,187 @@ function send(ws: import("ws").WebSocket, msg: ServerToClient) {
 }
 
 function broadcast(events: Event[]) {
+  console.log(`[SERVER] Broadcasting ${events.length} events to ${state.clients.size} clients:`, events.map(e => e.type));
   for (const c of state.clients.values()) {
     send(c.socket, { t: "statePatch", events });
   }
+}
+
+// Undo/Redo system functions
+function createGameSnapshot(): GameSnapshot {
+  const floors: { levelId: ID; pos: Vec2; kind: FloorKind }[] = [];
+  for (const [levelId, floorMap] of state.floors) {
+    for (const [posKey, kind] of floorMap) {
+      const [x, y] = posKey.split(',').map(Number);
+      floors.push({ levelId, pos: { x, y }, kind });
+    }
+  }
+  
+  // Include fog state in events
+  const events: Event[] = [];
+  console.log(`[SERVER] createGameSnapshot: saving fog for ${state.fog.size} levels`);
+  for (const [levelId, fogSet] of state.fog.entries()) {
+    const cells = Array.from(fogSet).map((k) => {
+      const [xs, ys] = k.split(",");
+      return { x: Number(xs), y: Number(ys) } as Vec2;
+    });
+    console.log(`[SERVER] createGameSnapshot: level ${levelId} has ${cells.length} revealed cells`);
+    if (cells.length > 0) {
+      events.push({ type: "fogRevealed", levelId, cells } as any);
+    }
+  }
+  console.log(`[SERVER] createGameSnapshot: total events: ${events.length}`);
+  
+  return {
+    location: state.location,
+    tokens: Array.from(state.tokens.values()),
+    assets: Array.from(state.assets.values()),
+    floors,
+    events
+  };
+}
+
+function createActionSnapshot(actionType: string, description: string, beforeState: GameSnapshot, afterState: GameSnapshot): ActionSnapshot {
+  return {
+    id: randomUUID(),
+    timestamp: Date.now(),
+    actionType,
+    beforeState,
+    afterState,
+    description
+  };
+}
+
+function pushToUndoStack(action: ActionSnapshot) {
+  const { undoRedo } = state;
+  
+  // Clear redo stack when new action is performed
+  undoRedo.redoStack = [];
+  
+  // Add to undo stack
+  undoRedo.undoStack.push(action);
+  
+  // Maintain max stack size
+  if (undoRedo.undoStack.length > undoRedo.maxStackSize) {
+    undoRedo.undoStack.shift();
+  }
+  
+  console.log(`[SERVER] Added action to undo stack: ${action.description}, stack size: ${undoRedo.undoStack.length}`);
+  
+  // Notify clients about undo/redo state
+  broadcastUndoRedoState();
+}
+
+function performUndo(): boolean {
+  const { undoRedo } = state;
+  
+  console.log(`[SERVER] performUndo called, stack size: ${undoRedo.undoStack.length}`);
+  
+  if (undoRedo.undoStack.length === 0) {
+    console.log(`[SERVER] performUndo: no actions to undo`);
+    return false;
+  }
+  
+  const action = undoRedo.undoStack.pop()!;
+  console.log(`[SERVER] performUndo: undoing action: ${action.description}`);
+  
+  // Apply the before state
+  applySnapshot(action.beforeState as GameSnapshot);
+  
+  // Move to redo stack
+  undoRedo.redoStack.push(action);
+  
+  // Send events for all updated objects
+  const events: Event[] = [];
+  
+  // Send asset updates for all assets
+  for (const asset of state.assets.values()) {
+    events.push({ type: "assetUpdated", asset } as any);
+  }
+  
+  // Send token updates for all tokens
+  for (const token of state.tokens.values()) {
+    events.push({ type: "tokenUpdated", token } as any);
+  }
+  
+  // Notify clients
+  broadcastUndoRedoState();
+  broadcast([{ type: "undoPerformed", actionId: action.id } as any]);
+  if (events.length > 0) {
+    broadcast(events);
+  }
+  
+  // Send game state restored event to refresh client display
+  console.log(`[SERVER] Sending gameStateRestored to ${state.clients.size} clients after undo`);
+  for (const client of state.clients.values()) {
+    console.log(`[SERVER] Sending gameStateRestored to client ${client.id}`);
+    send(client.socket, { t: "gameStateRestored" });
+  }
+  
+  console.log(`[SERVER] performUndo: completed, redo stack size: ${undoRedo.redoStack.length}`);
+  return true;
+}
+
+function performRedo(): boolean {
+  const { undoRedo } = state;
+  
+  if (undoRedo.redoStack.length === 0) {
+    return false;
+  }
+  
+  const action = undoRedo.redoStack.pop()!;
+  
+  // Apply the after state
+  applySnapshot(action.afterState as GameSnapshot);
+  
+  // Move back to undo stack
+  undoRedo.undoStack.push(action);
+  
+  // Send events for all updated objects
+  const events: Event[] = [];
+  
+  // Send asset updates for all assets
+  for (const asset of state.assets.values()) {
+    events.push({ type: "assetUpdated", asset } as any);
+  }
+  
+  // Send token updates for all tokens
+  for (const token of state.tokens.values()) {
+    events.push({ type: "tokenUpdated", token } as any);
+  }
+  
+  // Notify clients
+  broadcastUndoRedoState();
+  broadcast([{ type: "redoPerformed", actionId: action.id } as any]);
+  if (events.length > 0) {
+    broadcast(events);
+  }
+  
+  // Send game state restored event to refresh client display
+  console.log(`[SERVER] Sending gameStateRestored to ${state.clients.size} clients after redo`);
+  for (const client of state.clients.values()) {
+    console.log(`[SERVER] Sending gameStateRestored to client ${client.id}`);
+    send(client.socket, { t: "gameStateRestored" });
+  }
+  
+  return true;
+}
+
+function broadcastUndoRedoState() {
+  console.log(`[SERVER] Broadcasting undoRedoState to ${state.clients.size} clients: undo=${state.undoRedo.undoStack.length}, redo=${state.undoRedo.redoStack.length}`);
+  for (const c of state.clients.values()) {
+    send(c.socket, { 
+      t: "undoRedoState", 
+      undoStack: state.undoRedo.undoStack, 
+      redoStack: state.undoRedo.redoStack 
+    });
+  }
+}
+
+function clearUndoRedoHistory() {
+  state.undoRedo.undoStack = [];
+  state.undoRedo.redoStack = [];
+  broadcastUndoRedoState();
 }
 
 function persistIfAutosave() {
@@ -413,9 +624,24 @@ function onMessage(client: ClientRec, data: any) {
           if (!occupied(p)) { pos = p; break; }
         }
       }
+      
+      // Create snapshot before action
+      const beforeState = createGameSnapshot();
+      
       const owner: ID = (msg as any).owner || client.id;
       const t = kind === "npc" ? makeNPCToken(owner, level, pos) : makePlayerToken(owner, level, pos);
       state.tokens.set(t.id, t);
+      
+      // Create snapshot after action and push to undo stack
+      const afterState = createGameSnapshot();
+      const action = createActionSnapshot(
+        "spawnToken",
+        `Создание ${kind === "npc" ? "NPC" : "игрока"} в (${pos.x}, ${pos.y})`,
+        beforeState,
+        afterState
+      );
+      pushToUndoStack(action);
+      
       broadcast([{ type: "tokenSpawned", token: t } as any]);
       persistIfAutosave();
       break;
@@ -424,6 +650,10 @@ function onMessage(client: ClientRec, data: any) {
       const tok = state.tokens.get(msg.tokenId);
       if (!tok) return;
       if (client.role !== "DM" && tok.owner !== client.id) return;
+      
+      // Create snapshot before action (only for DM moves)
+      const beforeState = client.role === "DM" ? createGameSnapshot() : null;
+      
       // Normalize target to integer grid
       const target: Vec2 = { x: Math.floor(msg.pos.x), y: Math.floor(msg.pos.y) };
       ensureDefaultFloorsForLevel(msg.levelId);
@@ -433,9 +663,10 @@ function onMessage(client: ClientRec, data: any) {
       tok.levelId = msg.levelId;
       const events: Event[] = [];
       events.push({ type: "tokenMoved", tokenId: tok.id, pos, levelId: tok.levelId } as any);
-      // Auto-reveal fog based on token's vision radius, but ONLY for player tokens
+      // Auto-reveal fog based on token's vision radius, but ONLY for player tokens and ONLY in automatic mode
       const isNPC = (tok as any).kind === "npc";
-      if (!isNPC) {
+      const isAutomaticMode = !state.location?.fogMode || state.location.fogMode === "automatic";
+      if (!isNPC && isAutomaticMode) {
         const vr = Math.max(0, Math.min(20, Math.round((tok.vision as any)?.radius ?? 0)));
         if (vr > 0) {
           const fog = getFogSet(tok.levelId);
@@ -448,6 +679,19 @@ function onMessage(client: ClientRec, data: any) {
           if (added.length > 0) events.push({ type: "fogRevealed", levelId: tok.levelId, cells: added } as any);
         }
       }
+      
+      // Create snapshot after action and push to undo stack (only for DM moves)
+      if (beforeState && client.role === "DM") {
+        const afterState = createGameSnapshot();
+        const action = createActionSnapshot(
+          "moveToken",
+          `Перемещение токена в (${pos.x}, ${pos.y})`,
+          beforeState,
+          afterState
+        );
+        pushToUndoStack(action);
+      }
+      
       broadcast(events);
       persistIfAutosave();
       break;
@@ -476,6 +720,9 @@ function onMessage(client: ClientRec, data: any) {
         tok.notes = patch.notes.slice(0, 2000);
       } else if ((patch as any).notes === null) {
         delete (tok as any).notes;
+      }
+      if (typeof (patch as any).dead === "boolean") {
+        (tok as any).dead = (patch as any).dead;
       }
       if (patch.vision && typeof patch.vision === "object") {
         const vr = Math.max(0, Math.min(20, Math.round((patch.vision as any).radius ?? (tok.vision?.radius ?? 8))));
@@ -681,6 +928,10 @@ function onMessage(client: ClientRec, data: any) {
     }
     case "revealFog": {
       if (client.role !== "DM") return;
+      
+      // Create snapshot before action
+      const beforeSnapshot = createGameSnapshot();
+      
       const levelFog = getFogSet(msg.levelId);
       const added: Vec2[] = [];
       for (const c of msg.cells) {
@@ -693,12 +944,27 @@ function onMessage(client: ClientRec, data: any) {
       if (added.length > 0) {
         const ev: Event = { type: "fogRevealed", levelId: msg.levelId, cells: added } as any;
         broadcast([ev]);
+        
+        // Create snapshot after action and push to undo stack
+        const afterSnapshot = createGameSnapshot();
+        const action = createActionSnapshot(
+          "revealFog",
+          `Открытие тумана войны (${added.length} ячеек)`,
+          beforeSnapshot,
+          afterSnapshot
+        );
+        pushToUndoStack(action);
+        
         persistIfAutosave();
       }
       break;
     }
     case "obscureFog": {
       if (client.role !== "DM") return;
+      
+      // Create snapshot before action
+      const beforeSnapshot = createGameSnapshot();
+      
       const levelFog = getFogSet(msg.levelId);
       const removed: Vec2[] = [];
       for (const c of msg.cells) {
@@ -711,6 +977,59 @@ function onMessage(client: ClientRec, data: any) {
       if (removed.length > 0) {
         const ev: Event = { type: "fogObscured", levelId: msg.levelId, cells: removed } as any;
         broadcast([ev]);
+        
+        // Create snapshot after action and push to undo stack
+        const afterSnapshot = createGameSnapshot();
+        const action = createActionSnapshot(
+          "obscureFog",
+          `Скрытие тумана войны (${removed.length} ячеек)`,
+          beforeSnapshot,
+          afterSnapshot
+        );
+        pushToUndoStack(action);
+        
+        persistIfAutosave();
+      }
+      break;
+    }
+    case "setFogMode": {
+      if (client.role !== "DM") return;
+      if (!state.location) return;
+      
+      // Create snapshot before action
+      const beforeSnapshot = createGameSnapshot();
+      
+      state.location.fogMode = msg.fogMode;
+      const ev: Event = { type: "fogModeChanged", fogMode: msg.fogMode } as any;
+      broadcast([ev]);
+      
+      // Create snapshot after action and push to undo stack
+      const afterSnapshot = createGameSnapshot();
+      const action = createActionSnapshot(
+        "setFogMode",
+        `Изменение режима тумана войны на ${msg.fogMode === "automatic" ? "автоматический" : "ручной"}`,
+        beforeSnapshot,
+        afterSnapshot
+      );
+      pushToUndoStack(action);
+      
+      persistIfAutosave();
+      break;
+    }
+    case "undo": {
+      if (client.role !== "DM") return;
+      console.log(`[SERVER] Received undo request from client ${client.id}`);
+      const success = performUndo();
+      if (success) {
+        persistIfAutosave();
+      }
+      break;
+    }
+    case "redo": {
+      if (client.role !== "DM") return;
+      console.log(`[SERVER] Received redo request from client ${client.id}`);
+      const success = performRedo();
+      if (success) {
         persistIfAutosave();
       }
       break;
@@ -721,6 +1040,10 @@ function onMessage(client: ClientRec, data: any) {
       const gy = Math.floor(msg.pos.y);
       ensureDefaultFloorsForLevel(msg.levelId);
       if (!hasFloorAtXY(msg.levelId, gx, gy)) return;
+      
+      // Create snapshot before action
+      const beforeState = createGameSnapshot();
+      
       // remove existing asset at pos (single asset per cell policy)
       const existingId = findAssetIdAt(msg.levelId, { x: gx, y: gy });
       if (existingId) state.assets.delete(existingId);
@@ -734,6 +1057,17 @@ function onMessage(client: ClientRec, data: any) {
         tint: msg.tint,
       };
       state.assets.set(asset.id, asset);
+      
+      // Create snapshot after action and push to undo stack
+      const afterState = createGameSnapshot();
+      const action = createActionSnapshot(
+        "placeAsset",
+        `Размещение ${msg.kind} в (${gx}, ${gy})`,
+        beforeState,
+        afterState
+      );
+      pushToUndoStack(action);
+      
       broadcast([{ type: "assetPlaced", asset } as any]);
       persistIfAutosave();
       break;
@@ -751,6 +1085,9 @@ function onMessage(client: ClientRec, data: any) {
         break;
       }
       
+      // Create snapshot before action
+      const beforeState = createGameSnapshot();
+      
       // remove existing asset at new pos (single asset per cell policy)
       const existingId = findAssetIdAt(msg.levelId, { x: gx, y: gy });
       if (existingId && existingId !== msg.assetId) {
@@ -761,6 +1098,17 @@ function onMessage(client: ClientRec, data: any) {
       asset.pos = { x: gx, y: gy };
       asset.levelId = msg.levelId;
       state.assets.set(asset.id, asset);
+      
+      // Create snapshot after action and push to undo stack
+      const afterState = createGameSnapshot();
+      const action = createActionSnapshot(
+        "moveAsset",
+        `Перемещение ${asset.kind} в (${gx}, ${gy})`,
+        beforeState,
+        afterState
+      );
+      pushToUndoStack(action);
+      
       broadcast([{ type: "assetUpdated", asset } as any]);
       console.log(`[SERVER] Asset ${asset.id} moved to (${gx}, ${gy})`);
       persistIfAutosave();
@@ -770,6 +1118,10 @@ function onMessage(client: ClientRec, data: any) {
       if (client.role !== "DM") return;
       const gx = Math.floor(msg.pos.x);
       const gy = Math.floor(msg.pos.y);
+      
+      // Create snapshot before action
+      const beforeState = createGameSnapshot();
+      
       const removed: ID[] = [];
       for (const [id, a] of state.assets.entries()) {
         if (a.levelId === msg.levelId && a.pos.x === gx && a.pos.y === gy) {
@@ -778,6 +1130,17 @@ function onMessage(client: ClientRec, data: any) {
         }
       }
       if (removed.length === 0) return;
+      
+      // Create snapshot after action and push to undo stack
+      const afterState = createGameSnapshot();
+      const action = createActionSnapshot(
+        "removeAssetAt",
+        `Удаление объектов в (${gx}, ${gy})`,
+        beforeState,
+        afterState
+      );
+      pushToUndoStack(action);
+      
       broadcast(removed.map((id) => ({ type: "assetRemoved", assetId: id } as any)));
       persistIfAutosave();
       break;
@@ -813,6 +1176,10 @@ function onMessage(client: ClientRec, data: any) {
       if (client.role !== "DM") return;
       const gx = Math.floor(msg.pos.x);
       const gy = Math.floor(msg.pos.y);
+      
+      // Create snapshot before action
+      const beforeState = createGameSnapshot();
+      
       const key = cellKey({ x: gx, y: gy });
       let level = state.floors.get(msg.levelId);
       if (!level) { level = new Map(); state.floors.set(msg.levelId, level); }
@@ -821,6 +1188,17 @@ function onMessage(client: ClientRec, data: any) {
       } else {
         level.set(key, msg.kind);
       }
+      
+      // Create snapshot after action and push to undo stack
+      const afterState = createGameSnapshot();
+      const action = createActionSnapshot(
+        "paintFloor",
+        `Покраска пола в (${gx}, ${gy})`,
+        beforeState,
+        afterState
+      );
+      pushToUndoStack(action);
+      
       const ev: Event = { type: "floorPainted", levelId: msg.levelId, pos: { x: gx, y: gy }, kind: msg.kind } as any;
       broadcast([ev]);
       persistIfAutosave();
@@ -836,6 +1214,10 @@ function onMessage(client: ClientRec, data: any) {
       if (client.role !== "DM") return;
       const snap = msg.snapshot;
       applySnapshot(snap);
+      
+      // Clear undo/redo history when loading new snapshot
+      clearUndoRedoHistory();
+      
       (async () => {
         try {
           await ensureDataRoot();
@@ -1329,11 +1711,13 @@ function makeNPCToken(owner: ID, levelId: ID, spawn: Vec2): Token {
 function snapshot(): { snapshot: { location: Location; tokens: Token[]; assets: Asset[]; events: Event[]; floors?: { levelId: ID; pos: Vec2; kind: FloorKind }[] } } {
   ensureDefaultFloorsForAllLevels();
   const events: Event[] = [];
+  console.log(`[SERVER] Creating snapshot, fog levels: ${state.fog.size}`);
   for (const [lvl, set] of state.fog.entries()) {
     const cells = Array.from(set).map((k) => {
       const [xs, ys] = k.split(",");
       return { x: Number(xs), y: Number(ys) } as Vec2;
     });
+    console.log(`[SERVER] Saving fog for level ${lvl}, ${cells.length} cells`);
     if (cells.length > 0) events.push({ type: "fogRevealed", levelId: lvl, cells } as any);
   }
   // floors as entries for client bootstrap
@@ -1366,6 +1750,13 @@ function onConnection(ws: import("ws").WebSocket, req: IncomingMessage) {
   console.log(`[SERVER] Sending welcome to ${clientId}, role=${role}, assets count=${snap.snapshot.assets.length}`);
   console.log(`[SERVER] First 5 asset IDs in snapshot:`, snap.snapshot.assets.slice(0, 5).map(a => a.id));
   send(ws, { t: "welcome", playerId: clientId, role, ...snap });
+  
+  // Send initial undo/redo state
+  send(ws, { 
+    t: "undoRedoState", 
+    undoStack: state.undoRedo.undoStack, 
+    redoStack: state.undoRedo.redoStack 
+  });
 
   ws.on("message", (data: import("ws").RawData) => onMessage(client, data));
   ws.on("close", () => {
