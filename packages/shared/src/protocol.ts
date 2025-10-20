@@ -1,7 +1,7 @@
 import type { ID, Vec2, Role, GameSnapshot, FloorKind, LocationTreeNode, Token } from "./types";
 
 export type ClientToServer =
-  | { t: "join"; name?: string; invite?: string }
+  | { t: "join"; name?: string; invite?: string; preferredRole?: Role }
   | { t: "ping" }
   | { t: "moveToken"; tokenId: ID; pos: Vec2; levelId: ID }
   // DM can spawn tokens explicitly
@@ -24,9 +24,11 @@ export type ClientToServer =
   | { t: "moveLocation"; from: string; toFolder: string } // move a file into folder; keeps file name
   | { t: "renameFolder"; path: string; newName: string } // rename a folder at path (folder paths may end with "/")
   | { t: "loadLocation"; path: string }
+  | { t: "loadLocationById"; locationId: ID }
   | { t: "updateToken"; tokenId: ID; patch: Partial<Token> }
   | { t: "reorderToken"; tokenId: ID; direction: "top" | "up" | "down" | "bottom" }
-  | { t: "reorderAsset"; assetId: ID; direction: "top" | "up" | "down" | "bottom" };
+  | { t: "reorderAsset"; assetId: ID; direction: "top" | "up" | "down" | "bottom" }
+  | { t: "switchRole"; role: Role };
 
 export type ServerToClient =
   | { t: "welcome"; playerId: ID; role: Role; snapshot: GameSnapshot }
@@ -37,4 +39,5 @@ export type ServerToClient =
   | { t: "error"; message: string }
   // locations list response
   | { t: "locationsTree"; tree: LocationTreeNode[]; lastUsedPath?: string }
-  | { t: "savedOk"; path: string };
+  | { t: "savedOk"; path: string }
+  | { t: "roleChanged"; role: Role };

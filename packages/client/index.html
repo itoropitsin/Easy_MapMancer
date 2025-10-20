@@ -135,10 +135,17 @@
         left: 330px;
       }
 
-      .share-button {
+      #top-right-controls {
         position: fixed;
         top: 18px;
         right: 24px;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        z-index: 70;
+      }
+
+      .share-button {
         padding: 10px 18px;
         border-radius: 18px;
         border: 1px solid rgba(255, 255, 255, 0.08);
@@ -149,7 +156,6 @@
         letter-spacing: 0.04em;
         text-transform: uppercase;
         cursor: pointer;
-        z-index: 70;
         box-shadow: var(--shadow);
         transition: background 0.2s ease, border-color 0.2s ease, transform 0.15s ease;
       }
@@ -163,6 +169,117 @@
         opacity: 0.5;
         cursor: not-allowed;
         box-shadow: none;
+      }
+
+      .user-menu {
+        position: relative;
+      }
+
+      .user-icon {
+        width: 44px;
+        height: 44px;
+        border-radius: 14px;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        background: var(--surface-strong);
+        color: #e8eaed;
+        cursor: pointer;
+        box-shadow: var(--shadow);
+        transition: background 0.2s ease, border-color 0.2s ease, transform 0.15s ease;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      .user-icon:hover:not(:disabled) {
+        background: rgba(96, 165, 250, 0.22);
+        border-color: rgba(96, 165, 250, 0.45);
+      }
+
+      .user-icon svg {
+        width: 20px;
+        height: 20px;
+        fill: currentColor;
+      }
+
+      .user-icon.dm svg {
+        fill: #fbbf24;
+      }
+
+      .user-dropdown {
+        position: absolute;
+        top: calc(100% + 8px);
+        right: 0;
+        min-width: 200px;
+        background: var(--surface-strong);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 16px;
+        box-shadow: var(--shadow);
+        padding: 12px;
+        display: none;
+        flex-direction: column;
+        gap: 8px;
+        z-index: 80;
+      }
+
+      .user-dropdown.open {
+        display: flex;
+      }
+
+      .user-info {
+        padding: 8px 0;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+      }
+
+      .user-role {
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--accent);
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        margin-bottom: 2px;
+      }
+
+      .user-role.dm {
+        color: #fbbf24;
+      }
+
+      .user-name {
+        font-size: 13px;
+        color: #e8eaed;
+        opacity: 0.9;
+      }
+
+      .user-actions {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+      }
+
+      .user-action {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 8px 12px;
+        border-radius: 10px;
+        background: transparent;
+        border: none;
+        color: #e8eaed;
+        font-size: 13px;
+        cursor: pointer;
+        transition: background 0.2s ease;
+        text-align: left;
+        width: 100%;
+      }
+
+      .user-action:hover {
+        background: rgba(96, 165, 250, 0.15);
+      }
+
+      .user-action svg {
+        width: 16px;
+        height: 16px;
+        fill: currentColor;
+        flex-shrink: 0;
       }
 
       #top-bar .map-meta {
@@ -432,7 +549,12 @@
       }
 
       #tool-panels .tool-popover.open {
-        display: block;
+        display: block !important;
+      }
+      
+      /* Force hide panels for players */
+      #tool-panels .tool-popover:not(.open) {
+        display: none !important;
       }
 
       .panel-group {
@@ -768,7 +890,36 @@
         <div id="status" data-state="connecting">WS: connecting…</div>
       </div>
     </header>
-    <button id="btn-share" class="share-button" aria-label="Поделиться картой">Share</button>
+    <div id="top-right-controls">
+      <button id="btn-share" class="share-button" aria-label="Поделиться картой">Share</button>
+      <div id="user-menu" class="user-menu">
+        <button id="user-icon" class="user-icon" aria-label="Меню пользователя" aria-expanded="false">
+          <svg id="user-icon-svg" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M12 12.5a4.25 4.25 0 1 0-3.5-6.7A4.25 4.25 0 0 0 12 12.5ZM7 13.8A4 4 0 0 0 3 17.8v2.2a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-2.2a4 4 0 0 0-4-4h-10Z" />
+          </svg>
+        </button>
+        <div id="user-dropdown" class="user-dropdown" aria-hidden="true">
+          <div class="user-info">
+            <div id="user-role" class="user-role">Игрок</div>
+            <div id="user-name" class="user-name">Пользователь</div>
+          </div>
+          <div class="user-actions">
+            <button id="switch-to-dm" class="user-action" style="display: none;">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
+              </svg>
+              <span>Режим администратора</span>
+            </button>
+            <button id="switch-to-player" class="user-action" style="display: none;">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M12 12.5a4.25 4.25 0 1 0-3.5-6.7A4.25 4.25 0 0 0 12 12.5ZM7 13.8A4 4 0 0 0 3 17.8v2.2a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-2.2a4 4 0 0 0-4-4h-10Z" />
+              </svg>
+              <span>Режим игрока</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
     <aside id="locations-drawer" aria-hidden="true">
       <div class="drawer-header">
         <div class="drawer-title">Карты</div>

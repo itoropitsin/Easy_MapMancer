@@ -355,6 +355,15 @@ function onMessage(client: ClientRec, data: any) {
   if (!msg || typeof msg !== "object" || !("t" in msg)) return;
 
   switch (msg.t) {
+    case "join": {
+      // Handle role preference from client
+      const preferredRole = (msg as any).preferredRole;
+      if (preferredRole === "DM" || preferredRole === "PLAYER") {
+        client.role = preferredRole;
+        console.log(`[SERVER] Client ${client.id} joined with preferred role: ${preferredRole}`);
+      }
+      break;
+    }
     case "ping": {
       send(client.socket, { t: "pong" });
       break;
@@ -1103,6 +1112,73 @@ function onMessage(client: ClientRec, data: any) {
         } catch {}
         send(client.socket, { t: "locationsTree", tree, lastUsedPath } as any);
       })();
+      break;
+    }
+    case "loadLocationById": {
+      // Allow any client to load a location by ID
+      (async () => {
+        await ensureDataRoot();
+        const locationId = (msg as any).locationId;
+        if (!locationId) return send(client.socket, { t: "error", message: "Location ID required" });
+        
+        // Find location file by ID
+        const tree = await buildLocationsTree();
+        let locationPath: string | null = null;
+        
+        const findLocation = async (nodes: LocationTreeNode[]): Promise<boolean> => {
+          for (const node of nodes) {
+            if (node.type === "file") {
+              // Check if this file contains the location ID
+              const filePath = node.path;
+              const safe = withinDataRoot(filePath);
+              if (safe) {
+                try {
+                  const snap = await readJSON<GameSnapshot>(safe);
+                  if (snap.location?.id === locationId) {
+                    locationPath = filePath;
+                    return true;
+                  }
+                } catch (e) {
+                  // Continue searching
+                }
+              }
+            }
+            if (node.children && await findLocation(node.children)) {
+              return true;
+            }
+          }
+          return false;
+        };
+        
+        if (!(await findLocation(tree)) || !locationPath) {
+          return send(client.socket, { t: "error", message: "Location not found" });
+        }
+        
+        const safe = withinDataRoot(locationPath);
+        if (!safe) return send(client.socket, { t: "error", message: "Invalid path" });
+        
+        try {
+          const snap = await readJSON<GameSnapshot>(safe);
+          applySnapshot(snap);
+          currentSavePath = locationPath;
+          await writeLastUsed(locationPath);
+          // broadcast reset to all clients
+          for (const c of state.clients.values()) send(c.socket, { t: "reset", snapshot: snap } as any);
+          send(client.socket, { t: "savedOk", path: locationPath });
+        } catch (e) {
+          send(client.socket, { t: "error", message: "Failed to load location" });
+        }
+      })();
+      break;
+    }
+    case "switchRole": {
+      // Allow role switching for any client
+      const newRole = (msg as any).role;
+      if (newRole === "DM" || newRole === "PLAYER") {
+        client.role = newRole;
+        send(client.socket, { t: "roleChanged", role: newRole });
+        console.log(`[SERVER] Client ${client.id} switched role to ${newRole}`);
+      }
       break;
     }
   }

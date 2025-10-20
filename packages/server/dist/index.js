@@ -374,6 +374,15 @@ function onMessage(client, data) {
     if (!msg || typeof msg !== "object" || !("t" in msg))
         return;
     switch (msg.t) {
+        case "join": {
+            // Handle role preference from client
+            const preferredRole = msg.preferredRole;
+            if (preferredRole === "DM" || preferredRole === "PLAYER") {
+                client.role = preferredRole;
+                console.log(`[SERVER] Client ${client.id} joined with preferred role: ${preferredRole}`);
+            }
+            break;
+        }
         case "ping": {
             send(client.socket, { t: "pong" });
             break;
@@ -518,6 +527,186 @@ function onMessage(client, data) {
             state.tokens.set(tok.id, tok);
             broadcast([{ type: "tokenUpdated", token: tok }]);
             persistIfAutosave();
+            break;
+        }
+        case "reorderToken": {
+            // Only DM or token owner can reorder
+            const tok = state.tokens.get(msg.tokenId);
+            if (!tok)
+                break;
+            if (client.role !== "DM" && tok.owner !== client.id)
+                break;
+            // For top/bottom: compare with all objects on level (assets + tokens)
+            // For up/down: compare only with objects at same position
+            // Determine new zIndex based on direction
+            let newZIndex;
+            switch (msg.direction) {
+                case "top": {
+                    // Move to highest zIndex + 1 (considering all objects on level)
+                    const allAssetsOnLevel = Array.from(state.assets.values())
+                        .filter(a => a.levelId === tok.levelId);
+                    const allTokensOnLevel = Array.from(state.tokens.values())
+                        .filter(t => t.levelId === tok.levelId);
+                    const maxAssetZ = allAssetsOnLevel.length > 0
+                        ? Math.max(...allAssetsOnLevel.map(a => a.zIndex ?? 0))
+                        : 0;
+                    const maxTokenZ = allTokensOnLevel.length > 0
+                        ? Math.max(...allTokensOnLevel.map(t => t.zIndex ?? 0))
+                        : 0;
+                    newZIndex = Math.max(maxAssetZ, maxTokenZ) + 1;
+                    break;
+                }
+                case "bottom": {
+                    // Move to lowest zIndex - 1 (considering all objects on level)
+                    const allAssetsOnLevel = Array.from(state.assets.values())
+                        .filter(a => a.levelId === tok.levelId);
+                    const allTokensOnLevel = Array.from(state.tokens.values())
+                        .filter(t => t.levelId === tok.levelId);
+                    const minAssetZ = allAssetsOnLevel.length > 0
+                        ? Math.min(...allAssetsOnLevel.map(a => a.zIndex ?? 0))
+                        : 0;
+                    const minTokenZ = allTokensOnLevel.length > 0
+                        ? Math.min(...allTokensOnLevel.map(t => t.zIndex ?? 0))
+                        : 0;
+                    newZIndex = Math.min(minAssetZ, minTokenZ) - 1;
+                    break;
+                }
+                case "up":
+                case "down": {
+                    // For relative moves, only consider tokens at same position
+                    const tokensAtPos = Array.from(state.tokens.values())
+                        .filter(t => t.levelId === tok.levelId && t.pos.x === tok.pos.x && t.pos.y === tok.pos.y)
+                        .sort((a, b) => (a.zIndex ?? 0) - (b.zIndex ?? 0));
+                    if (tokensAtPos.length <= 1)
+                        break; // Nothing to swap with
+                    const currentIdx = tokensAtPos.findIndex(t => t.id === tok.id);
+                    if (currentIdx === -1)
+                        break;
+                    if (msg.direction === "up") {
+                        // Swap with token above (higher zIndex)
+                        if (currentIdx < tokensAtPos.length - 1) {
+                            const above = tokensAtPos[currentIdx + 1];
+                            newZIndex = above.zIndex ?? 0;
+                            above.zIndex = tok.zIndex ?? 0;
+                            state.tokens.set(above.id, above);
+                            broadcast([{ type: "tokenUpdated", token: above }]);
+                        }
+                    }
+                    else {
+                        // Swap with token below (lower zIndex)
+                        if (currentIdx > 0) {
+                            const below = tokensAtPos[currentIdx - 1];
+                            newZIndex = below.zIndex ?? 0;
+                            below.zIndex = tok.zIndex ?? 0;
+                            state.tokens.set(below.id, below);
+                            broadcast([{ type: "tokenUpdated", token: below }]);
+                        }
+                    }
+                    break;
+                }
+            }
+            if (newZIndex !== undefined) {
+                tok.zIndex = newZIndex;
+                state.tokens.set(tok.id, tok);
+                broadcast([{ type: "tokenUpdated", token: tok }]);
+                persistIfAutosave();
+            }
+            break;
+        }
+        case "reorderAsset": {
+            console.log(`[SERVER] reorderAsset received: assetId=${msg.assetId}, direction=${msg.direction}, role=${client.role}`);
+            if (client.role !== "DM") {
+                console.log(`[SERVER] reorderAsset rejected: not DM`);
+                break; // Only DM can reorder assets
+            }
+            const asset = state.assets.get(msg.assetId);
+            if (!asset) {
+                console.log(`[SERVER] reorderAsset rejected: asset not found. Looking for: ${msg.assetId}`);
+                console.log(`[SERVER] Available asset IDs:`, Array.from(state.assets.keys()).slice(0, 5));
+                break;
+            }
+            console.log(`[SERVER] reorderAsset: asset found at (${asset.pos.x}, ${asset.pos.y}), current zIndex=${asset.zIndex ?? 'undefined'}`);
+            // For top/bottom: compare with all objects on level (assets + tokens)
+            // For up/down: compare only with objects at same position
+            // Determine new zIndex based on direction
+            let newZIndex;
+            switch (msg.direction) {
+                case "top": {
+                    // Move to highest zIndex + 1 (considering all objects on level)
+                    const allAssetsOnLevel = Array.from(state.assets.values())
+                        .filter(a => a.levelId === asset.levelId);
+                    const allTokensOnLevel = Array.from(state.tokens.values())
+                        .filter(t => t.levelId === asset.levelId);
+                    const maxAssetZ = allAssetsOnLevel.length > 0
+                        ? Math.max(...allAssetsOnLevel.map(a => a.zIndex ?? 0))
+                        : 0;
+                    const maxTokenZ = allTokensOnLevel.length > 0
+                        ? Math.max(...allTokensOnLevel.map(t => t.zIndex ?? 0))
+                        : 0;
+                    // Assets have base 0, tokens have base 100 on client, so we add to max found
+                    newZIndex = Math.max(maxAssetZ, maxTokenZ) + 1;
+                    break;
+                }
+                case "bottom": {
+                    // Move to lowest zIndex - 1 (considering all objects on level)
+                    const allAssetsOnLevel = Array.from(state.assets.values())
+                        .filter(a => a.levelId === asset.levelId);
+                    const allTokensOnLevel = Array.from(state.tokens.values())
+                        .filter(t => t.levelId === asset.levelId);
+                    const minAssetZ = allAssetsOnLevel.length > 0
+                        ? Math.min(...allAssetsOnLevel.map(a => a.zIndex ?? 0))
+                        : 0;
+                    const minTokenZ = allTokensOnLevel.length > 0
+                        ? Math.min(...allTokensOnLevel.map(t => t.zIndex ?? 0))
+                        : 0;
+                    newZIndex = Math.min(minAssetZ, minTokenZ) - 1;
+                    break;
+                }
+                case "up":
+                case "down": {
+                    // For relative moves, only consider objects at same position
+                    const assetsAtPos = Array.from(state.assets.values())
+                        .filter(a => a.levelId === asset.levelId && a.pos.x === asset.pos.x && a.pos.y === asset.pos.y)
+                        .sort((a, b) => (a.zIndex ?? 0) - (b.zIndex ?? 0));
+                    if (assetsAtPos.length <= 1)
+                        break; // Nothing to swap with
+                    const currentIdx = assetsAtPos.findIndex(a => a.id === asset.id);
+                    if (currentIdx === -1)
+                        break;
+                    if (msg.direction === "up") {
+                        // Swap with asset above (higher zIndex)
+                        if (currentIdx < assetsAtPos.length - 1) {
+                            const above = assetsAtPos[currentIdx + 1];
+                            newZIndex = above.zIndex ?? 0;
+                            above.zIndex = asset.zIndex ?? 0;
+                            state.assets.set(above.id, above);
+                            broadcast([{ type: "assetPlaced", asset: above }]);
+                        }
+                    }
+                    else {
+                        // Swap with asset below (lower zIndex)
+                        if (currentIdx > 0) {
+                            const below = assetsAtPos[currentIdx - 1];
+                            newZIndex = below.zIndex ?? 0;
+                            below.zIndex = asset.zIndex ?? 0;
+                            state.assets.set(below.id, below);
+                            broadcast([{ type: "assetPlaced", asset: below }]);
+                        }
+                    }
+                    break;
+                }
+            }
+            if (newZIndex !== undefined) {
+                console.log(`[SERVER] reorderAsset: setting zIndex from ${asset.zIndex ?? 'undefined'} to ${newZIndex}`);
+                asset.zIndex = newZIndex;
+                state.assets.set(asset.id, asset);
+                broadcast([{ type: "assetPlaced", asset }]);
+                console.log(`[SERVER] reorderAsset: broadcasted assetPlaced event`);
+                persistIfAutosave();
+            }
+            else {
+                console.log(`[SERVER] reorderAsset: newZIndex is undefined, no changes made`);
+            }
             break;
         }
         case "revealFog": {
@@ -1027,6 +1216,73 @@ function onMessage(client, data) {
             })();
             break;
         }
+        case "loadLocationById": {
+            // Allow any client to load a location by ID
+            (async () => {
+                await ensureDataRoot();
+                const locationId = msg.locationId;
+                if (!locationId)
+                    return send(client.socket, { t: "error", message: "Location ID required" });
+                // Find location file by ID
+                const tree = await buildLocationsTree();
+                let locationPath = null;
+                const findLocation = async (nodes) => {
+                    for (const node of nodes) {
+                        if (node.type === "file") {
+                            // Check if this file contains the location ID
+                            const filePath = node.path;
+                            const safe = withinDataRoot(filePath);
+                            if (safe) {
+                                try {
+                                    const snap = await readJSON(safe);
+                                    if (snap.location?.id === locationId) {
+                                        locationPath = filePath;
+                                        return true;
+                                    }
+                                }
+                                catch (e) {
+                                    // Continue searching
+                                }
+                            }
+                        }
+                        if (node.children && await findLocation(node.children)) {
+                            return true;
+                        }
+                    }
+                    return false;
+                };
+                if (!(await findLocation(tree)) || !locationPath) {
+                    return send(client.socket, { t: "error", message: "Location not found" });
+                }
+                const safe = withinDataRoot(locationPath);
+                if (!safe)
+                    return send(client.socket, { t: "error", message: "Invalid path" });
+                try {
+                    const snap = await readJSON(safe);
+                    applySnapshot(snap);
+                    currentSavePath = locationPath;
+                    await writeLastUsed(locationPath);
+                    // broadcast reset to all clients
+                    for (const c of state.clients.values())
+                        send(c.socket, { t: "reset", snapshot: snap });
+                    send(client.socket, { t: "savedOk", path: locationPath });
+                }
+                catch (e) {
+                    send(client.socket, { t: "error", message: "Failed to load location" });
+                }
+            })();
+            break;
+        }
+        case "switchRole": {
+            // Allow role switching for any client
+            const newRole = msg.role;
+            if (newRole === "DM" || newRole === "PLAYER") {
+                client.role = newRole;
+                send(client.socket, { t: "roleChanged", role: newRole });
+                console.log(`[SERVER] Client ${client.id} switched role to ${newRole}`);
+            }
+            break;
+        }
     }
 }
 function cellKey(v) { return `${v.x},${v.y}`; }
@@ -1085,6 +1341,7 @@ function makePlayerToken(playerId, levelId, spawn) {
         flags: {},
         name: "Player",
         tint: randomBrightColor(),
+        zIndex: 100, // Default above assets
     };
 }
 function makeNPCToken(owner, levelId, spawn) {
@@ -1099,6 +1356,7 @@ function makeNPCToken(owner, levelId, spawn) {
         flags: {},
         name: "NPC",
         tint: randomBrightColor(),
+        zIndex: 100, // Default above assets
     };
 }
 function snapshot() {
@@ -1135,7 +1393,10 @@ function onConnection(ws, req) {
     // Ensure fog set exists for default level
     getFogSet(levelId);
     // Send welcome with snapshot
-    send(ws, { t: "welcome", playerId: clientId, role, ...snapshot() });
+    const snap = snapshot();
+    console.log(`[SERVER] Sending welcome to ${clientId}, role=${role}, assets count=${snap.snapshot.assets.length}`);
+    console.log(`[SERVER] First 5 asset IDs in snapshot:`, snap.snapshot.assets.slice(0, 5).map(a => a.id));
+    send(ws, { t: "welcome", playerId: clientId, role, ...snap });
     ws.on("message", (data) => onMessage(client, data));
     ws.on("close", () => {
         state.clients.delete(clientId);

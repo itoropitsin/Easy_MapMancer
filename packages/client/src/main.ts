@@ -1502,9 +1502,7 @@ function connect() {
   const buildShareLink = (): string | null => {
     if (!SHARE_BASE_URL || !currentLocation?.id) return null;
     try {
-      const url = new URL(window.location.pathname || "/", SHARE_BASE_URL);
-      url.searchParams.set("inv", "pl-local");
-      url.searchParams.set("loc", currentLocation.id);
+      const url = new URL(`/map/${currentLocation.id}/`, SHARE_BASE_URL);
       return url.toString();
     } catch (err) {
       try { console.warn("[Share] Failed to build link", err); } catch {}
@@ -1587,7 +1585,15 @@ function connect() {
   });
 
   const params = new URLSearchParams(location.search);
-  const inv = params.get("inv") ?? "pl-local";
+  // Parse map ID from URL path or query parameter
+  let mapId: string | null = null;
+  const pathMatch = location.pathname.match(/\/map\/([^\/]+)\/?/);
+  if (pathMatch) {
+    mapId = pathMatch[1];
+  } else {
+    mapId = params.get("loc");
+  }
+  const inv = "pl-local"; // Always use player role by default, role switching is handled via UI
   const startPort = Number(params.get("port") || 8080);
   const endPort = Number(params.get("maxPort") || (startPort + 20));
   const protocol = location.protocol === "https:" ? "wss" : "ws";
@@ -1634,9 +1640,8 @@ function connect() {
         try {
         setMapName(currentLocation?.name);
         if (currentLocation?.id) {
-          const url = new URL(window.location.href);
-          url.searchParams.set("loc", currentLocation.id);
-          history.replaceState(null, "", url.toString());
+          const newUrl = `${window.location.origin}/map/${currentLocation.id}/`;
+          history.replaceState(null, "", newUrl);
         }
         } catch {}
         // pick first token owned by me
@@ -1686,6 +1691,8 @@ function connect() {
         drawMinimap(); positionMinimap();
         // update UI state based on role
         try { (updateEditorUI as any)(); } catch {}
+        // update user menu
+        try { (updateUserMenu as any)(); } catch {}
         // auto-reveal around DM token on join to make map visible
         if (myRole === "DM") {
           for (const t of tokens.values()) {
@@ -1736,9 +1743,8 @@ function connect() {
         try {
         setMapName(currentLocation?.name);
         if (currentLocation?.id) {
-          const url = new URL(window.location.href);
-          url.searchParams.set("loc", currentLocation.id);
-          history.replaceState(null, "", url.toString());
+          const newUrl = `${window.location.origin}/map/${currentLocation.id}/`;
+          history.replaceState(null, "", newUrl);
         }
         } catch {}
         tokens.clear();
@@ -1870,6 +1876,11 @@ function connect() {
         hudToast(`Сохранено: ${msg.path}`);
         addRecent(msg.path);
         try { requestLocationsList(); } catch {}
+      } else if (msg.t === "roleChanged") {
+        myRole = (msg as any).role;
+        try { (updateEditorUI as any)(); } catch {}
+        try { (updateUserMenu as any)(); } catch {}
+        hudToast(`Роль изменена на: ${myRole === "DM" ? "Администратор" : "Игрок"}`);
       } else if ((msg as any).t === "error") {
         // show error toast for server-side failures
         try { hudToast(`Ошибка: ${(msg as any).message || "неизвестная ошибка"}`); } catch {}
@@ -1937,8 +1948,16 @@ function connect() {
       });
       if (opened && attemptId === activeAttemptId) {
         try { console.log(`[WS][client] connected on :${port}`); } catch {}
-        const joinMsg: ClientToServer = { t: "join", name: "Player", invite: inv };
+        const preferredRole = loadUserRole();
+        const joinMsg: ClientToServer = { t: "join", name: "Player", invite: inv, preferredRole };
         try { ws.send(JSON.stringify(joinMsg)); } catch {}
+        
+        // Load location by ID if specified in URL
+        if (mapId) {
+          const loadMsg: ClientToServer = { t: "loadLocationById", locationId: mapId };
+          try { ws.send(JSON.stringify(loadMsg)); } catch {}
+        }
+        
         attachHandlers(ws, port, attemptId);
         connecting = false;
         return;
@@ -2006,28 +2025,74 @@ function connect() {
   let activeDockButton: HTMLButtonElement | null = null;
 
   function closeToolPanels() {
-    if (activeToolPanel) {
-      activeToolPanel.classList.remove("open");
-      activeToolPanel = null;
-    }
-    if (activeDockButton) {
-      activeDockButton.classList.remove("open");
-      activeDockButton = null;
-    }
+    // Remove 'open' class from all panels
+    const allToolPanels = document.querySelectorAll('#tool-panels .tool-popover');
+    allToolPanels.forEach(panel => {
+      panel.classList.remove("open");
+    });
+
+    // Remove 'open' class from all dock buttons
+    const allDockButtons = document.querySelectorAll('#tool-dock .dock-btn');
+    allDockButtons.forEach(btn => {
+      btn.classList.remove("open");
+    });
+
+    // Reset state variables
+    activeToolPanel = null;
+    activeDockButton = null;
   }
 
   function positionPanelForButton(btn: HTMLButtonElement, panel: HTMLElement) {
+    // Don't position panels for hidden buttons
+    if (btn.style.display === 'none') {
+      return;
+    }
+    
     const rect = btn.getBoundingClientRect();
-    panel.style.left = `${Math.round(rect.right + 14)}px`;
-    panel.style.top = `${Math.round(rect.top + rect.height / 2)}px`;
+    const panelWidth = panel.offsetWidth || 260; // Default width if not calculated yet
+    const panelHeight = panel.offsetHeight || 200; // Default height if not calculated yet
+    
+    // Calculate position relative to viewport
+    let left = rect.right + 14;
+    // Position panel to align with the center of the button (CSS transform handles the centering)
+    let top = rect.top + rect.height / 2;
+    
+    // Ensure panel doesn't go off-screen
+    const viewportWidth = window.innerWidth;
+    const viewportHeight = window.innerHeight;
+    
+    // Adjust horizontal position if panel would go off-screen
+    if (left + panelWidth > viewportWidth - 20) {
+      left = rect.left - panelWidth - 14; // Position to the left of button
+    }
+    
+    // Adjust vertical position if panel would go off-screen
+    if (top < 20) {
+      top = 20;
+    } else if (top + panelHeight > viewportHeight - 20) {
+      top = viewportHeight - panelHeight - 20;
+    }
+    
+    panel.style.left = `${Math.round(left)}px`;
+    panel.style.top = `${Math.round(top)}px`;
   }
 
   function toggleToolPanel(btn: HTMLButtonElement, panel: HTMLElement) {
-    if (activeToolPanel === panel) {
+    // Don't open panels for hidden buttons or hidden panels
+    if (btn.style.display === 'none' || panel.style.display === 'none') {
+      return;
+    }
+    
+    // Check if this panel is already open
+    if (panel.classList.contains("open")) {
       closeToolPanels();
       return;
     }
+    
+    // Close all other panels first
     closeToolPanels();
+    
+    // Open this panel
     positionPanelForButton(btn, panel);
     panel.classList.add("open");
     btn.classList.add("open");
@@ -2097,6 +2162,104 @@ function connect() {
 
   setLocationsOpen(false);
 
+  // User menu handlers
+  const userIcon = document.getElementById("user-icon") as HTMLButtonElement | null;
+  const userDropdown = document.getElementById("user-dropdown") as HTMLDivElement | null;
+  const userRole = document.getElementById("user-role") as HTMLDivElement | null;
+  const userName = document.getElementById("user-name") as HTMLDivElement | null;
+  const switchToDmBtn = document.getElementById("switch-to-dm") as HTMLButtonElement | null;
+  const switchToPlayerBtn = document.getElementById("switch-to-player") as HTMLButtonElement | null;
+
+  let userMenuOpen = false;
+
+  function saveUserRole(role: "DM" | "PLAYER") {
+    try {
+      localStorage.setItem("dnd-user-role", role);
+    } catch (e) {
+      console.warn("Failed to save user role:", e);
+    }
+  }
+
+  function loadUserRole(): "DM" | "PLAYER" {
+    try {
+      const saved = localStorage.getItem("dnd-user-role");
+      return (saved === "DM" || saved === "PLAYER") ? saved : "PLAYER";
+    } catch (e) {
+      console.warn("Failed to load user role:", e);
+      return "PLAYER";
+    }
+  }
+
+  function updateUserMenu() {
+    if (!userRole || !userName || !switchToDmBtn || !switchToPlayerBtn || !userIcon) return;
+    
+    const isDM = myRole === "DM";
+    userRole.textContent = isDM ? "Администратор" : "Игрок";
+    userRole.className = `user-role ${isDM ? "dm" : ""}`;
+    userName.textContent = "Пользователь"; // Можно добавить имя пользователя позже
+    
+    // Показываем кнопку переключения на противоположную роль
+    switchToDmBtn.style.display = isDM ? "none" : "flex";
+    switchToPlayerBtn.style.display = isDM ? "flex" : "none";
+    
+    // Обновляем иконку
+    userIcon.className = `user-icon ${isDM ? "dm" : ""}`;
+  }
+
+  function toggleUserMenu() {
+    if (!userDropdown) return;
+    userMenuOpen = !userMenuOpen;
+    userDropdown.classList.toggle("open", userMenuOpen);
+    userIcon?.setAttribute("aria-expanded", userMenuOpen ? "true" : "false");
+  }
+
+  function closeUserMenu() {
+    if (!userDropdown) return;
+    userMenuOpen = false;
+    userDropdown.classList.remove("open");
+    userIcon?.setAttribute("aria-expanded", "false");
+  }
+
+  userIcon?.addEventListener("click", (ev) => {
+    ev.preventDefault();
+    ev.stopPropagation();
+    toggleUserMenu();
+  });
+
+  switchToDmBtn?.addEventListener("click", (ev) => {
+    ev.preventDefault();
+    ev.stopPropagation();
+    if (socket) {
+      // Отправляем запрос на смену роли на DM
+      const msg: ClientToServer = { t: "switchRole", role: "DM" };
+      socket.send(JSON.stringify(msg));
+      saveUserRole("DM");
+    }
+    closeUserMenu();
+  });
+
+  switchToPlayerBtn?.addEventListener("click", (ev) => {
+    ev.preventDefault();
+    ev.stopPropagation();
+    if (socket) {
+      // Отправляем запрос на смену роли на PLAYER
+      const msg: ClientToServer = { t: "switchRole", role: "PLAYER" };
+      socket.send(JSON.stringify(msg));
+      saveUserRole("PLAYER");
+    }
+    closeUserMenu();
+  });
+
+  // Закрываем меню при клике вне его
+  document.addEventListener("click", (ev) => {
+    if (userMenuOpen && userDropdown && !userDropdown.contains(ev.target as Node) && !userIcon?.contains(ev.target as Node)) {
+      closeUserMenu();
+    }
+  });
+
+  // Инициализируем меню пользователя
+  updateUserMenu();
+
   btnUndo?.addEventListener("click", (ev) => {
     ev.preventDefault();
     closeToolPanels();
@@ -2125,6 +2288,53 @@ function connect() {
 
   function updateEditorUI() {
     const isDM = myRole === "DM";
+    
+    // Force close any open panels first and remove all open classes
+    closeToolPanels();
+    
+    // Additional cleanup: remove open classes from all panels regardless of visibility
+    const allToolPanels = document.querySelectorAll('#tool-panels .tool-popover');
+    allToolPanels.forEach(panel => {
+      panel.classList.remove("open");
+      // Force hide panels that should be hidden
+      if (!isDM && (panel.id === 'panel-characters' || panel.id === 'panel-brush' || panel.id === 'panel-fog' || panel.id === 'panel-assets' || panel.id === 'panel-floors')) {
+        panel.style.display = 'none';
+        panel.classList.remove("open");
+      }
+    });
+    
+    const allDockButtons = document.querySelectorAll('#tool-dock .dock-btn');
+    allDockButtons.forEach(btn => {
+      btn.classList.remove("open");
+    });
+    
+    // Hide/show tool panels based on role
+    const toolPanels = document.querySelectorAll('#tool-panels .tool-popover');
+    toolPanels.forEach(panel => {
+      const panelId = panel.id;
+      if (panelId === 'panel-characters') {
+        // Characters panel is only for DM
+        panel.style.display = isDM ? 'block' : 'none';
+      } else if (panelId === 'panel-brush' || panelId === 'panel-fog' || panelId === 'panel-assets' || panelId === 'panel-floors') {
+        // These panels are only for DM
+        panel.style.display = isDM ? 'block' : 'none';
+      }
+    });
+    
+    // Hide/show dock buttons based on role
+    const dockButtons = document.querySelectorAll('#tool-dock .dock-btn');
+    dockButtons.forEach(btn => {
+      const group = btn.getAttribute('data-group');
+      if (group === 'characters') {
+        // Characters button is only for DM
+        btn.style.display = isDM ? 'flex' : 'none';
+      } else if (group === 'brush' || group === 'fog' || group === 'assets' || group === 'floors') {
+        // These buttons are only for DM
+        btn.style.display = isDM ? 'flex' : 'none';
+      }
+    });
+    
+    // Disable/enable buttons
     if (btnCursor) btnCursor.disabled = false; // cursor is always available
     if (btnEraseTokens) btnEraseTokens.disabled = !isDM;
     if (btnEraseObjects) btnEraseObjects.disabled = !isDM;
@@ -2153,6 +2363,17 @@ function connect() {
     if (btnNewFolder) btnNewFolder.disabled = !isDM;
     if (btnRevealFog) btnRevealFog.disabled = !isDM;
     if (btnEraseFog) btnEraseFog.disabled = !isDM;
+    if (btnAddPlayer) btnAddPlayer.disabled = !isDM;
+    if (btnAddNPC) btnAddNPC.disabled = !isDM;
+    
+    // Reset editor mode if switching to player role
+    if (!isDM && (editorMode === "paint" || editorMode === "eraseObjects" || editorMode === "eraseSpace" || editorMode === "eraseTokens" || editorMode === "spawnToken" || editorMode === "revealFog" || editorMode === "eraseFog")) {
+      editorMode = "cursor";
+      selectedAssetKind = null;
+      selectedFloorKind = null;
+      selectedTokenKind = null;
+    }
+    
     // selected states
     btnEraseTokens?.classList.toggle("selected", editorMode === "eraseTokens");
     btnEraseObjects?.classList.toggle("selected", editorMode === "eraseObjects");
@@ -2177,14 +2398,22 @@ function connect() {
     btnBrush2?.classList.toggle("selected", brushSize === 2);
     btnBrush3?.classList.toggle("selected", brushSize === 3);
     btnBrush4?.classList.toggle("selected", brushSize === 4);
-   btnRevealFog?.classList.toggle("selected", editorMode === "revealFog");
-   btnEraseFog?.classList.toggle("selected", editorMode === "eraseFog");
-   // Token spawn selection state
-   btnAddPlayer?.classList.toggle("selected", editorMode === "spawnToken" && selectedTokenKind === "player");
-   btnAddNPC?.classList.toggle("selected", editorMode === "spawnToken" && selectedTokenKind === "npc");
-   if (btnAddPlayer) btnAddPlayer.disabled = !isDM;
-   if (btnAddNPC) btnAddNPC.disabled = !isDM;
+    btnRevealFog?.classList.toggle("selected", editorMode === "revealFog");
+    btnEraseFog?.classList.toggle("selected", editorMode === "eraseFog");
+    // Token spawn selection state
+    btnAddPlayer?.classList.toggle("selected", editorMode === "spawnToken" && selectedTokenKind === "player");
+    btnAddNPC?.classList.toggle("selected", editorMode === "spawnToken" && selectedTokenKind === "npc");
+    
     updateDockSelection();
+    
+    // Redraw everything to reflect role changes
+    drawFloor();
+    drawGrid();
+    drawWalls();
+    drawObjects();
+    drawAssets();
+    drawTokens();
+    drawFog();
   }
   updateEditorUI();
   // Editor tool buttons

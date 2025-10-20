@@ -3,6 +3,7 @@ export type ClientToServer = {
     t: "join";
     name?: string;
     invite?: string;
+    preferredRole?: Role;
 } | {
     t: "ping";
 } | {
@@ -76,6 +77,9 @@ export type ClientToServer = {
     t: "loadLocation";
     path: string;
 } | {
+    t: "loadLocationById";
+    locationId: ID;
+} | {
     t: "updateToken";
     tokenId: ID;
     patch: Partial<Token>;
@@ -87,6 +91,9 @@ export type ClientToServer = {
     t: "reorderAsset";
     assetId: ID;
     direction: "top" | "up" | "down" | "bottom";
+} | {
+    t: "switchRole";
+    role: Role;
 };
 export type ServerToClient = {
     t: "welcome";
@@ -114,4 +121,7 @@ export type ServerToClient = {
 } | {
     t: "savedOk";
     path: string;
+} | {
+    t: "roleChanged";
+    role: Role;
 };
