@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="ru">
+<html lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -866,6 +866,47 @@
         letter-spacing: 0.08em;
       }
 
+      /* Icon selector styles */
+      .icon-selector {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(32px, 1fr));
+        gap: 4px;
+        max-height: 120px;
+        overflow-y: auto;
+        padding: 4px;
+        background: rgba(15, 23, 42, 0.3);
+        border-radius: 8px;
+        border: 1px solid rgba(255, 255, 255, 0.06);
+      }
+
+      .icon-selector-btn {
+        width: 32px;
+        height: 32px;
+        border-radius: 6px;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        background: rgba(255, 255, 255, 0.02);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 16px;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        padding: 0;
+        margin: 0;
+      }
+
+      .icon-selector-btn:hover {
+        background: rgba(96, 165, 250, 0.15);
+        border-color: rgba(96, 165, 250, 0.3);
+        transform: scale(1.05);
+      }
+
+      .icon-selector-btn.selected {
+        background: rgba(96, 165, 250, 0.28);
+        border-color: rgba(96, 165, 250, 0.6);
+        box-shadow: 0 0 0 1px rgba(96, 165, 250, 0.35) inset;
+      }
+
       #right-panel > *:last-child {
         margin-bottom: 0;
       }
@@ -1120,47 +1161,47 @@
         padding-bottom: 160px;
       }
     </style>
-    <script type="module" crossorigin src="/assets/index-DVNpABG5.js"></script>
+    <script type="module" crossorigin src="/assets/index-Bjv2uLRv.js"></script>
   </head>
   <body>
     <div id="app"></div>
     <div id="hud"></div>
     <header id="top-bar">
-      <button id="locations-toggle" class="icon-button" aria-label="Открыть список карт" aria-expanded="false">
+      <button id="locations-toggle" class="icon-button" aria-label="Open maps list" aria-expanded="false">
         <svg viewBox="0 0 24 24" aria-hidden="true">
           <path d="M4 5.5a1.5 1.5 0 0 1 1.5-1.5h13A1.5 1.5 0 0 1 20 5.5V8a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V5.5ZM4 11a1 1 0 0 1 1-1h14a1 1 0 0 1 0 2H5a1 1 0 0 1-1-1Zm0 4a1 1 0 0 1 1-1h9.5a1 1 0 0 1 0 2H5a1 1 0 0 1-1-1Z" />
         </svg>
       </button>
       <div class="map-meta">
-        <div id="map-info" title="Текущая карта">—</div>
+        <div id="map-info" title="Current map">—</div>
         <div id="status" data-state="connecting">WS: connecting…</div>
       </div>
     </header>
     <div id="top-right-controls">
-      <button id="btn-share" class="share-button" aria-label="Поделиться картой">Share</button>
+      <button id="btn-share" class="share-button" aria-label="Share map">Share</button>
       <div id="user-menu" class="user-menu">
-        <button id="user-icon" class="user-icon" aria-label="Меню пользователя" aria-expanded="false">
+        <button id="user-icon" class="user-icon" aria-label="User menu" aria-expanded="false">
           <svg id="user-icon-svg" viewBox="0 0 24 24" aria-hidden="true">
             <path d="M12 12.5a4.25 4.25 0 1 0-3.5-6.7A4.25 4.25 0 0 0 12 12.5ZM7 13.8A4 4 0 0 0 3 17.8v2.2a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-2.2a4 4 0 0 0-4-4h-10Z" />
           </svg>
         </button>
         <div id="user-dropdown" class="user-dropdown" aria-hidden="true">
           <div class="user-info">
-            <div id="user-role" class="user-role">Мастер</div>
-            <div id="user-name" class="user-name">Пользователь</div>
+            <div id="user-role" class="user-role">Master</div>
+            <div id="user-name" class="user-name">User</div>
           </div>
           <div class="user-actions">
             <button id="switch-to-dm" class="user-action" style="display: none;">
               <svg viewBox="0 0 24 24" aria-hidden="true">
                 <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
               </svg>
-              <span>Режим мастера</span>
+              <span>Master mode</span>
             </button>
             <button id="switch-to-player" class="user-action" style="display: none;">
               <svg viewBox="0 0 24 24" aria-hidden="true">
                 <path d="M12 12.5a4.25 4.25 0 1 0-3.5-6.7A4.25 4.25 0 0 0 12 12.5ZM7 13.8A4 4 0 0 0 3 17.8v2.2a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-2.2a4 4 0 0 0-4-4h-10Z" />
               </svg>
-              <span>Режим игрока</span>
+              <span>Player mode</span>
             </button>
           </div>
         </div>
@@ -1168,61 +1209,61 @@
     </div>
     <aside id="locations-drawer" aria-hidden="true">
       <div class="drawer-header">
-        <div class="drawer-title">Карты</div>
-        <button id="locations-close" class="icon-button small" aria-label="Скрыть список карт">
+        <div class="drawer-title">Maps</div>
+        <button id="locations-close" class="icon-button small" aria-label="Hide maps list">
           <svg viewBox="0 0 24 24" aria-hidden="true">
             <path d="m8.22 8.22a.75.75 0 0 1 1.06 0L12 10.94l2.72-2.72a.75.75 0 1 1 1.06 1.06L13.06 12l2.72 2.72a.75.75 0 1 1-1.06 1.06L12 13.06l-2.72 2.72a.75.75 0 0 1-1.06-1.06L10.94 12 8.22 9.28a.75.75 0 0 1 0-1.06Z" />
           </svg>
         </button>
       </div>
       <div class="drawer-actions">
-        <button id="btn-new-map" title="Создать новую пустую карту">
+        <button id="btn-new-map" title="Create new empty map">
           <span class="icon">🗺️</span>
-          <span>Новая карта</span>
+          <span>New map</span>
         </button>
-        <button id="btn-new-folder" title="Создать папку">
+        <button id="btn-new-folder" title="Create folder">
           <span class="icon">📁</span>
-          <span>Новая папка</span>
+          <span>New folder</span>
         </button>
       </div>
       <div id="locations-tree" class="drawer-scroll" style="font-size:13px; line-height:1.5;"></div>
     </aside>
     <div id="tool-zone">
       <nav id="tool-dock">
-        <button id="btn-tool-cursor" class="icon-button dock-btn" data-label="Курсор" data-group="cursor" aria-label="Курсор (перемещение)">
+        <button id="btn-tool-cursor" class="icon-button dock-btn" data-label="Cursor" data-group="cursor" aria-label="Cursor (movement)">
           <svg viewBox="0 0 24 24" aria-hidden="true">
             <path d="M6 4a.8.8 0 0 1 .9-.8l11.5 6.4a.8.8 0 0 1-.1 1.5l-3.8 1.1 1.2 4.6a.8.8 0 0 1-1.3.8l-2.9-1.9-1.7 2.8a.7.7 0 0 1-1.3-.2L6 4Z" fill="currentColor" />
           </svg>
         </button>
-        <button class="icon-button dock-btn" data-panel="panel-brush" data-label="Кисть" data-group="brush" aria-label="Настройки кисти">
+        <button class="icon-button dock-btn" data-panel="panel-brush" data-label="Brush" data-group="brush" aria-label="Brush settings">
           <svg viewBox="0 0 24 24" aria-hidden="true">
             <path d="M16.1 4.2 20 8.1a2.4 2.4 0 0 1 0 3.4l-8.5 8.5-5.5 1.7 1.7-5.5 8.5-8.5a2.4 2.4 0 0 1 3.4 0Z" fill="currentColor" />
             <path d="M4.9 19.6c0-1.4 1-2.6 2.3-2.9l3.9-1-1 3.9c-.3 1.3.8 2.4 2.1 2.1-.6.8-2 1.3-3.1 1.2-1.5-.2-2.8-1.6-2.8-3.3Z" fill="currentColor" opacity="0.85" />
           </svg>
         </button>
-        <button class="icon-button dock-btn" data-panel="panel-fog" data-label="Туман" data-group="fog" aria-label="Туман войны">
+        <button class="icon-button dock-btn" data-panel="panel-fog" data-label="Fog" data-group="fog" aria-label="Fog of war">
           <svg viewBox="0 0 24 24" aria-hidden="true">
             <path d="M7.8 18.5A3.8 3.8 0 0 1 4 14.7c0-1.6 1-3.1 2.5-3.6a5.1 5.1 0 0 1 9.8-1.5 4 4 0 0 1 .9 7.8H7.8Z" />
           </svg>
         </button>
-        <button class="icon-button dock-btn" data-panel="panel-characters" data-label="Персонажи" data-group="characters" aria-label="Персонажи">
+        <button class="icon-button dock-btn" data-panel="panel-characters" data-label="Characters" data-group="characters" aria-label="Characters">
           <svg viewBox="0 0 24 24" aria-hidden="true">
             <path d="M12 12.5a4.25 4.25 0 1 0-3.5-6.7A4.25 4.25 0 0 0 12 12.5ZM7 13.8A4 4 0 0 0 3 17.8v2.2a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-2.2a4 4 0 0 0-4-4h-10Z" />
           </svg>
         </button>
-        <button class="icon-button dock-btn" data-panel="panel-floors" data-label="Пол" data-group="floors" aria-label="Пол и покрытия">
+        <button class="icon-button dock-btn" data-panel="panel-floors" data-label="Floor" data-group="floors" aria-label="Floor and coverings">
           <svg viewBox="0 0 24 24" aria-hidden="true">
             <path d="M4.5 4h15A2.5 2.5 0 0 1 22 6.5v11A2.5 2.5 0 0 1 19.5 20h-15A2.5 2.5 0 0 1 2 17.5v-11A2.5 2.5 0 0 1 4.5 4Zm0 1.5A1 1 0 0 0 3.5 6.5v11a1 1 0 0 0 1 1h15a1 1 0 0 0 1-1v-11a1 1 0 0 0-1-1h-15Zm2.5 7h10a1 1 0 1 1 0 2h-10a1 1 0 0 1 0-2Z" />
           </svg>
         </button>
       </nav>
       <div id="undo-stack">
-        <button id="btn-undo" class="icon-button" title="Отменить предыдущее действие" aria-label="Отменить">
+        <button id="btn-undo" class="icon-button" title="Undo previous action" aria-label="Undo">
           <svg viewBox="0 0 24 24" aria-hidden="true">
             <path d="M5.2 9.7 9 5.9a.75.75 0 1 1 1.06 1.06l-2.22 2.2H14a5.25 5.25 0 0 1 0 10.5H6.75a.75.75 0 0 1 0-1.5H14a3.75 3.75 0 0 0 0-7.5H7.84l2.22 2.2A.75.75 0 0 1 9 14.5L5.2 10.7a1 1 0 0 1 0-1Z" />
           </svg>
         </button>
-        <button id="btn-redo" class="icon-button" title="Повторить действие" aria-label="Повторить">
+        <button id="btn-redo" class="icon-button" title="Redo action" aria-label="Redo">
           <svg viewBox="0 0 24 24" aria-hidden="true">
             <path d="M18.8 9.7 15 5.9a.75.75 0 1 0-1.06 1.06l2.22 2.2H10a5.25 5.25 0 0 0 0 10.5h7.25a.75.75 0 0 0 0-1.5H10a3.75 3.75 0 0 1 0-7.5h6.16l-2.22 2.2A.75.75 0 0 0 15 14.5l3.8-3.8a1 1 0 0 0 0-1Z" />
           </svg>
@@ -1232,7 +1273,7 @@
     <div id="tool-panels">
       <div id="panel-brush" class="tool-popover">
         <div class="panel-group brush" id="brush">
-          <div class="panel-title">Кисть</div>
+          <div class="panel-title">Brush</div>
           <div class="row">
             <button id="brush-1">1x1</button>
             <button id="brush-2">2x2</button>
@@ -1243,92 +1284,92 @@
       </div>
       <div id="panel-fog" class="tool-popover">
         <div class="panel-group" id="fog">
-          <div class="panel-title">Туман войны</div>
+          <div class="panel-title">Fog of war</div>
           <div class="row">
             <label class="toggle-label">
               <input type="checkbox" id="fog-mode-toggle" />
-              <span class="toggle-text">Ручной режим</span>
+              <span class="toggle-text">Manual mode</span>
             </label>
           </div>
           <div class="row">
-            <button id="btn-tool-reveal-fog" title="Открыть туман войны">Открыть туман</button>
-            <button id="btn-tool-erase-fog" title="Скрыть туманом">Скрыть туманом</button>
+            <button id="btn-tool-reveal-fog" title="Open fog of war">Open fog</button>
+            <button id="btn-tool-erase-fog" title="Hide with fog">Hide with fog</button>
           </div>
         </div>
       </div>
       <div id="panel-characters" class="tool-popover">
         <div class="panel-group" id="characters">
-          <div class="panel-title">Персонажи</div>
+          <div class="panel-title">Characters</div>
           <div class="row">
-            <button id="btn-tool-erase-tokens" title="Ластик персонажей">🧽 Ластик персонажей</button>
-            <button id="btn-add-player" title="Добавить игрока">🧙 Игрок</button>
-            <button id="btn-add-npc" title="Добавить NPC">🧟 NPC</button>
+            <button id="btn-tool-erase-tokens" title="Character eraser">🧽 Character eraser</button>
+            <button id="btn-add-player" title="Add player">🧙 Player</button>
+            <button id="btn-add-npc" title="Add NPC">🧟 NPC</button>
           </div>
         </div>
       </div>
       <div id="panel-floors" class="tool-popover">
         <div class="panel-group" id="floors">
-          <div class="panel-title">Пол</div>
+          <div class="panel-title">Floor</div>
           <div class="row">
-            <button id="btn-tool-erase-space" title="Ластик пола">🧽 Ластик пола</button>
+            <button id="btn-tool-erase-space" title="Floor eraser">🧽 Floor eraser</button>
           </div>
-          <div class="panel-title panel-subtitle">Основные</div>
+          <div class="panel-title panel-subtitle">Basic</div>
           <div class="row">
-            <button class="asset" id="floor-stone" title="Пол: камень">🧱 Камень</button>
-            <button class="asset" id="floor-wood" title="Пол: дерево">🪵 Дерево</button>
-            <button class="asset" id="floor-water" title="Пол: вода">💧 Вода</button>
-            <button class="asset" id="floor-sand" title="Пол: песок">🏖️ Песок</button>
-            <button class="asset" id="floor-grass" title="Пол: трава">🌱 Трава</button>
+            <button class="asset" id="floor-stone" title="Floor: stone">🧱 Stone</button>
+            <button class="asset" id="floor-wood" title="Floor: wood">🪵 Wood</button>
+            <button class="asset" id="floor-water" title="Floor: water">💧 Water</button>
+            <button class="asset" id="floor-sand" title="Floor: sand">🏖️ Sand</button>
+            <button class="asset" id="floor-grass" title="Floor: grass">🌱 Grass</button>
           </div>
-          <div class="panel-title panel-subtitle">Дорожки и мосты</div>
+          <div class="panel-title panel-subtitle">Paths and bridges</div>
           <div class="row">
-            <button class="asset" id="floor-path" title="Пол: дорожка">🛤️ Дорожка</button>
-            <button class="asset" id="floor-bridge" title="Пол: мост">🌉 Мост</button>
+            <button class="asset" id="floor-path" title="Floor: path">🛤️ Path</button>
+            <button class="asset" id="floor-bridge" title="Floor: bridge">🌉 Bridge</button>
           </div>
-          <div class="panel-title panel-subtitle">Покрытия</div>
+          <div class="panel-title panel-subtitle">Coverings</div>
           <div class="row">
-            <button class="asset" id="floor-carpet" title="Пол: ковер">🟥 Ковер</button>
-            <button class="asset" id="floor-marble" title="Пол: мрамор">⚪ Мрамор</button>
+            <button class="asset" id="floor-carpet" title="Floor: carpet">🟥 Carpet</button>
+            <button class="asset" id="floor-marble" title="Floor: marble">⚪ Marble</button>
           </div>
-          <div class="panel-title panel-subtitle">Почва</div>
+          <div class="panel-title panel-subtitle">Soil</div>
           <div class="row">
-            <button class="asset" id="floor-dirt" title="Пол: земля">🟫 Земля</button>
-            <button class="asset" id="floor-mud" title="Пол: грязь">🟤 Грязь</button>
+            <button class="asset" id="floor-dirt" title="Floor: dirt">🟫 Dirt</button>
+            <button class="asset" id="floor-mud" title="Floor: mud">🟤 Mud</button>
           </div>
-          <div class="panel-title panel-subtitle">Зимние</div>
+          <div class="panel-title panel-subtitle">Winter</div>
           <div class="row">
-            <button class="asset" id="floor-snow" title="Пол: снег">⚪ Снег</button>
-            <button class="asset" id="floor-ice" title="Пол: лед">🔵 Лед</button>
+            <button class="asset" id="floor-snow" title="Floor: snow">⚪ Snow</button>
+            <button class="asset" id="floor-ice" title="Floor: ice">🔵 Ice</button>
           </div>
         </div>
       </div>
     </div>
     <aside id="right-panel">
-      <div class="title">Лист персонажа</div>
-      <div style="opacity:.7">Нет выбранного токена</div>
+      <div class="title">Character sheet</div>
+      <div style="opacity:.7">No selected token</div>
     </aside>
     <!-- Bottom Asset Menu -->
     <div id="bottom-asset-menu">
       <div id="asset-menu-header">
-        <input id="asset-search" type="text" placeholder="Поиск ассетов..." />
+        <input id="asset-search" type="text" placeholder="Search assets..." />
         <div id="asset-category-tabs">
-          <button class="asset-category-tab active" data-category="all">Все</button>
-          <button class="asset-category-tab" data-category="nature">Природа</button>
-          <button class="asset-category-tab" data-category="fire">Огонь</button>
-          <button class="asset-category-tab" data-category="weapons">Оружие</button>
-          <button class="asset-category-tab" data-category="armor">Доспехи</button>
-          <button class="asset-category-tab" data-category="containers">Контейнеры</button>
-          <button class="asset-category-tab" data-category="kitchen">Кухня</button>
-          <button class="asset-category-tab" data-category="food">Еда</button>
-          <button class="asset-category-tab" data-category="clothing">Одежда</button>
-          <button class="asset-category-tab" data-category="animals">Животные</button>
-          <button class="asset-category-tab" data-category="insects">Насекомые</button>
-          <button class="asset-category-tab" data-category="treasure">Сокровища</button>
-          <button class="asset-category-tab" data-category="magic">Магия</button>
-          <button class="asset-category-tab" data-category="tools">Инструменты</button>
-          <button class="asset-category-tab" data-category="furniture">Мебель</button>
-          <button class="asset-category-tab" data-category="paths">Дорожки</button>
-          <button class="asset-category-tab" data-category="buildings">Здания</button>
+          <button class="asset-category-tab active" data-category="all">All</button>
+          <button class="asset-category-tab" data-category="nature">Nature</button>
+          <button class="asset-category-tab" data-category="fire">Fire</button>
+          <button class="asset-category-tab" data-category="weapons">Weapons</button>
+          <button class="asset-category-tab" data-category="armor">Armor</button>
+          <button class="asset-category-tab" data-category="containers">Containers</button>
+          <button class="asset-category-tab" data-category="kitchen">Kitchen</button>
+          <button class="asset-category-tab" data-category="food">Food</button>
+          <button class="asset-category-tab" data-category="clothing">Clothing</button>
+          <button class="asset-category-tab" data-category="animals">Animals</button>
+          <button class="asset-category-tab" data-category="insects">Insects</button>
+          <button class="asset-category-tab" data-category="treasure">Treasure</button>
+          <button class="asset-category-tab" data-category="magic">Magic</button>
+          <button class="asset-category-tab" data-category="tools">Tools</button>
+          <button class="asset-category-tab" data-category="furniture">Furniture</button>
+          <button class="asset-category-tab" data-category="paths">Paths</button>
+          <button class="asset-category-tab" data-category="buildings">Buildings</button>
         </div>
       </div>
       <div id="asset-content">
@@ -1339,8 +1380,8 @@
     <div id="emoji-modal">
       <div class="modal">
         <div style="display:flex; gap:10px; align-items:center;">
-          <input id="emoji-search" placeholder="Поиск эмодзи..." />
-          <button id="emoji-close" class="icon-button small" title="Закрыть">
+          <input id="emoji-search" placeholder="Search emoji..." />
+          <button id="emoji-close" class="icon-button small" title="Close">
             <svg viewBox="0 0 24 24" aria-hidden="true">
               <path d="m8.22 8.22a.75.75 0 0 1 1.06 0L12 10.94l2.72-2.72a.75.75 0 1 1 1.06 1.06L13.06 12l2.72 2.72a.75.75 0 1 1-1.06 1.06L12 13.06l-2.72 2.72a.75.75 0 0 1-1.06-1.06L10.94 12 8.22 9.28a.75.75 0 0 1 0-1.06Z" />
             </svg>

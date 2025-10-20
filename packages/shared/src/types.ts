@@ -18,7 +18,7 @@ export interface Location {
   name: string;
   levels: Level[];
   settings?: Record<string, unknown>;
-  fogMode?: FogMode; // режим открытия тумана войны
+  fogMode?: FogMode; // fog of war reveal mode
 }
 
 export interface Token {
@@ -39,6 +39,7 @@ export interface Token {
   zIndex?: number; // rendering layer order within same cell
   hidden?: boolean; // if true, only DM can see this token
   dead?: boolean; // if true, character is dead
+  icon?: string; // emoji icon for the character
 }
 
 export interface Asset {

@@ -357,8 +357,8 @@ async function buildLocationsTree() {
                 }
             }
         }
-        folders.sort((a, b) => a.name.localeCompare(b.name, "ru"));
-        files.sort((a, b) => a.name.localeCompare(b.name, "ru"));
+        folders.sort((a, b) => a.name.localeCompare(b.name, "en"));
+        files.sort((a, b) => a.name.localeCompare(b.name, "en"));
         return [...folders, ...files];
     }
     return walk("");
@@ -620,7 +620,7 @@ function onMessage(client, data) {
             state.tokens.set(t.id, t);
             // Create snapshot after action and push to undo stack
             const afterState = createGameSnapshot();
-            const action = createActionSnapshot("spawnToken", `Создание ${kind === "npc" ? "NPC" : "игрока"} в (${pos.x}, ${pos.y})`, beforeState, afterState);
+            const action = createActionSnapshot("spawnToken", `Creating ${kind === "npc" ? "NPC" : "player"} at (${pos.x}, ${pos.y})`, beforeState, afterState);
             pushToUndoStack(action);
             broadcast([{ type: "tokenSpawned", token: t }]);
             persistIfAutosave();
@@ -667,7 +667,7 @@ function onMessage(client, data) {
             // Create snapshot after action and push to undo stack (only for DM moves)
             if (beforeState && client.role === "DM") {
                 const afterState = createGameSnapshot();
-                const action = createActionSnapshot("moveToken", `Перемещение токена в (${pos.x}, ${pos.y})`, beforeState, afterState);
+                const action = createActionSnapshot("moveToken", `Moving token to (${pos.x}, ${pos.y})`, beforeState, afterState);
                 pushToUndoStack(action);
             }
             broadcast(events);
@@ -714,6 +714,9 @@ function onMessage(client, data) {
                 const vr = Math.max(0, Math.min(20, Math.round(patch.vision.radius ?? (tok.vision?.radius ?? 8))));
                 const ang = patch.vision.angle ?? (tok.vision?.angle ?? 360);
                 tok.vision = { radius: vr, angle: ang };
+            }
+            if (typeof patch.icon === "string") {
+                tok.icon = patch.icon;
             }
             state.tokens.set(tok.id, tok);
             broadcast([{ type: "tokenUpdated", token: tok }]);
@@ -919,7 +922,7 @@ function onMessage(client, data) {
                 broadcast([ev]);
                 // Create snapshot after action and push to undo stack
                 const afterSnapshot = createGameSnapshot();
-                const action = createActionSnapshot("revealFog", `Открытие тумана войны (${added.length} ячеек)`, beforeSnapshot, afterSnapshot);
+                const action = createActionSnapshot("revealFog", `Revealing fog of war (${added.length} cells)`, beforeSnapshot, afterSnapshot);
                 pushToUndoStack(action);
                 persistIfAutosave();
             }
@@ -944,7 +947,7 @@ function onMessage(client, data) {
                 broadcast([ev]);
                 // Create snapshot after action and push to undo stack
                 const afterSnapshot = createGameSnapshot();
-                const action = createActionSnapshot("obscureFog", `Скрытие тумана войны (${removed.length} ячеек)`, beforeSnapshot, afterSnapshot);
+                const action = createActionSnapshot("obscureFog", `Hiding fog of war (${removed.length} cells)`, beforeSnapshot, afterSnapshot);
                 pushToUndoStack(action);
                 persistIfAutosave();
             }
@@ -962,7 +965,7 @@ function onMessage(client, data) {
             broadcast([ev]);
             // Create snapshot after action and push to undo stack
             const afterSnapshot = createGameSnapshot();
-            const action = createActionSnapshot("setFogMode", `Изменение режима тумана войны на ${msg.fogMode === "automatic" ? "автоматический" : "ручной"}`, beforeSnapshot, afterSnapshot);
+            const action = createActionSnapshot("setFogMode", `Changing fog mode to ${msg.fogMode === "automatic" ? "automatic" : "manual"}`, beforeSnapshot, afterSnapshot);
             pushToUndoStack(action);
             persistIfAutosave();
             break;
@@ -1013,7 +1016,7 @@ function onMessage(client, data) {
             state.assets.set(asset.id, asset);
             // Create snapshot after action and push to undo stack
             const afterState = createGameSnapshot();
-            const action = createActionSnapshot("placeAsset", `Размещение ${msg.kind} в (${gx}, ${gy})`, beforeState, afterState);
+            const action = createActionSnapshot("placeAsset", `Placing ${msg.kind} at (${gx}, ${gy})`, beforeState, afterState);
             pushToUndoStack(action);
             broadcast([{ type: "assetPlaced", asset }]);
             persistIfAutosave();
@@ -1045,7 +1048,7 @@ function onMessage(client, data) {
             state.assets.set(asset.id, asset);
             // Create snapshot after action and push to undo stack
             const afterState = createGameSnapshot();
-            const action = createActionSnapshot("moveAsset", `Перемещение ${asset.kind} в (${gx}, ${gy})`, beforeState, afterState);
+            const action = createActionSnapshot("moveAsset", `Moving ${asset.kind} to (${gx}, ${gy})`, beforeState, afterState);
             pushToUndoStack(action);
             broadcast([{ type: "assetUpdated", asset }]);
             console.log(`[SERVER] Asset ${asset.id} moved to (${gx}, ${gy})`);
@@ -1070,7 +1073,7 @@ function onMessage(client, data) {
                 return;
             // Create snapshot after action and push to undo stack
             const afterState = createGameSnapshot();
-            const action = createActionSnapshot("removeAssetAt", `Удаление объектов в (${gx}, ${gy})`, beforeState, afterState);
+            const action = createActionSnapshot("removeAssetAt", `Removing objects at (${gx}, ${gy})`, beforeState, afterState);
             pushToUndoStack(action);
             broadcast(removed.map((id) => ({ type: "assetRemoved", assetId: id })));
             persistIfAutosave();
@@ -1128,7 +1131,7 @@ function onMessage(client, data) {
             }
             // Create snapshot after action and push to undo stack
             const afterState = createGameSnapshot();
-            const action = createActionSnapshot("paintFloor", `Покраска пола в (${gx}, ${gy})`, beforeState, afterState);
+            const action = createActionSnapshot("paintFloor", `Painting floor at (${gx}, ${gy})`, beforeState, afterState);
             pushToUndoStack(action);
             const ev = { type: "floorPainted", levelId: msg.levelId, pos: { x: gx, y: gy }, kind: msg.kind };
             broadcast([ev]);
@@ -1695,6 +1698,27 @@ function randomBrightColor() {
     const ch = () => (128 + Math.floor(Math.random() * 128)) & 0xff;
     return (ch() << 16) | (ch() << 8) | ch();
 }
+// Available character icons
+const CHARACTER_ICONS = {
+    players: [
+        "🧙", "🧙‍♂️", "🧙‍♀️", "⚔️", "🛡️", "🏹", "🗡️", "🔮", "⚡", "🔥",
+        "❄️", "🌊", "🌪️", "🌱", "🌿", "🍀", "🌸", "🌺", "🌻", "🌹",
+        "👑", "💎", "⭐", "🌟", "✨", "💫", "🌈", "🦄", "🐉", "🐲",
+        "🦅", "🦆", "🦇", "🦉", "🦊", "🦋", "🦌", "🦍", "🦎", "🦏",
+        "🦐", "🦑", "🦒", "🦓", "🦔", "🦕", "🦖", "🦗", "🦘", "🦙"
+    ],
+    npcs: [
+        "🧟", "🧟‍♂️", "🧟‍♀️", "👹", "👺", "💀", "☠️", "👻", "🎭", "🎪",
+        "🤖", "👽", "👾", "🤡", "👹", "👺", "💀", "☠️", "👻", "🎭",
+        "🐺", "🐻", "🐻‍❄️", "🐨", "🐯", "🦁", "🐮", "🐷", "🐸", "🐵",
+        "🙈", "🙉", "🙊", "🐒", "🦍", "🦧", "🐶", "🐕", "🐩", "🐕‍🦺",
+        "🐈", "🐈‍⬛", "🐱", "🐯", "🦁", "🐮", "🐷", "🐸", "🐵", "🙈"
+    ]
+};
+function getRandomIcon(kind) {
+    const icons = CHARACTER_ICONS[kind === "npc" ? "npcs" : "players"];
+    return icons[Math.floor(Math.random() * icons.length)];
+}
 function makePlayerToken(playerId, levelId, spawn) {
     return {
         id: "t-" + randomUUID(),
@@ -1708,6 +1732,7 @@ function makePlayerToken(playerId, levelId, spawn) {
         name: "Player",
         tint: randomBrightColor(),
         zIndex: 100, // Default above assets
+        icon: getRandomIcon("player"),
     };
 }
 function makeNPCToken(owner, levelId, spawn) {
@@ -1723,6 +1748,7 @@ function makeNPCToken(owner, levelId, spawn) {
         name: "NPC",
         tint: randomBrightColor(),
         zIndex: 100, // Default above assets
+        icon: getRandomIcon("npc"),
     };
 }
 function snapshot() {

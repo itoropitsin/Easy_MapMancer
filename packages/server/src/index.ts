@@ -340,8 +340,8 @@ async function buildLocationsTree(): Promise<LocationTreeNode[]> {
         }
       }
     }
-    folders.sort((a, b) => a.name.localeCompare(b.name, "ru"));
-    files.sort((a, b) => a.name.localeCompare(b.name, "ru"));
+    folders.sort((a, b) => a.name.localeCompare(b.name, "en"));
+    files.sort((a, b) => a.name.localeCompare(b.name, "en"));
     return [...folders, ...files];
   }
   return walk("");
@@ -636,7 +636,7 @@ function onMessage(client: ClientRec, data: any) {
       const afterState = createGameSnapshot();
       const action = createActionSnapshot(
         "spawnToken",
-        `Создание ${kind === "npc" ? "NPC" : "игрока"} в (${pos.x}, ${pos.y})`,
+        `Creating ${kind === "npc" ? "NPC" : "player"} at (${pos.x}, ${pos.y})`,
         beforeState,
         afterState
       );
@@ -685,7 +685,7 @@ function onMessage(client: ClientRec, data: any) {
         const afterState = createGameSnapshot();
         const action = createActionSnapshot(
           "moveToken",
-          `Перемещение токена в (${pos.x}, ${pos.y})`,
+          `Moving token to (${pos.x}, ${pos.y})`,
           beforeState,
           afterState
         );
@@ -728,6 +728,9 @@ function onMessage(client: ClientRec, data: any) {
         const vr = Math.max(0, Math.min(20, Math.round((patch.vision as any).radius ?? (tok.vision?.radius ?? 8))));
         const ang = (patch.vision as any).angle ?? (tok.vision?.angle ?? 360);
         tok.vision = { radius: vr, angle: ang };
+      }
+      if (typeof (patch as any).icon === "string") {
+        (tok as any).icon = (patch as any).icon;
       }
       state.tokens.set(tok.id, tok);
       broadcast([{ type: "tokenUpdated", token: tok } as any]);
@@ -949,7 +952,7 @@ function onMessage(client: ClientRec, data: any) {
         const afterSnapshot = createGameSnapshot();
         const action = createActionSnapshot(
           "revealFog",
-          `Открытие тумана войны (${added.length} ячеек)`,
+          `Revealing fog of war (${added.length} cells)`,
           beforeSnapshot,
           afterSnapshot
         );
@@ -982,7 +985,7 @@ function onMessage(client: ClientRec, data: any) {
         const afterSnapshot = createGameSnapshot();
         const action = createActionSnapshot(
           "obscureFog",
-          `Скрытие тумана войны (${removed.length} ячеек)`,
+          `Hiding fog of war (${removed.length} cells)`,
           beforeSnapshot,
           afterSnapshot
         );
@@ -1007,7 +1010,7 @@ function onMessage(client: ClientRec, data: any) {
       const afterSnapshot = createGameSnapshot();
       const action = createActionSnapshot(
         "setFogMode",
-        `Изменение режима тумана войны на ${msg.fogMode === "automatic" ? "автоматический" : "ручной"}`,
+        `Changing fog mode to ${msg.fogMode === "automatic" ? "automatic" : "manual"}`,
         beforeSnapshot,
         afterSnapshot
       );
@@ -1062,7 +1065,7 @@ function onMessage(client: ClientRec, data: any) {
       const afterState = createGameSnapshot();
       const action = createActionSnapshot(
         "placeAsset",
-        `Размещение ${msg.kind} в (${gx}, ${gy})`,
+        `Placing ${msg.kind} at (${gx}, ${gy})`,
         beforeState,
         afterState
       );
@@ -1103,7 +1106,7 @@ function onMessage(client: ClientRec, data: any) {
       const afterState = createGameSnapshot();
       const action = createActionSnapshot(
         "moveAsset",
-        `Перемещение ${asset.kind} в (${gx}, ${gy})`,
+        `Moving ${asset.kind} to (${gx}, ${gy})`,
         beforeState,
         afterState
       );
@@ -1135,7 +1138,7 @@ function onMessage(client: ClientRec, data: any) {
       const afterState = createGameSnapshot();
       const action = createActionSnapshot(
         "removeAssetAt",
-        `Удаление объектов в (${gx}, ${gy})`,
+        `Removing objects at (${gx}, ${gy})`,
         beforeState,
         afterState
       );
@@ -1193,7 +1196,7 @@ function onMessage(client: ClientRec, data: any) {
       const afterState = createGameSnapshot();
       const action = createActionSnapshot(
         "paintFloor",
-        `Покраска пола в (${gx}, ${gy})`,
+        `Painting floor at (${gx}, ${gy})`,
         beforeState,
         afterState
       );
@@ -1711,6 +1714,29 @@ function randomBrightColor(): number {
   return (ch() << 16) | (ch() << 8) | ch();
 }
 
+// Available character icons
+const CHARACTER_ICONS = {
+  players: [
+    "🧙", "🧙‍♂️", "🧙‍♀️", "⚔️", "🛡️", "🏹", "🗡️", "🔮", "⚡", "🔥", 
+    "❄️", "🌊", "🌪️", "🌱", "🌿", "🍀", "🌸", "🌺", "🌻", "🌹",
+    "👑", "💎", "⭐", "🌟", "✨", "💫", "🌈", "🦄", "🐉", "🐲",
+    "🦅", "🦆", "🦇", "🦉", "🦊", "🦋", "🦌", "🦍", "🦎", "🦏",
+    "🦐", "🦑", "🦒", "🦓", "🦔", "🦕", "🦖", "🦗", "🦘", "🦙"
+  ],
+  npcs: [
+    "🧟", "🧟‍♂️", "🧟‍♀️", "👹", "👺", "💀", "☠️", "👻", "🎭", "🎪",
+    "🤖", "👽", "👾", "🤡", "👹", "👺", "💀", "☠️", "👻", "🎭",
+    "🐺", "🐻", "🐻‍❄️", "🐨", "🐯", "🦁", "🐮", "🐷", "🐸", "🐵",
+    "🙈", "🙉", "🙊", "🐒", "🦍", "🦧", "🐶", "🐕", "🐩", "🐕‍🦺",
+    "🐈", "🐈‍⬛", "🐱", "🐯", "🦁", "🐮", "🐷", "🐸", "🐵", "🙈"
+  ]
+};
+
+function getRandomIcon(kind: "player" | "npc"): string {
+  const icons = CHARACTER_ICONS[kind === "npc" ? "npcs" : "players"];
+  return icons[Math.floor(Math.random() * icons.length)];
+}
+
 function makePlayerToken(playerId: ID, levelId: ID, spawn: Vec2): Token {
   return {
     id: "t-" + randomUUID(),
@@ -1724,6 +1750,7 @@ function makePlayerToken(playerId: ID, levelId: ID, spawn: Vec2): Token {
     name: "Player",
     tint: randomBrightColor(),
     zIndex: 100, // Default above assets
+    icon: getRandomIcon("player"),
   } as any;
 }
 
@@ -1740,6 +1767,7 @@ function makeNPCToken(owner: ID, levelId: ID, spawn: Vec2): Token {
     name: "NPC",
     tint: randomBrightColor(),
     zIndex: 100, // Default above assets
+    icon: getRandomIcon("npc"),
   } as any;
 }
 

@@ -90,7 +90,7 @@ const tokens = new Map<ID, Token>();
 let currentLocation: Location | null = null;
 let currentSeed: string | null = null;
 let myRole: "DM" | "PLAYER" | null = null;
-let fogMode: FogMode = "automatic"; // режим открытия тумана войны
+let fogMode: FogMode = "automatic"; // fog of war reveal mode
 const revealedByLevel: Map<ID, Set<string>> = new Map();
 const assets = new Map<ID, Asset>();
 type EditorMode = "cursor" | "paint" | "eraseObjects" | "eraseSpace" | "revealFog" | "eraseFog" | "eraseTokens" | "spawnToken";
@@ -110,6 +110,24 @@ const SHARE_BASE_URL = typeof window !== "undefined" ? window.location.origin : 
 // Recent locations (client-side only)
 let recentLocations: string[] = [];
 try { const s = localStorage.getItem("recentLocations"); if (s) recentLocations = JSON.parse(s); } catch {}
+
+// Available character icons
+const CHARACTER_ICONS = {
+  players: [
+    "🧙", "🧙‍♂️", "🧙‍♀️", "⚔️", "🛡️", "🏹", "🗡️", "🔮", "⚡", "🔥", 
+    "❄️", "🌊", "🌪️", "🌱", "🌿", "🍀", "🌸", "🌺", "🌻", "🌹",
+    "👑", "💎", "⭐", "🌟", "✨", "💫", "🌈", "🦄", "🐉", "🐲",
+    "🦅", "🦆", "🦇", "🦉", "🦊", "🦋", "🦌", "🦍", "🦎", "🦏",
+    "🦐", "🦑", "🦒", "🦓", "🦔", "🦕", "🦖", "🦗", "🦘", "🦙"
+  ],
+  npcs: [
+    "🧟", "🧟‍♂️", "🧟‍♀️", "👹", "👺", "💀", "☠️", "👻", "🎭", "🎪",
+    "🤖", "👽", "👾", "🤡", "👹", "👺", "💀", "☠️", "👻", "🎭",
+    "🐺", "🐻", "🐻‍❄️", "🐨", "🐯", "🦁", "🐮", "🐷", "🐸", "🐵",
+    "🙈", "🙉", "🙊", "🐒", "🦍", "🦧", "🐶", "🐕", "🐩", "🐕‍🦺",
+    "🐈", "🐈‍⬛", "🐱", "🐯", "🦁", "🐮", "🐷", "🐸", "🐵", "🙈"
+  ]
+};
 function saveRecents() { try { localStorage.setItem("recentLocations", JSON.stringify(recentLocations.slice(0, 10))); } catch {} }
 function addRecent(path: string | undefined) {
   if (!path) return;
@@ -431,7 +449,94 @@ function paintedFloorColor(kind: FloorKind, gx: number, gy: number): number {
   const mixT = ((noise >>> 1) & 0xff) / 255; // 0..1
   const mix = 0.2 + mixT * 0.35; // keep near mid tone
   const useLight = (noise & 1) === 0;
-  return useLight ? lerpColor(palette.mid, palette.light, mix) : lerpColor(palette.mid, palette.dark, mix);
+  let baseColor = useLight ? lerpColor(palette.mid, palette.light, mix) : lerpColor(palette.mid, palette.dark, mix);
+  
+  // Add texture based on floor type
+  const textureNoise = hash2D(gx, gy, baseSeed ^ levelSeed ^ 0x12345678);
+  const texturePattern = (textureNoise >>> 8) & 0xff;
+  
+  switch (kind) {
+    case 'stone':
+      // Stone texture: add small dark spots
+      if ((texturePattern & 0x1f) < 3) {
+        baseColor = lerpColor(baseColor, 0x404040, 0.3);
+      }
+      break;
+    case 'wood':
+      // Wood texture: add grain lines
+      if ((texturePattern & 0x0f) < 2) {
+        baseColor = lerpColor(baseColor, 0x2d1b0e, 0.2);
+      }
+      break;
+    case 'water':
+      // Water texture: add ripples
+      if ((texturePattern & 0x1f) < 4) {
+        baseColor = lerpColor(baseColor, 0x1e3a8a, 0.15);
+      }
+      break;
+    case 'sand':
+      // Sand texture: add small particles
+      if ((texturePattern & 0x3f) < 6) {
+        baseColor = lerpColor(baseColor, 0xfbbf24, 0.1);
+      }
+      break;
+    case 'grass':
+      // Grass texture: add small dark spots
+      if ((texturePattern & 0x1f) < 3) {
+        baseColor = lerpColor(baseColor, 0x166534, 0.2);
+      }
+      break;
+    case 'path':
+      // Path texture: add dirt spots
+      if ((texturePattern & 0x1f) < 4) {
+        baseColor = lerpColor(baseColor, 0x451a03, 0.25);
+      }
+      break;
+    case 'bridge':
+      // Bridge texture: add wood grain
+      if ((texturePattern & 0x0f) < 2) {
+        baseColor = lerpColor(baseColor, 0x451a03, 0.2);
+      }
+      break;
+    case 'carpet':
+      // Carpet texture: add fabric pattern
+      if ((texturePattern & 0x1f) < 3) {
+        baseColor = lerpColor(baseColor, 0x7f1d1d, 0.15);
+      }
+      break;
+    case 'marble':
+      // Marble texture: add veining
+      if ((texturePattern & 0x1f) < 2) {
+        baseColor = lerpColor(baseColor, 0x94a3b8, 0.1);
+      }
+      break;
+    case 'dirt':
+      // Dirt texture: add small rocks
+      if ((texturePattern & 0x1f) < 5) {
+        baseColor = lerpColor(baseColor, 0x451a03, 0.2);
+      }
+      break;
+    case 'mud':
+      // Mud texture: add wet spots
+      if ((texturePattern & 0x1f) < 4) {
+        baseColor = lerpColor(baseColor, 0x1c1917, 0.25);
+      }
+      break;
+    case 'snow':
+      // Snow texture: add ice crystals
+      if ((texturePattern & 0x1f) < 3) {
+        baseColor = lerpColor(baseColor, 0xe0e7ff, 0.1);
+      }
+      break;
+    case 'ice':
+      // Ice texture: add cracks
+      if ((texturePattern & 0x1f) < 2) {
+        baseColor = lerpColor(baseColor, 0x1e40af, 0.15);
+      }
+      break;
+  }
+  
+  return baseColor;
 }
 
 // 10x10 irregular island mask around (0..9, 0..9)
@@ -715,7 +820,7 @@ function onDragEnd(e: any) {
   if (myRole !== "DM" && !isGround(snapped.x, snapped.y)) {
     const tok = tokens.get(tokenId);
     if (tok) sprite.position.set(tok.pos.x * CELL + CELL / 2, tok.pos.y * CELL + CELL / 2);
-    try { hudToast("Нельзя перемещаться вне пола/земли"); } catch {}
+    try { hudToast("Cannot move outside floor/ground"); } catch {}
     dragging = null;
     app.stage.off("pointermove", onDragMove);
     app.stage.off("pointerup", onDragEnd);
@@ -796,7 +901,7 @@ function showContextMenu(x: number, y: number, target: { type: "token"; id: ID }
     menu.appendChild(item);
   };
   
-  addItem("⬆️ На самый верх", () => {
+  addItem("⬆️ To top", () => {
     if (!socket || !contextMenuTarget) return;
     if (contextMenuTarget.type === "token") {
       const msg: ClientToServer = { t: "reorderToken", tokenId: contextMenuTarget.id, direction: "top" };
@@ -809,7 +914,7 @@ function showContextMenu(x: number, y: number, target: { type: "token"; id: ID }
     }
   });
   
-  addItem("⬆ Выше", () => {
+  addItem("⬆ Up", () => {
     if (!socket || !contextMenuTarget) return;
     if (contextMenuTarget.type === "token") {
       const msg: ClientToServer = { t: "reorderToken", tokenId: contextMenuTarget.id, direction: "up" };
@@ -820,7 +925,7 @@ function showContextMenu(x: number, y: number, target: { type: "token"; id: ID }
     }
   });
   
-  addItem("⬇ Ниже", () => {
+  addItem("⬇ Down", () => {
     if (!socket || !contextMenuTarget) return;
     if (contextMenuTarget.type === "token") {
       const msg: ClientToServer = { t: "reorderToken", tokenId: contextMenuTarget.id, direction: "down" };
@@ -831,7 +936,7 @@ function showContextMenu(x: number, y: number, target: { type: "token"; id: ID }
     }
   });
   
-  addItem("⬇️ На самый низ", () => {
+  addItem("⬇️ To bottom", () => {
     if (!socket || !contextMenuTarget) return;
     if (contextMenuTarget.type === "token") {
       const msg: ClientToServer = { t: "reorderToken", tokenId: contextMenuTarget.id, direction: "bottom" };
@@ -856,7 +961,7 @@ function showContextMenu(x: number, y: number, target: { type: "token"; id: ID }
     const token = tokens.get(contextMenuTarget.id);
     const isDead = (token as any)?.dead;
     
-    addItem(`${isDead ? "❤️" : "💀"} ${isDead ? "Воскресить" : "Убить"}`, () => {
+    addItem(`${isDead ? "❤️" : "💀"} ${isDead ? "Resurrect" : "Kill"}`, () => {
       if (!socket || !contextMenuTarget) return;
       const msg: ClientToServer = { t: "updateToken", tokenId: contextMenuTarget.id, patch: { dead: !isDead } };
       console.log(`[CLIENT] Sending updateToken dead:`, msg);
@@ -870,7 +975,7 @@ function showContextMenu(x: number, y: number, target: { type: "token"; id: ID }
       ? (tokens.get(contextMenuTarget.id) as any)?.hidden 
       : (assets.get(contextMenuTarget.id) as any)?.hidden;
     
-    addItem(`${isHidden ? "👁️" : "🙈"} ${isHidden ? "Показать" : "Скрыть"}`, () => {
+    addItem(`${isHidden ? "👁️" : "🙈"} ${isHidden ? "Show" : "Hide"}`, () => {
       if (!socket || !contextMenuTarget) return;
       if (contextMenuTarget.type === "token") {
         const msg: ClientToServer = { t: "toggleTokenHidden", tokenId: contextMenuTarget.id };
@@ -946,8 +1051,8 @@ function drawTokens() {
     const node = new Container();
     const isNPC = (tok as any).kind === "npc";
     const isMine = tok.id === myTokenId;
-    // Emoji-like token appearance
-    const emoji = isNPC ? "🧟" : "🧙";
+    // Use custom icon if available, otherwise use default
+    const emoji = (tok as any).icon || (isNPC ? "🧟" : "🧙");
     const text = new Text({
       text: emoji,
       style: {
@@ -1151,7 +1256,7 @@ function renderCharacterPanel() {
   if (!panel) return; // panel not present in DOM yet
   const tok = selectedTokenId ? tokens.get(selectedTokenId) : null;
   if (!tok) {
-    panel.innerHTML = '<div class="char-header">Лист персонажа</div><div style="opacity:.7">Нет выбранного токена</div>';
+    panel.innerHTML = '<div class="char-header">Character sheet</div><div style="opacity:.7">No selected token</div>';
     return;
   }
   const anyTok: any = tok as any;
@@ -1168,6 +1273,15 @@ function renderCharacterPanel() {
     const extra = opts.attrs ? ` ${opts.attrs}` : "";
     return `<input id="${opts.id}" class="char-input" type="${opts.type}" value="${escapeHtml(opts.value)}"${placeholder}${extra} />`;
   };
+  
+  const renderIconSelector = (opts: { id: string; value: string; kind: "player" | "npc" }) => {
+    const icons = CHARACTER_ICONS[opts.kind === "npc" ? "npcs" : "players"];
+    const currentIcon = opts.value || (opts.kind === "npc" ? "🧟" : "🧙");
+    const iconButtons = icons.map(icon => 
+      `<button type="button" class="icon-selector-btn ${icon === currentIcon ? 'selected' : ''}" data-icon="${icon}" title="${icon}">${icon}</button>`
+    ).join("");
+    return `<div class="icon-selector" id="${opts.id}">${iconButtons}</div>`;
+  };
   const iconMarkup = (kind: string): string => {
     if (kind.startsWith("stat-")) {
       const code = kind.slice(5).toUpperCase();
@@ -1176,6 +1290,8 @@ function renderCharacterPanel() {
     switch (kind) {
       case "name":
         return `<span class="char-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 12a4 4 0 1 0-4-4 4 4 0 0 0 4 4Z" fill="currentColor" opacity="0.9"/><path d="M6.2 19c.6-2.5 2.8-4.5 5.8-4.5s5.2 2 5.8 4.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/></svg></span>`;
+      case "icon":
+        return `<span class="char-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" fill="currentColor"/></svg></span>`;
       case "hp":
         return `<span class="char-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19.5 6.2 13.7a4 4 0 0 1 0-5.6 4 4 0 0 1 5.6 0l.2.3.2-.3a4 4 0 0 1 5.6 0 4 4 0 0 1 0 5.6L12 19.5Z" fill="currentColor"/></svg></span>`;
       case "ac":
@@ -1198,8 +1314,13 @@ function renderCharacterPanel() {
   const profileFields: FieldConfig[] = [
     {
       icon: "name",
-      label: "Имя",
-      input: renderInput({ id: "char-name", type: "text", value: tok.name ?? "", placeholder: "Имя" }),
+      label: "Name",
+      input: renderInput({ id: "char-name", type: "text", value: tok.name ?? "", placeholder: "Name" }),
+    },
+    {
+      icon: "icon",
+      label: "Icon",
+      input: renderIconSelector({ id: "char-icon-selector", value: anyTok.icon || "", kind: anyTok.kind || "player" }),
     },
   ];
   const combatFields: FieldConfig[] = [
@@ -1218,7 +1339,7 @@ function renderCharacterPanel() {
       label: "Dead",
       input: `<label class="char-checkbox-label">
         <input id="char-dead" type="checkbox" ${anyTok.dead ? 'checked' : ''} />
-        <span class="char-checkbox-text">Мертв</span>
+        <span class="char-checkbox-text">Dead</span>
       </label>`,
     },
   ];
@@ -1239,39 +1360,39 @@ function renderCharacterPanel() {
   }));
   const visionField = renderField({
     icon: "vision",
-    label: "Видимость",
+    label: "Vision",
     input: renderInput({ id: "char-vision-radius", type: "number", value: String(vr), attrs: 'inputmode="numeric" min="0" max="20"' }),
-    hint: "радиус (0-20)",
+    hint: "radius (0-20)",
   });
   panel.innerHTML = `
-    <div class="char-header">Лист персонажа</div>
+    <div class="char-header">Character sheet</div>
     <div class="char-section">
-      <div class="char-section-title">Профиль</div>
+      <div class="char-section-title">Profile</div>
       <div class="char-fields-grid char-fields-grid--two">
         ${profileFields.map(renderField).join("")}
       </div>
     </div>
     <div class="char-section">
-      <div class="char-section-title">Боевые параметры</div>
+      <div class="char-section-title">Combat stats</div>
       <div class="char-fields-grid char-fields-grid--two">
         ${combatFields.map(renderField).join("")}
       </div>
     </div>
     <div class="char-section">
-      <div class="char-section-title">Характеристики</div>
+      <div class="char-section-title">Attributes</div>
       <div class="char-stats-grid">
         ${statsFields.join("")}
       </div>
     </div>
     <div class="char-section">
-      <div class="char-section-title">Видимость</div>
+      <div class="char-section-title">Vision</div>
       <div class="char-fields-grid">
         ${visionField}
       </div>
     </div>
     <div class="char-section char-notes-wrapper">
-      <label for="char-notes">Заметки</label>
-      <textarea id="char-notes" placeholder="Свободный текст...">${escapeHtml(notes)}</textarea>
+      <label for="char-notes">Notes</label>
+      <textarea id="char-notes" placeholder="Free text...">${escapeHtml(notes)}</textarea>
     </div>
   `;
   // Enable/disable based on permissions
@@ -1290,6 +1411,25 @@ function renderCharacterPanel() {
   // Wire updates
   const nameEl = q("#char-name");
   nameEl?.addEventListener("change", () => { if (!editable) return; sendUpdateToken(tok.id, { name: nameEl.value.trim() }); });
+  
+  // Icon selector
+  const iconSelector = q("#char-icon-selector");
+  if (iconSelector) {
+    iconSelector.addEventListener("click", (e) => {
+      if (!editable) return;
+      const target = e.target as HTMLElement;
+      if (target.classList.contains("icon-selector-btn")) {
+        const selectedIcon = target.dataset.icon;
+        if (selectedIcon) {
+          // Update visual selection
+          iconSelector.querySelectorAll(".icon-selector-btn").forEach(btn => btn.classList.remove("selected"));
+          target.classList.add("selected");
+          // Send update to server
+          sendUpdateToken(tok.id, { icon: selectedIcon });
+        }
+      }
+    });
+  }
   const hpEl = q("#char-hp");
   hpEl?.addEventListener("change", () => { if (!editable) return; const v = parseNum(hpEl, 0, 999); if (v != null) sendUpdateToken(tok.id, { hp: v }); });
   const acEl = q("#char-ac");
@@ -1467,7 +1607,7 @@ function drawAssets() {
       // Emoji-like for decorative items
       const emojiFor = (k: string): string => {
         switch (k) {
-          // Природа и растения
+          // Nature and plants
           case "tree": return "🌳";
           case "rock": return "🪨";
           case "bush": return "🌿";
@@ -1477,14 +1617,14 @@ function drawAssets() {
           case "vine": return "🌱";
           case "log": return "🪵";
           
-          // Огонь и освещение
+          // Fire and lighting
           case "fire": return "🔥";
           case "torch": return "🕯️";
           case "candle": return "🕯️";
           case "lantern": return "🏮";
           case "campfire": return "🔥";
           
-          // Оружие
+          // Weapons
           case "sword": return "🗡️";
           case "bow": return "🏹";
           case "axe": return "🪓";
@@ -1494,13 +1634,13 @@ function drawAssets() {
           case "crossbow": return "🏹";
           case "shield": return "🛡️";
           
-          // Доспехи
+          // Armor
           case "helmet": return "⛑️";
           case "armor": return "🛡️";
           case "boots": return "👢";
           case "gloves": return "🧤";
           
-          // Сундуки и контейнеры
+          // Chests and containers
           case "chest": return "📦";
           case "barrel": return "🛢️";
           case "crate": return "📦";
@@ -1508,7 +1648,7 @@ function drawAssets() {
           case "basket": return "🧺";
           case "pot": return "🍯";
           
-          // Кухонные принадлежности
+          // Kitchen utensils
           case "cauldron": return "🍲";
           case "pan": return "🍳";
           case "plate": return "🍽️";
@@ -1518,7 +1658,7 @@ function drawAssets() {
           case "fork": return "🍴";
           case "spoon": return "🥄";
           
-          // Еда и продукты
+          // Food and products
           case "bread": return "🍞";
           case "apple": return "🍎";
           case "meat": return "🥩";
@@ -1530,7 +1670,7 @@ function drawAssets() {
           case "wine": return "🍷";
           case "beer": return "🍺";
           
-          // Одежда
+          // Clothing
           case "hat": return "🎩";
           case "cloak": return "🧥";
           case "shirt": return "👕";
@@ -1539,7 +1679,7 @@ function drawAssets() {
           case "shoes": return "👟";
           case "belt": return "👔";
           
-          // Животные
+          // Animals
           case "cat": return "🐱";
           case "dog": return "🐕";
           case "horse": return "🐴";
@@ -1553,14 +1693,14 @@ function drawAssets() {
           case "bee": return "🐝";
           case "fish_animal": return "🐠";
           
-          // Насекомые
+          // Insects
           case "ant": return "🐜";
           case "fly": return "🪰";
           case "mosquito": return "🦟";
           case "beetle": return "🪲";
           case "dragonfly": return "🦟";
           
-          // Драгоценности и монеты
+          // Gems and coins
           case "coins": return "🪙";
           case "gem": return "💎";
           case "ring": return "💍";
@@ -1568,7 +1708,7 @@ function drawAssets() {
           case "crown": return "👑";
           case "treasure": return "💰";
           
-          // Книги и магия
+          // Books and magic
           case "book": return "📖";
           case "scroll": return "📜";
           case "potion": return "🧪";
@@ -1576,7 +1716,7 @@ function drawAssets() {
           case "wand": return "🪄";
           case "orb": return "🔮";
           
-          // Инструменты
+          // Tools
           case "hammer": return "🔨";
           case "pickaxe": return "⛏️";
           case "shovel": return "🪣";
@@ -1584,19 +1724,19 @@ function drawAssets() {
           case "key": return "🗝️";
           case "lock": return "🔒";
           
-          // Мебель
+          // Furniture
           case "chair": return "🪑";
           case "table": return "🪑";
           case "bed": return "🛏️";
           case "stool": return "🪑";
           case "bench": return "🪑";
           
-          // Дорожки и тропы
+          // Paths and trails
           case "path": return "🛤️";
           case "bridge": return "🌉";
           case "stairs": return "🪜";
           
-          // Разное
+          // Miscellaneous
           case "other": return "✨";
           case "mystery": return "❓";
           case "magic": return "✨";
@@ -1829,7 +1969,7 @@ function connect() {
     shareLink = buildShareLink();
     const hasLink = Boolean(shareLink);
     shareButtonEl.disabled = !hasLink;
-    shareButtonEl.setAttribute("title", hasLink ? "Скопировать ссылку на карту" : "Ссылка недоступна");
+    shareButtonEl.setAttribute("title", hasLink ? "Copy map link" : "Link unavailable");
   };
   const setStatus = (text: string, state: "connecting" | "connected" | "disconnected" | "error") => {
     if (!statusEl) return;
@@ -1917,7 +2057,7 @@ function connect() {
     const link = buildShareLink();
     if (!link) {
       refreshShareButton();
-      hudToast("Ссылка пока недоступна");
+      hudToast("Link not available yet");
       return;
     }
     shareLink = link;
@@ -1950,16 +2090,16 @@ function connect() {
     }
     if (!copied) {
       try {
-        prompt("Скопируйте ссылку на карту:", link);
+        prompt("Copy map link:", link);
         copied = true;
       } catch {
         copied = false;
       }
     }
     if (copied) {
-      hudToast("Ссылка скопирована");
+      hudToast("Link copied");
     } else {
-      hudToast("Не удалось скопировать ссылку");
+      hudToast("Failed to copy link");
     }
   });
 
@@ -2010,7 +2150,7 @@ function connect() {
         preferredPort = port;
         currentPort = port;
         lastConnectedPort = port;
-        setStatus(`WS: проверка соединения (:${port})...`, "connecting");
+        setStatus(`WS: checking connection (:${port})...`, "connecting");
         startHeartbeat(ws, attemptId);
         playerId = msg.playerId;
         myRole = msg.role;
@@ -2275,20 +2415,20 @@ function connect() {
         renderLocationsTree(msg.tree, lastUsedLocationPath);
       } else if (msg.t === "savedOk") {
         // lightweight toast and refresh locations list
-        hudToast(`Сохранено: ${msg.path}`);
+        hudToast(`Saved: ${msg.path}`);
         addRecent(msg.path);
         try { requestLocationsList(); } catch {}
       } else if (msg.t === "roleChanged") {
         myRole = (msg as any).role;
         try { (updateEditorUI as any)(); } catch {}
         try { (updateUserMenu as any)(); } catch {}
-        hudToast(`Роль изменена на: ${myRole === "DM" ? "Администратор" : "Игрок"}`);
+        hudToast(`Role changed to: ${myRole === "DM" ? "Administrator" : "Player"}`);
       } else if (msg.t === "locationRenamed") {
         const newName = (msg as any).newName;
         if (currentLocation) {
           currentLocation.name = newName;
           setMapName(newName);
-          hudToast(`Карта переименована в: ${newName}`);
+          hudToast(`Map renamed to: ${newName}`);
         }
       } else if (msg.t === "undoRedoState") {
         console.log(`[CLIENT] Received undoRedoState:`, (msg as any).undoStack.length, (msg as any).redoStack.length);
@@ -2311,7 +2451,7 @@ function connect() {
         renderCharacterPanel();
       } else if ((msg as any).t === "error") {
         // show error toast for server-side failures
-        try { hudToast(`Ошибка: ${(msg as any).message || "неизвестная ошибка"}`); } catch {}
+        try { hudToast(`Error: ${(msg as any).message || "unknown error"}`); } catch {}
       }
     });
     ws.addEventListener("close", (ev) => {
@@ -2396,7 +2536,7 @@ function connect() {
       }
       try { console.warn(`[WS][client] failed to connect on :${port}`); } catch {}
       if (pendingSocket === ws) pendingSocket = null;
-      setStatus("WS: offline, повтор подключения...", "error");
+      setStatus("WS: offline, reconnecting...", "error");
       try { ws.close(); } catch {}
       if (preferredPort == null) {
         currentPort = port + 1 > endPort ? startPort : (port + 1);
@@ -2634,15 +2774,15 @@ function connect() {
     if (!userRole || !userName || !switchToDmBtn || !switchToPlayerBtn || !userIcon) return;
     
     const isDM = myRole === "DM";
-    userRole.textContent = isDM ? "Мастер" : "Игрок";
+    userRole.textContent = isDM ? "Master" : "Player";
     userRole.className = `user-role ${isDM ? "dm" : ""}`;
-    userName.textContent = "Пользователь"; // Можно добавить имя пользователя позже
+    userName.textContent = "User"; // Can add username later
     
-    // Показываем кнопку переключения на противоположную роль
+    // Show button to switch to opposite role
     switchToDmBtn.style.display = isDM ? "none" : "flex";
     switchToPlayerBtn.style.display = isDM ? "flex" : "none";
     
-    // Обновляем иконку
+    // Update icon
     userIcon.className = `user-icon ${isDM ? "dm" : ""}`;
   }
 
@@ -2670,7 +2810,7 @@ function connect() {
     ev.preventDefault();
     ev.stopPropagation();
     if (socket) {
-      // Отправляем запрос на смену роли на DM
+      // Send request to switch role to DM
       const msg: ClientToServer = { t: "switchRole", role: "DM" };
       socket.send(JSON.stringify(msg));
       saveUserRole("DM");
@@ -2682,7 +2822,7 @@ function connect() {
     ev.preventDefault();
     ev.stopPropagation();
     if (socket) {
-      // Отправляем запрос на смену роли на PLAYER
+      // Send request to switch role to PLAYER
       const msg: ClientToServer = { t: "switchRole", role: "PLAYER" };
       socket.send(JSON.stringify(msg));
       saveUserRole("PLAYER");
@@ -2690,14 +2830,14 @@ function connect() {
     closeUserMenu();
   });
 
-  // Закрываем меню при клике вне его
+  // Close menu when clicking outside
   document.addEventListener("click", (ev) => {
     if (userMenuOpen && userDropdown && !userDropdown.contains(ev.target as Node) && !userIcon?.contains(ev.target as Node)) {
       closeUserMenu();
     }
   });
 
-  // Инициализируем меню пользователя
+  // Initialize user menu
   updateUserMenu();
 
   btnUndo?.addEventListener("click", (ev) => {
@@ -2709,7 +2849,7 @@ function connect() {
       console.log(`[CLIENT] Sending undo message:`, msg);
       socket.send(JSON.stringify(msg));
     } else {
-      hudToast("Только DM может отменять действия");
+      hudToast("Only DM can undo actions");
     }
   });
   btnRedo?.addEventListener("click", (ev) => {
@@ -2721,7 +2861,7 @@ function connect() {
       console.log(`[CLIENT] Sending redo message:`, msg);
       socket.send(JSON.stringify(msg));
     } else {
-      hudToast("Только DM может повторять действия");
+      hudToast("Only DM can redo actions");
     }
   });
 
@@ -2886,16 +3026,16 @@ function connect() {
     if (btnUndo) {
       btnUndo.disabled = !isDM || undoStack.length === 0;
       btnUndo.title = undoStack.length > 0 
-        ? `Отменить: ${undoStack[undoStack.length - 1]?.description || "предыдущее действие"}` 
-        : "Отменить предыдущее действие";
+        ? `Undo: ${undoStack[undoStack.length - 1]?.description || "previous action"}` 
+        : "Undo previous action";
     }
     
     // Update redo button
     if (btnRedo) {
       btnRedo.disabled = !isDM || redoStack.length === 0;
       btnRedo.title = redoStack.length > 0 
-        ? `Повторить: ${redoStack[redoStack.length - 1]?.description || "отмененное действие"}` 
-        : "Повторить действие";
+        ? `Redo: ${redoStack[redoStack.length - 1]?.description || "undone action"}` 
+        : "Redo action";
     }
   }
 
@@ -2982,13 +3122,13 @@ function connect() {
   });
   btnNewMap?.addEventListener("click", () => {
     if (!socket || myRole !== "DM") return;
-    const name = prompt("Название новой карты:", "Новая карта");
+    const name = prompt("New map name:", "New map");
     if (name == null) return;
     const levelIdNew: ID = uid("lvl");
     const locationIdNew: ID = uid("loc");
     const seed = `seed-${Date.now().toString(36)}`;
     const snap: GameSnapshot = {
-      location: { id: locationIdNew, name: name || "Новая карта", levels: [{ id: levelIdNew, seed, spawnPoint: { x: 5, y: 5 }, lights: [] }] },
+      location: { id: locationIdNew, name: name || "New map", levels: [{ id: levelIdNew, seed, spawnPoint: { x: 5, y: 5 }, lights: [] }] },
       tokens: [],
       assets: [],
       floors: [],
@@ -3008,7 +3148,7 @@ function connect() {
 
   btnNewFolder?.addEventListener("click", () => {
     if (!socket || myRole !== "DM") return;
-    const rel = prompt("Введите путь папки (относительно корня):", "new-folder");
+    const rel = prompt("Enter folder path (relative to root):", "new-folder");
     if (rel == null) return;
     const pathClean = rel.replace(/\\+/g, "/").replace(/^\/+|\/+$/g, "");
     if (!pathClean) return;
@@ -3094,7 +3234,7 @@ function connect() {
       const spacer = document.createElement("span"); spacer.style.flex = "1"; row.appendChild(spacer);
       // Actions: create subfolder
       const btnAdd = document.createElement("span");
-      btnAdd.title = "Новая папка внутри";
+      btnAdd.title = "New folder inside";
       btnAdd.textContent = "+";
       btnAdd.style.opacity = "0.85";
       btnAdd.style.marginLeft = "6px";
@@ -3102,7 +3242,7 @@ function connect() {
       btnAdd.onclick = (e) => {
         e.stopPropagation();
         if (!socket || myRole !== "DM") return;
-        const name = prompt("Название новой папки:", "folder");
+        const name = prompt("New folder name:", "folder");
         if (!name) return;
         const base = node.path.endsWith("/") ? node.path.slice(0, -1) : node.path;
         const rel = `${base}/${name}`;
@@ -3112,7 +3252,7 @@ function connect() {
       row.appendChild(btnAdd);
       // Action: rename folder (pencil)
       const btnRename = document.createElement("span");
-      btnRename.title = "Переименовать папку";
+      btnRename.title = "Rename folder";
       btnRename.textContent = "✎";
       btnRename.style.opacity = "0.85";
       btnRename.style.marginLeft = "6px";
@@ -3121,10 +3261,10 @@ function connect() {
         e.stopPropagation();
         if (!socket || myRole !== "DM") return;
         const cur = node.name;
-        const nn = prompt("Новое имя папки:", cur || "folder");
+        const nn = prompt("New folder name:", cur || "folder");
         if (!nn) return;
         const newName = nn.replace(/\s+/g, " ").trim();
-        if (!newName || /[\\/]/.test(newName)) { alert("Недопустимое имя папки"); return; }
+        if (!newName || /[\\/]/.test(newName)) { alert("Invalid folder name"); return; }
         const msg: ClientToServer = { t: "renameFolder", path: node.path, newName };
         socket.send(JSON.stringify(msg));
       };
@@ -3158,7 +3298,7 @@ function connect() {
       const onMove = (e: MouseEvent) => {
         e.stopPropagation();
         if (!socket || myRole !== "DM") return;
-        const dest = prompt("Переместить в папку (путь относительно корня, пусто = корень):", "");
+        const dest = prompt("Move to folder (path relative to root, empty = root):", "");
         if (dest == null) return;
         const toFolder = dest.replace(/\\+/g, "/").replace(/^\/+|\/+$/g, "");
         const msg: ClientToServer = { t: "moveLocation", from: node.path, toFolder };
@@ -3167,12 +3307,12 @@ function connect() {
       const onDelete = (e: MouseEvent) => {
         e.stopPropagation();
         if (!socket || myRole !== "DM") return;
-        if (!confirm(`Удалить локацию ${title}?`)) return;
+        if (!confirm(`Delete location ${title}?`)) return;
         const msg: ClientToServer = { t: "deleteLocation", path: node.path };
         socket.send(JSON.stringify(msg));
       };
-      row.appendChild(mkAction("↪", "Переместить", onMove));
-      row.appendChild(mkAction("🗑", "Удалить", onDelete));
+      row.appendChild(mkAction("↪", "Move", onMove));
+      row.appendChild(mkAction("🗑", "Delete", onDelete));
       return row;
     }
   }
@@ -3201,25 +3341,25 @@ function initializeBottomAssetMenu() {
   // Asset data organized by categories
   const assetCategories = {
     nature: [
-      { id: 'tree', emoji: '🌳', name: 'Дерево' },
-      { id: 'rock', emoji: '🪨', name: 'Камень' },
-      { id: 'bush', emoji: '🌿', name: 'Куст' },
-      { id: 'flower', emoji: '🌸', name: 'Цветок' },
-      { id: 'mushroom', emoji: '🍄', name: 'Гриб' },
-      { id: 'cactus', emoji: '🌵', name: 'Кактус' },
-      { id: 'vine', emoji: '🌱', name: 'Лоза' },
-      { id: 'log', emoji: '🪵', name: 'Бревно' }
+      { id: 'tree', emoji: '🌳', name: 'Tree' },
+      { id: 'rock', emoji: '🪨', name: 'Rock' },
+      { id: 'bush', emoji: '🌿', name: 'Bush' },
+      { id: 'flower', emoji: '🌸', name: 'Flower' },
+      { id: 'mushroom', emoji: '🍄', name: 'Mushroom' },
+      { id: 'cactus', emoji: '🌵', name: 'Cactus' },
+      { id: 'vine', emoji: '🌱', name: 'Vine' },
+      { id: 'log', emoji: '🪵', name: 'Log' }
     ],
     fire: [
-      { id: 'fire', emoji: '🔥', name: 'Огонь' },
-      { id: 'torch', emoji: '🕯️', name: 'Факел' },
+      { id: 'fire', emoji: '🔥', name: 'Fire' },
+      { id: 'torch', emoji: '🕯️', name: 'Torch' },
       { id: 'candle', emoji: '🕯️', name: 'Свеча' },
       { id: 'lantern', emoji: '🏮', name: 'Фонарь' },
       { id: 'campfire', emoji: '🔥', name: 'Костер' }
     ],
     weapons: [
-      { id: 'sword', emoji: '🗡️', name: 'Меч' },
-      { id: 'bow', emoji: '🏹', name: 'Лук' },
+      { id: 'sword', emoji: '🗡️', name: 'Sword' },
+      { id: 'bow', emoji: '🏹', name: 'Bow' },
       { id: 'axe', emoji: '🪓', name: 'Топор' },
       { id: 'spear', emoji: '🔱', name: 'Копье' },
       { id: 'mace', emoji: '⚔️', name: 'Булава' },
@@ -3234,7 +3374,7 @@ function initializeBottomAssetMenu() {
       { id: 'gloves', emoji: '🧤', name: 'Перчатки' }
     ],
     containers: [
-      { id: 'chest', emoji: '📦', name: 'Сундук' },
+      { id: 'chest', emoji: '📦', name: 'Chest' },
       { id: 'barrel', emoji: '🛢️', name: 'Бочка' },
       { id: 'crate', emoji: '📦', name: 'Ящик' },
       { id: 'bag', emoji: '🎒', name: 'Мешок' },
@@ -3252,8 +3392,8 @@ function initializeBottomAssetMenu() {
       { id: 'spoon', emoji: '🥄', name: 'Ложка' }
     ],
     food: [
-      { id: 'bread', emoji: '🍞', name: 'Хлеб' },
-      { id: 'apple', emoji: '🍎', name: 'Яблоко' },
+      { id: 'bread', emoji: '🍞', name: 'Bread' },
+      { id: 'apple', emoji: '🍎', name: 'Apple' },
       { id: 'meat', emoji: '🥩', name: 'Мясо' },
       { id: 'fish', emoji: '🐟', name: 'Рыба' },
       { id: 'cheese', emoji: '🧀', name: 'Сыр' },

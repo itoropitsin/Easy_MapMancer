@@ -1,199 +1,233 @@
 # DnD Map Maker
 
-Веб-приложение для создания и управления картами для настольных ролевых игр с поддержкой многопользовательской игры в реальном времени.
+A web application for creating and managing maps for tabletop role-playing games with real-time multiplayer support.
 
-## Стек
-- **Клиент**: TypeScript + PixiJS v8 + Vite
-- **Сервер**: Node.js + ws (WebSocket)
-- **Общие типы/протокол**: пакет `@dnd/shared`
-- **Сборка**: npm workspaces + TypeScript
+## Tech Stack
+- **Client**: TypeScript + PixiJS v8 + Vite
+- **Server**: Node.js + ws (WebSocket)
+- **Shared Types/Protocol**: `@dnd/shared` package
+- **Build System**: npm workspaces + TypeScript
 
-**Требования**: Node.js >= 18, npm >= 9
+**Requirements**: Node.js >= 18, npm >= 9
 
-## Основные возможности
+## Key Features
 
-### 🎮 Многопользовательская игра
-- **Реалтайм синхронизация**: все изменения карты, токенов и ассетов синхронизируются между всеми игроками
-- **Роли**: DM (Мастер) и Player (Игрок) с разными правами доступа
-- **WebSocket соединение**: стабильная связь с автоматическим переподключением
+### 🎮 Multiplayer Gaming
+- **Real-time synchronization**: All map changes, tokens, and assets sync between all players
+- **Role-based access**: DM (Dungeon Master) and Player roles with different permissions
+- **WebSocket connection**: Stable connection with automatic reconnection
+- **Role switching**: Players can switch between DM and Player roles
 
-### 🗺️ Система карт и локаций
-- **Управление локациями**: создание, сохранение, загрузка карт в формате JSON
-- **Дерево папок**: организация карт в папки с возможностью переименования и перемещения
-- **Автосохранение**: автоматическое сохранение изменений
-- **Недавние карты**: быстрый доступ к последним использованным картам
+### 🗺️ Map and Location Management
+- **Location management**: Create, save, and load maps in JSON format
+- **Folder organization**: Organize maps in folders with rename and move capabilities
+- **Auto-save**: Automatic saving of changes
+- **Recent maps**: Quick access to recently used maps
+- **Location tree**: Hierarchical file browser for map organization
 
-### 👥 Управление персонажами
-- **Токены**: создание и управление токенами игроков и NPC
-- **Характеристики**: редактирование имени, HP, AC, статов (STR, DEX, CON, INT, WIS, CHA)
-- **Визуальные настройки**: цвет, радиус и угол зрения
-- **Заметки**: текстовые заметки для каждого токена
-- **Перемещение**: перетаскивание токенов по сетке с привязкой
-- **Z-индекс**: управление слоями отображения токенов
+### 👥 Character Management
+- **Tokens**: Create and manage player and NPC tokens
+- **Character sheets**: Edit name, HP, AC, stats (STR, DEX, CON, INT, WIS, CHA)
+- **Visual customization**: Color, vision radius and angle, emoji icons
+- **Notes**: Text notes for each token (up to 2000 characters)
+- **Movement**: Drag tokens on grid with snap-to-grid
+- **Z-index management**: Control rendering layer order for tokens
+- **Hidden tokens**: DM-only visibility toggle
+- **Death state**: Mark characters as dead/alive
+- **Vision system**: Automatic fog of war reveal based on vision radius
 
-### 🎨 Редактор карт
-- **Кисти**: инструменты размером 1x1, 2x2, 3x3, 4x4 клетки
-- **Покраска пола**: 5 типов покрытий (камень, дерево, вода, песок, трава)
-- **Ассеты**: размещение объектов (деревья, камни, кусты, стены, двери, окна, сундуки, оружие)
-- **Ластики**: удаление токенов, ассетов и покрытий пола
-- **Процедурная генерация**: автоматическая генерация стен и пола на основе seed
+### 🎨 Map Editor
+- **Brush tools**: 1x1, 2x2, 3x3, 4x4 cell brushes
+- **Floor painting**: 13 types of floor coverings:
+  - Basic: Stone, Wood, Water, Sand, Grass
+  - Paths: Path, Bridge
+  - Coverings: Carpet, Marble
+  - Soil: Dirt, Mud
+  - Winter: Snow, Ice
+- **Asset placement**: 100+ objects across 15 categories:
+  - Nature: Trees, rocks, bushes, flowers, mushrooms, cactus, vines, logs
+  - Fire: Fire, torch, candle, lantern, campfire
+  - Weapons: Sword, bow, axe, spear, mace, dagger, crossbow, shield
+  - Armor: Helmet, armor, boots, gloves
+  - Containers: Chest, barrel, crate, bag, sack, basket, pouch
+  - Kitchen: Pot, pan, plate, bowl, cup, mug, bottle, jar
+  - Food: Apple, bread, cheese, meat, fish, cake, cookie, pie
+  - Clothing: Hat, cape, boots, gloves, belt, necklace, ring
+  - Animals: Cat, dog, horse, cow, pig, sheep, chicken, duck
+  - Insects: Bee, butterfly, spider, ant, fly, mosquito, beetle
+  - Treasure: Gold, silver, gems, coins, crown, treasure chest
+  - Magic: Wand, staff, scroll, potion, crystal, orb
+  - Tools: Hammer, pickaxe, shovel, rope, key, lock
+  - Furniture: Chair, table, bed, stool, bench
+  - Buildings: Wall, window, door
+- **Erasers**: Remove tokens, assets, and floor coverings
+- **Interactive objects**: Clickable doors that can be opened/closed
+- **Procedural generation**: Automatic wall and floor generation based on seed
 
-### 🌫️ Туман войны
-- **Автоматическое открытие**: по радиусу зрения для токенов игроков
-- **Ручное управление**: DM может открывать/скрывать области вручную
-- **Line of Sight**: учет препятствий (стены, закрытые двери) для расчета видимости
-- **Разные роли**: NPC не открывают туман автоматически
+### 🌫️ Fog of War
+- **Automatic reveal**: Based on vision radius for player tokens
+- **Manual control**: DM can reveal/hide areas manually
+- **Line of Sight**: Considers obstacles (walls, closed doors) for visibility calculation
+- **Role differences**: NPCs don't automatically reveal fog
+- **Mode switching**: Toggle between automatic and manual fog modes
 
-### 🏗️ Интерактивные объекты
-- **Двери**: кликабельные двери, которые можно открывать/закрывать
-- **Стены**: блокируют движение и линию видимости
-- **Окна**: декоративные элементы
-- **Сундуки и предметы**: интерактивные объекты для исследования
+### 🏗️ Interactive Objects
+- **Doors**: Clickable doors that can be opened/closed by any player
+- **Walls**: Block movement and line of sight
+- **Windows**: Decorative elements
+- **Chests and items**: Interactive objects for exploration
 
-### 🎯 Интерфейс и навигация
-- **Панорамирование**: перетаскивание карты мышью
-- **Масштабирование**: зум колесом мыши с фокусом под курсором
-- **Мини-карта**: обзор всей карты в углу экрана
-- **Контекстные меню**: правый клик для быстрых действий
-- **Горячие клавиши**: быстрый доступ к инструментам
+### 🎯 Interface and Navigation
+- **Panning**: Drag map with mouse
+- **Zooming**: Mouse wheel zoom with focus under cursor
+- **Mini-map**: Overview of entire map in corner
+- **Context menus**: Right-click for quick actions
+- **Hotkeys**: Quick access to tools
+- **Responsive design**: Support for different screen sizes
 
-### 🔧 Дополнительные функции
-- **Отмена/Повтор**: система undo/redo для действий
-- **Экспорт/Импорт**: сохранение и загрузка карт
-- **Поделиться**: генерация ссылок для подключения других игроков
-- **Адаптивный интерфейс**: поддержка разных размеров экрана
+### 🔧 Additional Features
+- **Undo/Redo**: Complete undo/redo system for all actions (50 action history)
+- **Export/Import**: Save and load maps
+- **Share**: Generate links for connecting other players
+- **Character icons**: 50+ emoji icons for players and NPCs
+- **Asset search**: Search and filter assets by category
+- **Layer management**: Z-index controls for proper rendering order
+- **Hidden objects**: DM-only visibility for tokens and assets
 
-## Структура репозитория
+## Repository Structure
 ```
 .
 ├─ packages/
-│  ├─ client/           # Vite + PixiJS клиент
+│  ├─ client/           # Vite + PixiJS client
 │  │  ├─ index.html
 │  │  └─ src/
-│  │     └─ main.ts    # подключение к WS, рендер сетки и токенов
-│  ├─ server/           # Node + ws сервер-авторитет
+│  │     └─ main.ts    # WebSocket connection, grid rendering, tokens
+│  ├─ server/           # Node + ws authoritative server
 │  │  └─ src/
-│  │     └─ index.ts   # WS /ws, события, snapshot, базовые права
-│  └─ shared/           # Общие типы и протокол сообщений
+│  │     └─ index.ts   # WebSocket /ws, events, snapshot, basic permissions
+│  └─ shared/           # Shared types and message protocols
 │     └─ src/
 │        ├─ types.ts
 │        └─ protocol.ts
-├─ package.json          # npm workspaces, общие скрипты
-├─ tsconfig.base.json    # базовые TS-настройки и алиасы
+├─ package.json          # npm workspaces, shared scripts
+├─ tsconfig.base.json    # base TS settings and aliases
 └─ .gitignore
 ```
 
-## Быстрый старт
+## Quick Start
 
-### Установка и запуск
-1. **Установка зависимостей**:
+### Installation and Setup
+1. **Install dependencies**:
 ```bash
 npm install
 ```
 
-2. **Запуск в режиме разработки**:
+2. **Run in development mode**:
 ```bash
 npm run dev
 ```
 
-3. **Открытие приложения**:
-- **DM (Мастер)**: http://localhost:5173/?inv=dm-local
-- **Player (Игрок)**: http://localhost:5173/?inv=pl-local
+3. **Open the application**:
+- **DM (Dungeon Master)**: http://localhost:5173/?inv=dm-local
+- **Player**: http://localhost:5173/?inv=pl-local
 
-### Управление
-- **Перемещение токенов**: перетаскивание мышью (привязка к сетке)
-- **Панорамирование**: перетаскивание пустого места левой кнопкой мыши
-- **Масштабирование**: колесо мыши (зум с фокусом под курсором)
-- **Интерактивные объекты**: клик по дверям для открытия/закрытия
-- **Инструменты**: выбор в левой панели инструментов
-- **Управление картами**: кнопка "Карты" в верхнем левом углу
+### Controls
+- **Move tokens**: Drag with mouse (snap to grid)
+- **Pan map**: Drag empty space with left mouse button
+- **Zoom**: Mouse wheel (zoom with focus under cursor)
+- **Interactive objects**: Click doors to open/close
+- **Tools**: Select in left tool panel
+- **Map management**: "Maps" button in top-left corner
 
-### Подключение к серверу
+### Server Connection
 - **WebSocket**: ws://localhost:8080/ws
-- **HTTP проверка**: http://localhost:8080/
+- **HTTP check**: http://localhost:8080/
 
-## Доступные команды
+## Available Commands
 
-### Разработка
-- `npm run dev` — запуск сервера и клиента одновременно
-- `npm run server:dev` — только сервер в режиме watch
-- `npm run client:dev` — только клиент (Vite dev server)
+### Development
+- `npm run dev` — Run server and client simultaneously
+- `npm run server:dev` — Server only in watch mode
+- `npm run client:dev` — Client only (Vite dev server)
 
-### Сборка и продакшн
-- `npm run build` — сборка всех пакетов (shared → server → client)
-- `npm start` — запуск продакшн сборок (сервер + клиент preview)
-- `npm run server:start` — только сервер из сборки
-- `npm run client:preview` — предпросмотр собранного клиента
+### Build and Production
+- `npm run build` — Build all packages (shared → server → client)
+- `npm start` — Run production builds (server + client preview)
+- `npm run server:start` — Server only from build
+- `npm run client:preview` — Preview built client
 
-### Форматирование
-- `npm run format` — форматирование кода с Prettier
+### Formatting
+- `npm run format` — Format code with Prettier
 
-## Продакшн развертывание
+## Production Deployment
 
-### Сборка
+### Build
 ```bash
 npm run build
 ```
 
-### Запуск
+### Run
 ```bash
 npm start
 ```
 
-**Доступные адреса:**
-- **Сервер**: http://localhost:8080 (WebSocket: ws://localhost:8080/ws)
-- **Клиент**: http://localhost:5173
+**Available URLs:**
+- **Server**: http://localhost:8080 (WebSocket: ws://localhost:8080/ws)
+- **Client**: http://localhost:5173
 - **DM**: http://localhost:5173/?inv=dm-local
 - **Player**: http://localhost:5173/?inv=pl-local
 
-## Техническая информация
+## Technical Information
 
-### WebSocket протокол
+### WebSocket Protocol
 **Client → Server:**
-- `{ t: "join", name?, invite? }` — подключение к игре
-- `{ t: "moveToken", tokenId, pos:{x,y}, levelId }` — перемещение токена
-- `{ t: "spawnToken", kind, levelId?, pos?, owner? }` — создание токена
-- `{ t: "updateToken", tokenId, patch }` — обновление характеристик
-- `{ t: "placeAsset", levelId, pos, kind, rot?, scale?, tint? }` — размещение ассета
-- `{ t: "paintFloor", levelId, pos, kind }` — покраска пола
-- `{ t: "revealFog", levelId, cells }` — открытие тумана войны
-- `{ t: "saveLocation", path }` — сохранение локации
-- `{ t: "loadLocation", path }` — загрузка локации
+- `{ t: "join", name?, invite?, preferredRole? }` — Connect to game
+- `{ t: "moveToken", tokenId, pos:{x,y}, levelId }` — Move token
+- `{ t: "spawnToken", kind, levelId?, pos?, owner? }` — Create token
+- `{ t: "updateToken", tokenId, patch }` — Update token stats
+- `{ t: "placeAsset", levelId, pos, kind, rot?, scale?, tint? }` — Place asset
+- `{ t: "paintFloor", levelId, pos, kind }` — Paint floor
+- `{ t: "revealFog", levelId, cells }` — Reveal fog of war
+- `{ t: "obscureFog", levelId, cells }` — Hide with fog of war
+- `{ t: "saveLocation", path }` — Save location
+- `{ t: "loadLocation", path }` — Load location
+- `{ t: "undo" }` — Undo last action
+- `{ t: "redo" }` — Redo last undone action
 
 **Server → Client:**
-- `{ t: "welcome", playerId, role, snapshot }` — приветствие с начальным состоянием
-- `{ t: "statePatch", events: [...] }` — обновления состояния
-- `{ t: "locationsTree", tree, lastUsedPath? }` — дерево локаций
-- `{ t: "error", message }` — ошибка
+- `{ t: "welcome", playerId, role, snapshot }` — Welcome with initial state
+- `{ t: "statePatch", events: [...] }` — State updates
+- `{ t: "locationsTree", tree, lastUsedPath? }` — Location tree
+- `{ t: "error", message }` — Error message
+- `{ t: "undoRedoState", undoStack, redoStack }` — Undo/redo state
 
-### Архитектура
-- **Монорепозиторий** с npm workspaces
-- **Shared типы** для синхронизации между клиентом и сервером
-- **Авторитетный сервер** для валидации всех действий
-- **Event-driven** архитектура для синхронизации состояния
+### Architecture
+- **Monorepo** with npm workspaces
+- **Shared types** for client-server synchronization
+- **Authoritative server** for validating all actions
+- **Event-driven** architecture for state synchronization
 
-## Конфигурация
+## Configuration
 
-### Переменные окружения
-- `PORT` — порт HTTP/WS сервера (по умолчанию 8080)
-- `LOCATIONS_DIR` — директория для сохранения карт (по умолчанию `packages/server/data/locations`)
-- `MAX_PORT` — максимальный порт для автоматического поиска свободного (по умолчанию PORT + 20)
+### Environment Variables
+- `PORT` — HTTP/WS server port (default: 8080)
+- `LOCATIONS_DIR` — Directory for saving maps (default: `packages/server/data/locations`)
+- `MAX_PORT` — Maximum port for automatic free port search (default: PORT + 20)
 
-### Примеры использования
+### Usage Examples
 ```bash
-# Запуск на порту 9090
+# Run on port 9090
 PORT=9090 npm start
 
-# Использование другой директории для карт
+# Use different directory for maps
 LOCATIONS_DIR=/path/to/maps npm start
 ```
 
-### Подключение к другому серверу
-Клиент может подключаться к серверу на другом порту:
+### Connecting to Different Server
+Client can connect to server on different port:
 ```
 http://localhost:5173/?inv=dm-local&port=9090
 ```
 
-## Лицензия
+## License
 MIT
-

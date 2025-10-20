@@ -54,6 +54,7 @@ export interface Token {
     zIndex?: number;
     hidden?: boolean;
     dead?: boolean;
+    icon?: string;
 }
 export interface Asset {
     id: ID;
