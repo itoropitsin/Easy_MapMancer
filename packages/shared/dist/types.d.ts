@@ -51,6 +51,7 @@ export interface Token {
     };
     notes?: string;
     zIndex?: number;
+    hidden?: boolean;
 }
 export interface Asset {
     id: ID;
@@ -62,6 +63,7 @@ export interface Asset {
     tint?: number;
     open?: boolean;
     zIndex?: number;
+    hidden?: boolean;
 }
 export type FloorKind = "stone" | "wood" | "water" | "sand" | "grass";
 export type Event = {
@@ -88,6 +90,9 @@ export type Event = {
     cells: Vec2[];
 } | {
     type: "assetPlaced";
+    asset: Asset;
+} | {
+    type: "assetUpdated";
     asset: Asset;
 } | {
     type: "assetRemoved";

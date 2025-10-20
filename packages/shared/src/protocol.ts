@@ -11,6 +11,7 @@ export type ClientToServer =
   | { t: "revealFog"; levelId: ID; cells: Vec2[] }
   | { t: "obscureFog"; levelId: ID; cells: Vec2[] }
   | { t: "placeAsset"; levelId: ID; pos: Vec2; kind: string; rot?: number; scale?: number; tint?: number }
+  | { t: "moveAsset"; assetId: ID; pos: Vec2; levelId: ID }
   | { t: "removeAssetAt"; levelId: ID; pos: Vec2 }
   | { t: "toggleDoor"; assetId: ID }
   | { t: "paintFloor"; levelId: ID; pos: Vec2; kind: FloorKind | null }
@@ -28,6 +29,8 @@ export type ClientToServer =
   | { t: "updateToken"; tokenId: ID; patch: Partial<Token> }
   | { t: "reorderToken"; tokenId: ID; direction: "top" | "up" | "down" | "bottom" }
   | { t: "reorderAsset"; assetId: ID; direction: "top" | "up" | "down" | "bottom" }
+  | { t: "toggleTokenHidden"; tokenId: ID }
+  | { t: "toggleAssetHidden"; assetId: ID }
   | { t: "switchRole"; role: Role };
 
 export type ServerToClient =

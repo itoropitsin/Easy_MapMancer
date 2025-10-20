@@ -832,6 +832,36 @@ function showContextMenu(x: number, y: number, target: { type: "token"; id: ID }
     }
   });
   
+  // Add separator
+  const separator = document.createElement("div");
+  separator.style.cssText = `
+    height: 1px;
+    background: #5f6368;
+    margin: 4px 0;
+  `;
+  menu.appendChild(separator);
+  
+  // Add hidden toggle option (only for DM)
+  if (myRole === "DM") {
+    const isHidden = contextMenuTarget.type === "token" 
+      ? (tokens.get(contextMenuTarget.id) as any)?.hidden 
+      : (assets.get(contextMenuTarget.id) as any)?.hidden;
+    
+    addItem(`${isHidden ? "👁️" : "🙈"} ${isHidden ? "Показать" : "Скрыть"}`, () => {
+      if (!socket || !contextMenuTarget) return;
+      if (contextMenuTarget.type === "token") {
+        const msg: ClientToServer = { t: "toggleTokenHidden", tokenId: contextMenuTarget.id };
+        console.log(`[CLIENT] Sending toggleTokenHidden:`, msg);
+        socket.send(JSON.stringify(msg));
+      } else {
+        const msg: ClientToServer = { t: "toggleAssetHidden", assetId: contextMenuTarget.id };
+        console.log(`[CLIENT] Sending toggleAssetHidden:`, msg);
+        console.log(`[CLIENT] Available assets:`, Array.from(assets.keys()).slice(0, 10));
+        socket.send(JSON.stringify(msg));
+      }
+    });
+  }
+  
   // Position menu
   menu.style.left = `${x}px`;
   menu.style.top = `${y}px`;
@@ -881,6 +911,11 @@ function drawTokens() {
   console.log(`Sorted tokens count: ${sortedTokens.length}`);
   
   for (const tok of sortedTokens) {
+    // Check if token is hidden and user is not DM
+    if ((tok as any).hidden && myRole !== "DM") {
+      continue; // Hide token from non-DM users
+    }
+    
     if (myRole !== "DM" && revealed && tok.id !== myTokenId && !revealed.has(`${tok.pos.x},${tok.pos.y}`)) {
       // hide non-owned tokens in unrevealed cells for player
       continue;
@@ -922,6 +957,9 @@ function drawTokens() {
     const ring = new Graphics();
     const ringColor = isMine ? 0x8ab4f8 : 0x9aa0a6;
     ring.circle(0, 0, CELL * 0.46).stroke({ color: ringColor, width: 2, alpha: 0.8 });
+    // Check if token is hidden for DM
+    const isHidden = (tok as any).hidden && myRole === "DM";
+    
     // Compose
     // @ts-ignore
     node.addChild(ring);
@@ -931,14 +969,35 @@ function drawTokens() {
       // @ts-ignore
       node.addChild(label);
     }
+    
+    // Add eye icon for hidden tokens (only visible to DM)
+    if (isHidden) {
+      const eyeIcon = new Text({
+        text: "👁️",
+        style: {
+          fontFamily: "Apple Color Emoji, Segoe UI Emoji, Noto Color Emoji, Inter, system-ui",
+          fontSize: Math.floor(CELL * 0.4),
+          stroke: 0x202124,
+          strokeThickness: 1,
+        }
+      } as any);
+      (eyeIcon as any).anchor?.set?.(0.5);
+      eyeIcon.position.set(CELL * 0.3, -CELL * 0.3);
+      // @ts-ignore
+      node.addChild(eyeIcon);
+      
+      // Make token semi-transparent but keep eye icon fully visible
+      node.alpha = 0.5;
+      eyeIcon.alpha = 1.0;
+    }
     node.position.set(tok.pos.x * CELL + CELL / 2, tok.pos.y * CELL + CELL / 2);
     // Mark as token for cleanup
     (node as any).userData = { type: "token" };
     // Enlarge hit area to make grabbing easier
     try { (node as any).hitArea = new Circle(0, 0, CELL * 0.55); } catch {}
     
-    // Set zIndex for proper layering (default offset 100 to be above most assets)
-    node.zIndex = 100 + ((tok as any).zIndex ?? 0);
+    // Set zIndex for proper layering (tokens use range 0-99)
+    node.zIndex = (tok as any).zIndex ?? 0;
     
     // Decide which layer to use
     const shouldBeAboveFog = myRole === "PLAYER" && tok.owner === playerId;
@@ -1219,14 +1278,29 @@ function drawAssets() {
   const revealed = getRevealed(levelId);
   
   // Sort assets by zIndex (lower first = drawn first = behind)
-  const sortedAssets = Array.from(assets.values())
+  const allAssets = Array.from(assets.values());
+  console.log(`[CLIENT] drawAssets: total assets=${allAssets.length}, current levelId=${levelId}`);
+  console.log(`[CLIENT] drawAssets: assets by level:`, allAssets.reduce((acc, a) => {
+    acc[a.levelId] = (acc[a.levelId] || 0) + 1;
+    return acc;
+  }, {} as Record<string, number>));
+  
+  const sortedAssets = allAssets
     .filter(a => a.levelId === levelId)
-    .filter(a => myRole === "DM" || revealed.has(`${a.pos.x},${a.pos.y}`))
+    .filter(a => {
+      // Check if asset is hidden and user is not DM
+      if ((a as any).hidden && myRole !== "DM") {
+        return false; // Hide asset from non-DM users
+      }
+      return myRole === "DM" || revealed.has(`${a.pos.x},${a.pos.y}`);
+    })
     .sort((a, b) => {
       const zA = (a as any).zIndex ?? 0;
       const zB = (b as any).zIndex ?? 0;
       return zA - zB;
     });
+  
+  console.log(`[CLIENT] drawAssets: filtered assets for level ${levelId}: ${sortedAssets.length}`);
   
   // Build occupancy map for structural connections (walls/windows/doors)
   const byKey = new Map<string, { kind: string; open?: boolean }>();
@@ -1295,6 +1369,27 @@ function drawAssets() {
       if (typeof a.scale === "number") node.scale.set(a.scale);
       if (typeof a.rot === "number") node.rotation = a.rot;
       if (typeof a.tint === "number") (node as any).tint = a.tint;
+      
+      // Add eye icon for hidden assets (only visible to DM)
+      const isHidden = (a as any).hidden && myRole === "DM";
+      if (isHidden) {
+        const eyeIcon = new Text({
+          text: "👁️",
+          style: {
+            fontFamily: "Apple Color Emoji, Segoe UI Emoji, Noto Color Emoji, Inter, system-ui",
+            fontSize: Math.floor(CELL * 0.3),
+            stroke: 0x202124,
+            strokeThickness: 1,
+          }
+        } as any);
+        (eyeIcon as any).anchor?.set?.(0.5);
+        eyeIcon.position.set(CELL * 0.25, -CELL * 0.25);
+        node.addChild(eyeIcon as any);
+        
+        // Make asset semi-transparent but keep eye icon fully visible
+        node.alpha = 0.5;
+        eyeIcon.alpha = 1.0;
+      }
     } else {
       // Emoji-like for decorative items
       const emojiFor = (k: string): string => {
@@ -1326,6 +1421,27 @@ function drawAssets() {
       if (typeof a.scale === "number") node.scale.set(a.scale);
       if (typeof a.rot === "number") node.rotation = a.rot;
       if (typeof a.tint === "number") (label as any).tint = a.tint;
+      
+      // Add eye icon for hidden assets (only visible to DM)
+      const isHidden = (a as any).hidden && myRole === "DM";
+      if (isHidden) {
+        const eyeIcon = new Text({
+          text: "👁️",
+          style: {
+            fontFamily: "Apple Color Emoji, Segoe UI Emoji, Noto Color Emoji, Inter, system-ui",
+            fontSize: Math.floor(CELL * 0.3),
+            stroke: 0x202124,
+            strokeThickness: 1,
+          }
+        } as any);
+        (eyeIcon as any).anchor?.set?.(0.5);
+        eyeIcon.position.set(CELL * 0.25, -CELL * 0.25);
+        node.addChild(eyeIcon as any);
+        
+        // Make asset semi-transparent but keep eye icon fully visible
+        node.alpha = 0.5;
+        eyeIcon.alpha = 1.0;
+      }
     }
     // Enable dragging assets in cursor mode for DM
     if (myRole === "DM") {
@@ -1376,7 +1492,7 @@ function drawAssets() {
         showContextMenu(e.global.x, e.global.y, { type: "asset", id: a.id });
       });
     }
-    // Add to gameObjectsLayer with zIndex (default 0, tokens default to 100, so assets are below by default)
+    // Add to gameObjectsLayer with zIndex (both assets and tokens use same zIndex range)
     node.zIndex = (a as any).zIndex ?? 0;
     gameObjectsLayer.addChild(node);
     console.log(`Asset ${a.kind} at (${a.pos.x}, ${a.pos.y}) with zIndex=${node.zIndex}`);
@@ -1398,17 +1514,15 @@ function onAssetDragMove(e: any) {
 }
 function onAssetDragEnd(e: any) {
   if (!draggingAsset) return;
-  const { sprite, from, kind } = draggingAsset;
+  const { sprite, from, assetId } = draggingAsset;
   const snapped = snapToGrid(sprite.x, sprite.y);
   // revert if invalid
   if (!levelId || !socket) {
     sprite.position.set(from.x * CELL + CELL / 2, from.y * CELL + CELL / 2);
   } else {
-    // simulate move: remove at old, place at new
-    const msg1: ClientToServer = { t: "removeAssetAt", levelId, pos: from };
-    const msg2: ClientToServer = { t: "placeAsset", levelId, pos: snapped, kind };
-    socket.send(JSON.stringify(msg1));
-    socket.send(JSON.stringify(msg2));
+    // use moveAsset to preserve ID
+    const msg: ClientToServer = { t: "moveAsset", assetId, levelId, pos: snapped };
+    socket.send(JSON.stringify(msg));
   }
   draggingAsset = null;
   app.stage.off("pointermove", onAssetDragMove);
@@ -1819,6 +1933,10 @@ function connect() {
             const a = (e as any).asset as Asset;
             assets.set(a.id, a);
             drawAssets(); // Redraw to reflect zIndex changes
+          } else if ((e as any).type === "assetUpdated") {
+            const a = (e as any).asset as Asset;
+            assets.set(a.id, a);
+            drawAssets(); // Redraw to reflect changes
           } else if ((e as any).type === "assetRemoved") {
             const id = (e as any).assetId as ID;
             assets.delete(id);
@@ -2183,10 +2301,14 @@ function connect() {
   function loadUserRole(): "DM" | "PLAYER" {
     try {
       const saved = localStorage.getItem("dnd-user-role");
-      return (saved === "DM" || saved === "PLAYER") ? saved : "PLAYER";
+      console.log(`[CLIENT] loadUserRole: saved=${saved}`);
+      // If no saved role or it's PLAYER, default to DM
+      const role = (saved === "DM") ? "DM" : "DM";
+      console.log(`[CLIENT] loadUserRole: returning=${role}`);
+      return role;
     } catch (e) {
       console.warn("Failed to load user role:", e);
-      return "PLAYER";
+      return "DM";
     }
   }
 
@@ -2194,7 +2316,7 @@ function connect() {
     if (!userRole || !userName || !switchToDmBtn || !switchToPlayerBtn || !userIcon) return;
     
     const isDM = myRole === "DM";
-    userRole.textContent = isDM ? "Администратор" : "Игрок";
+    userRole.textContent = isDM ? "Мастер" : "Игрок";
     userRole.className = `user-role ${isDM ? "dm" : ""}`;
     userName.textContent = "Пользователь"; // Можно добавить имя пользователя позже
     

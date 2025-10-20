@@ -38,6 +38,11 @@ export type ClientToServer = {
     scale?: number;
     tint?: number;
 } | {
+    t: "moveAsset";
+    assetId: ID;
+    pos: Vec2;
+    levelId: ID;
+} | {
     t: "removeAssetAt";
     levelId: ID;
     pos: Vec2;
@@ -91,6 +96,12 @@ export type ClientToServer = {
     t: "reorderAsset";
     assetId: ID;
     direction: "top" | "up" | "down" | "bottom";
+} | {
+    t: "toggleTokenHidden";
+    tokenId: ID;
+} | {
+    t: "toggleAssetHidden";
+    assetId: ID;
 } | {
     t: "switchRole";
     role: Role;

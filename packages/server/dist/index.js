@@ -333,11 +333,10 @@ async function buildLocationsTree() {
     return walk("");
 }
 function roleFromInvite(inv) {
-    if (!inv)
-        return "PLAYER";
-    if (inv.startsWith("dm-"))
-        return "DM";
-    return "PLAYER";
+    console.log(`[SERVER] roleFromInvite: inv=${inv}`);
+    // Always return DM as default, ignore invite codes for now
+    console.log(`[SERVER] roleFromInvite: returning DM (default)`);
+    return "DM";
 }
 function send(ws, msg) {
     ws.send(JSON.stringify(msg));
@@ -643,7 +642,7 @@ function onMessage(client, data) {
                     const maxTokenZ = allTokensOnLevel.length > 0
                         ? Math.max(...allTokensOnLevel.map(t => t.zIndex ?? 0))
                         : 0;
-                    // Assets have base 0, tokens have base 100 on client, so we add to max found
+                    // Both assets and tokens use same zIndex range, so we add to max found
                     newZIndex = Math.max(maxAssetZ, maxTokenZ) + 1;
                     break;
                 }
@@ -680,7 +679,7 @@ function onMessage(client, data) {
                             newZIndex = above.zIndex ?? 0;
                             above.zIndex = asset.zIndex ?? 0;
                             state.assets.set(above.id, above);
-                            broadcast([{ type: "assetPlaced", asset: above }]);
+                            broadcast([{ type: "assetUpdated", asset: above }]);
                         }
                     }
                     else {
@@ -690,7 +689,7 @@ function onMessage(client, data) {
                             newZIndex = below.zIndex ?? 0;
                             below.zIndex = asset.zIndex ?? 0;
                             state.assets.set(below.id, below);
-                            broadcast([{ type: "assetPlaced", asset: below }]);
+                            broadcast([{ type: "assetUpdated", asset: below }]);
                         }
                     }
                     break;
@@ -700,8 +699,8 @@ function onMessage(client, data) {
                 console.log(`[SERVER] reorderAsset: setting zIndex from ${asset.zIndex ?? 'undefined'} to ${newZIndex}`);
                 asset.zIndex = newZIndex;
                 state.assets.set(asset.id, asset);
-                broadcast([{ type: "assetPlaced", asset }]);
-                console.log(`[SERVER] reorderAsset: broadcasted assetPlaced event`);
+                broadcast([{ type: "assetUpdated", asset }]);
+                console.log(`[SERVER] reorderAsset: broadcasted assetUpdated event`);
                 persistIfAutosave();
             }
             else {
@@ -770,6 +769,33 @@ function onMessage(client, data) {
             };
             state.assets.set(asset.id, asset);
             broadcast([{ type: "assetPlaced", asset }]);
+            persistIfAutosave();
+            break;
+        }
+        case "moveAsset": {
+            if (client.role !== "DM")
+                return;
+            const gx = Math.floor(msg.pos.x);
+            const gy = Math.floor(msg.pos.y);
+            ensureDefaultFloorsForLevel(msg.levelId);
+            if (!hasFloorAtXY(msg.levelId, gx, gy))
+                return;
+            const asset = state.assets.get(msg.assetId);
+            if (!asset) {
+                console.log(`[SERVER] moveAsset rejected: asset not found`);
+                break;
+            }
+            // remove existing asset at new pos (single asset per cell policy)
+            const existingId = findAssetIdAt(msg.levelId, { x: gx, y: gy });
+            if (existingId && existingId !== msg.assetId) {
+                state.assets.delete(existingId);
+            }
+            // update asset position
+            asset.pos = { x: gx, y: gy };
+            asset.levelId = msg.levelId;
+            state.assets.set(asset.id, asset);
+            broadcast([{ type: "assetUpdated", asset }]);
+            console.log(`[SERVER] Asset ${asset.id} moved to (${gx}, ${gy})`);
             persistIfAutosave();
             break;
         }
@@ -1271,6 +1297,44 @@ function onMessage(client, data) {
                     send(client.socket, { t: "error", message: "Failed to load location" });
                 }
             })();
+            break;
+        }
+        case "toggleTokenHidden": {
+            if (client.role !== "DM") {
+                console.log(`[SERVER] toggleTokenHidden rejected: not DM`);
+                break;
+            }
+            const token = state.tokens.get(msg.tokenId);
+            if (!token) {
+                console.log(`[SERVER] toggleTokenHidden rejected: token not found`);
+                break;
+            }
+            // Toggle hidden state
+            token.hidden = !token.hidden;
+            state.tokens.set(token.id, token);
+            broadcast([{ type: "tokenUpdated", token }]);
+            console.log(`[SERVER] Token ${token.id} hidden state toggled to ${token.hidden}`);
+            persistIfAutosave();
+            break;
+        }
+        case "toggleAssetHidden": {
+            if (client.role !== "DM") {
+                console.log(`[SERVER] toggleAssetHidden rejected: not DM`);
+                break;
+            }
+            console.log(`[SERVER] toggleAssetHidden: looking for assetId=${msg.assetId}`);
+            console.log(`[SERVER] Available asset IDs:`, Array.from(state.assets.keys()).slice(0, 10));
+            const asset = state.assets.get(msg.assetId);
+            if (!asset) {
+                console.log(`[SERVER] toggleAssetHidden rejected: asset not found`);
+                break;
+            }
+            // Toggle hidden state
+            asset.hidden = !asset.hidden;
+            state.assets.set(asset.id, asset);
+            broadcast([{ type: "assetUpdated", asset }]);
+            console.log(`[SERVER] Asset ${asset.id} hidden state toggled to ${asset.hidden}`);
+            persistIfAutosave();
             break;
         }
         case "switchRole": {

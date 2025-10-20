@@ -315,9 +315,10 @@ async function buildLocationsTree(): Promise<LocationTreeNode[]> {
 }
 
 function roleFromInvite(inv?: string | null): Role {
-  if (!inv) return "PLAYER";
-  if (inv.startsWith("dm-")) return "DM";
-  return "PLAYER";
+  console.log(`[SERVER] roleFromInvite: inv=${inv}`);
+  // Always return DM as default, ignore invite codes for now
+  console.log(`[SERVER] roleFromInvite: returning DM (default)`);
+  return "DM";
 }
 
 function send(ws: import("ws").WebSocket, msg: ServerToClient) {
@@ -610,7 +611,7 @@ function onMessage(client: ClientRec, data: any) {
             ? Math.max(...allTokensOnLevel.map(t => (t as any).zIndex ?? 0)) 
             : 0;
           
-          // Assets have base 0, tokens have base 100 on client, so we add to max found
+          // Both assets and tokens use same zIndex range, so we add to max found
           newZIndex = Math.max(maxAssetZ, maxTokenZ) + 1;
           break;
         }
@@ -650,7 +651,7 @@ function onMessage(client: ClientRec, data: any) {
               newZIndex = (above as any).zIndex ?? 0;
               (above as any).zIndex = (asset as any).zIndex ?? 0;
               state.assets.set(above.id, above);
-              broadcast([{ type: "assetPlaced", asset: above } as any]);
+              broadcast([{ type: "assetUpdated", asset: above } as any]);
             }
           } else {
             // Swap with asset below (lower zIndex)
@@ -659,7 +660,7 @@ function onMessage(client: ClientRec, data: any) {
               newZIndex = (below as any).zIndex ?? 0;
               (below as any).zIndex = (asset as any).zIndex ?? 0;
               state.assets.set(below.id, below);
-              broadcast([{ type: "assetPlaced", asset: below } as any]);
+              broadcast([{ type: "assetUpdated", asset: below } as any]);
             }
           }
           break;
@@ -670,8 +671,8 @@ function onMessage(client: ClientRec, data: any) {
         console.log(`[SERVER] reorderAsset: setting zIndex from ${(asset as any).zIndex ?? 'undefined'} to ${newZIndex}`);
         (asset as any).zIndex = newZIndex;
         state.assets.set(asset.id, asset);
-        broadcast([{ type: "assetPlaced", asset } as any]);
-        console.log(`[SERVER] reorderAsset: broadcasted assetPlaced event`);
+        broadcast([{ type: "assetUpdated", asset } as any]);
+        console.log(`[SERVER] reorderAsset: broadcasted assetUpdated event`);
         persistIfAutosave();
       } else {
         console.log(`[SERVER] reorderAsset: newZIndex is undefined, no changes made`);
@@ -734,6 +735,34 @@ function onMessage(client: ClientRec, data: any) {
       };
       state.assets.set(asset.id, asset);
       broadcast([{ type: "assetPlaced", asset } as any]);
+      persistIfAutosave();
+      break;
+    }
+    case "moveAsset": {
+      if (client.role !== "DM") return;
+      const gx = Math.floor(msg.pos.x);
+      const gy = Math.floor(msg.pos.y);
+      ensureDefaultFloorsForLevel(msg.levelId);
+      if (!hasFloorAtXY(msg.levelId, gx, gy)) return;
+      
+      const asset = state.assets.get(msg.assetId);
+      if (!asset) {
+        console.log(`[SERVER] moveAsset rejected: asset not found`);
+        break;
+      }
+      
+      // remove existing asset at new pos (single asset per cell policy)
+      const existingId = findAssetIdAt(msg.levelId, { x: gx, y: gy });
+      if (existingId && existingId !== msg.assetId) {
+        state.assets.delete(existingId);
+      }
+      
+      // update asset position
+      asset.pos = { x: gx, y: gy };
+      asset.levelId = msg.levelId;
+      state.assets.set(asset.id, asset);
+      broadcast([{ type: "assetUpdated", asset } as any]);
+      console.log(`[SERVER] Asset ${asset.id} moved to (${gx}, ${gy})`);
       persistIfAutosave();
       break;
     }
@@ -1169,6 +1198,44 @@ function onMessage(client: ClientRec, data: any) {
           send(client.socket, { t: "error", message: "Failed to load location" });
         }
       })();
+      break;
+    }
+    case "toggleTokenHidden": {
+      if (client.role !== "DM") {
+        console.log(`[SERVER] toggleTokenHidden rejected: not DM`);
+        break;
+      }
+      const token = state.tokens.get(msg.tokenId);
+      if (!token) {
+        console.log(`[SERVER] toggleTokenHidden rejected: token not found`);
+        break;
+      }
+      // Toggle hidden state
+      (token as any).hidden = !(token as any).hidden;
+      state.tokens.set(token.id, token);
+      broadcast([{ type: "tokenUpdated", token } as any]);
+      console.log(`[SERVER] Token ${token.id} hidden state toggled to ${(token as any).hidden}`);
+      persistIfAutosave();
+      break;
+    }
+    case "toggleAssetHidden": {
+      if (client.role !== "DM") {
+        console.log(`[SERVER] toggleAssetHidden rejected: not DM`);
+        break;
+      }
+      console.log(`[SERVER] toggleAssetHidden: looking for assetId=${msg.assetId}`);
+      console.log(`[SERVER] Available asset IDs:`, Array.from(state.assets.keys()).slice(0, 10));
+      const asset = state.assets.get(msg.assetId);
+      if (!asset) {
+        console.log(`[SERVER] toggleAssetHidden rejected: asset not found`);
+        break;
+      }
+      // Toggle hidden state
+      (asset as any).hidden = !(asset as any).hidden;
+      state.assets.set(asset.id, asset);
+      broadcast([{ type: "assetUpdated", asset } as any]);
+      console.log(`[SERVER] Asset ${asset.id} hidden state toggled to ${(asset as any).hidden}`);
+      persistIfAutosave();
       break;
     }
     case "switchRole": {

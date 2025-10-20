@@ -36,6 +36,7 @@ export interface Token {
   stats?: { str?: number; dex?: number; con?: number; int?: number; wis?: number; cha?: number; hp?: number; ac?: number };
   notes?: string;
   zIndex?: number; // rendering layer order within same cell
+  hidden?: boolean; // if true, only DM can see this token
 }
 
 export interface Asset {
@@ -49,6 +50,7 @@ export interface Asset {
   // for interactive assets like door
   open?: boolean;
   zIndex?: number; // rendering layer order within same cell
+  hidden?: boolean; // if true, only DM can see this asset
 }
 
 export type FloorKind = "stone" | "wood" | "water" | "sand" | "grass";
@@ -61,6 +63,7 @@ export type Event =
   | { type: "fogRevealed"; levelId: ID; cells: Vec2[] }
   | { type: "fogObscured"; levelId: ID; cells: Vec2[] }
   | { type: "assetPlaced"; asset: Asset }
+  | { type: "assetUpdated"; asset: Asset }
   | { type: "assetRemoved"; assetId: ID }
   | { type: "floorPainted"; levelId: ID; pos: Vec2; kind: FloorKind | null };
 

@@ -30,7 +30,8 @@
       "light": null,
       "flags": {},
       "name": "Player",
-      "zIndex": -1
+      "zIndex": -1,
+      "hidden": true
     },
     {
       "id": "t-d4a85c39-5069-4d33-9fb2-3f7573cd785b",
@@ -38,7 +39,7 @@
       "levelId": "lvl-ip012w-meq35r9r",
       "pos": {
         "x": 5,
-        "y": 8
+        "y": 7
       },
       "vision": {
         "radius": 8,
@@ -53,7 +54,7 @@
       "owner": "p-6d081cbb-0c6b-452a-a53d-8e4719179ff6",
       "levelId": "lvl-ip012w-meq35r9r",
       "pos": {
-        "x": 8,
+        "x": 7,
         "y": 3
       },
       "vision": {
@@ -70,7 +71,7 @@
       "kind": "npc",
       "levelId": "lvl-ip012w-meq35r9r",
       "pos": {
-        "x": 7,
+        "x": -1,
         "y": 2
       },
       "vision": {
@@ -80,7 +81,8 @@
       "light": null,
       "flags": {},
       "name": "NPC",
-      "tint": 9764023
+      "tint": 9764023,
+      "hidden": true
     },
     {
       "id": "t-69ece184-e84d-4774-a5aa-b8eab74f1ddc",
@@ -102,33 +104,6 @@
     }
   ],
   "assets": [
-    {
-      "id": "a-d829bb8d-331c-4dbd-bcec-b7f0fa9d1824",
-      "levelId": "lvl-ip012w-meq35r9r",
-      "pos": {
-        "x": 3,
-        "y": 3
-      },
-      "kind": "sword"
-    },
-    {
-      "id": "a-57e67ed8-b5dc-4cb3-9021-1555fd50a24c",
-      "levelId": "lvl-ip012w-meq35r9r",
-      "pos": {
-        "x": 4,
-        "y": 2
-      },
-      "kind": "bow"
-    },
-    {
-      "id": "a-6b0fe7c6-f27d-40d4-bdc8-a323c92afc5b",
-      "levelId": "lvl-ip012w-meq35r9r",
-      "pos": {
-        "x": 4,
-        "y": 3
-      },
-      "kind": "other"
-    },
     {
       "id": "a-6463ec17-aa5d-4e83-9aef-681139c992a3",
       "levelId": "lvl-ip012w-meq35r9r",
@@ -391,13 +366,52 @@
       "kind": "wall"
     },
     {
-      "id": "a-3e7739c3-7a71-4b2d-8e32-dc9cf9c4c4a9",
+      "id": "a-36de4c99-704a-4cb2-a37a-0ca4b6ae8b5a",
       "levelId": "lvl-ip012w-meq35r9r",
       "pos": {
         "x": 3,
         "y": 5
       },
-      "kind": "chest"
+      "kind": "sword"
+    },
+    {
+      "id": "a-d509b26c-a550-4143-974c-0c6acb7def05",
+      "levelId": "lvl-ip012w-meq35r9r",
+      "pos": {
+        "x": 3,
+        "y": 4
+      },
+      "kind": "sword"
+    },
+    {
+      "id": "a-42a551a1-2650-4b49-be6c-acd2db7c33a0",
+      "levelId": "lvl-ip012w-meq35r9r",
+      "pos": {
+        "x": 3,
+        "y": 7
+      },
+      "kind": "sword",
+      "zIndex": 1,
+      "hidden": true
+    },
+    {
+      "id": "a-c49354f7-bca2-4b06-9fd5-d2e95e1e3368",
+      "levelId": "lvl-ip012w-meq35r9r",
+      "pos": {
+        "x": 4,
+        "y": 7
+      },
+      "kind": "sword",
+      "zIndex": -2
+    },
+    {
+      "id": "a-dd840ae9-c81c-4559-8f4c-b8d0e3a5fc96",
+      "levelId": "lvl-ip012w-meq35r9r",
+      "pos": {
+        "x": 8,
+        "y": 3
+      },
+      "kind": "bow"
     }
   ],
   "events": [
@@ -2296,6 +2310,18 @@
         {
           "x": -3,
           "y": -2
+        },
+        {
+          "x": 7,
+          "y": -5
+        },
+        {
+          "x": 4,
+          "y": -4
+        },
+        {
+          "x": 4,
+          "y": 16
         }
       ]
     }
