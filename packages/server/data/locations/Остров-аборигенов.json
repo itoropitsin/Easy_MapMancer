@@ -1,0 +1,3186 @@
+{
+  "location": {
+    "id": "loc-island-natives-001",
+    "name": "Остров аборигенов",
+    "levels": [
+      {
+        "id": "lvl-island-main-001",
+        "seed": "island-natives-seed",
+        "spawnPoint": {
+          "x": 8,
+          "y": 8
+        },
+        "lights": []
+      }
+    ],
+    "fogMode": "manual"
+  },
+  "tokens": [
+    {
+      "id": "t-player-spawn-001",
+      "owner": "p-dm-001",
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 8,
+        "y": 8
+      },
+      "vision": {
+        "radius": 8,
+        "angle": 360
+      },
+      "light": null,
+      "flags": {},
+      "name": "Игрок",
+      "zIndex": -1,
+      "hidden": true
+    },
+    {
+      "id": "t-native-chief-001",
+      "owner": "p-dm-001",
+      "kind": "npc",
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 5,
+        "y": 5
+      },
+      "vision": {
+        "radius": 6,
+        "angle": 360
+      },
+      "light": null,
+      "flags": {},
+      "name": "Вождь аборигенов",
+      "hp": 25,
+      "ac": 14,
+      "tint": 16711680,
+      "hidden": true
+    },
+    {
+      "id": "t-native-warrior-001",
+      "owner": "p-dm-001",
+      "kind": "npc",
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 3,
+        "y": 3
+      },
+      "vision": {
+        "radius": 5,
+        "angle": 360
+      },
+      "light": null,
+      "flags": {},
+      "name": "Воин абориген",
+      "hp": 15,
+      "ac": 12,
+      "tint": 16711680,
+      "hidden": true
+    },
+    {
+      "id": "t-native-warrior-002",
+      "owner": "p-dm-001",
+      "kind": "npc",
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 7,
+        "y": 3
+      },
+      "vision": {
+        "radius": 5,
+        "angle": 360
+      },
+      "light": null,
+      "flags": {},
+      "name": "Воин абориген",
+      "hp": 15,
+      "ac": 12,
+      "tint": 16711680,
+      "hidden": true
+    }
+  ],
+  "assets": [
+    {
+      "id": "a-palm-tree-001",
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 2,
+        "y": 2
+      },
+      "kind": "bush",
+      "zIndex": 1
+    },
+    {
+      "id": "a-palm-tree-002",
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 8,
+        "y": 2
+      },
+      "kind": "bush",
+      "zIndex": 1
+    },
+    {
+      "id": "a-palm-tree-003",
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 14,
+        "y": 2
+      },
+      "kind": "bush",
+      "zIndex": 1
+    },
+    {
+      "id": "a-palm-tree-004",
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 2,
+        "y": 8
+      },
+      "kind": "bush",
+      "zIndex": 1
+    },
+    {
+      "id": "a-palm-tree-005",
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 14,
+        "y": 8
+      },
+      "kind": "bush",
+      "zIndex": 1
+    },
+    {
+      "id": "a-palm-tree-006",
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 2,
+        "y": 14
+      },
+      "kind": "bush",
+      "zIndex": 1
+    },
+    {
+      "id": "a-palm-tree-007",
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 8,
+        "y": 14
+      },
+      "kind": "bush",
+      "zIndex": 1
+    },
+    {
+      "id": "a-palm-tree-008",
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 14,
+        "y": 14
+      },
+      "kind": "bush",
+      "zIndex": 1
+    },
+    {
+      "id": "a-rock-001",
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 1,
+        "y": 1
+      },
+      "kind": "wall",
+      "zIndex": 0
+    },
+    {
+      "id": "a-rock-002",
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 15,
+        "y": 1
+      },
+      "kind": "wall",
+      "zIndex": 0
+    },
+    {
+      "id": "a-rock-003",
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 1,
+        "y": 15
+      },
+      "kind": "wall",
+      "zIndex": 0
+    },
+    },
+    {
+      "id": "a-rock-004",
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 15,
+        "y": 15
+      },
+      "kind": "wall",
+      "zIndex": 0
+    },
+    {
+      "id": "a-hut-001",
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 4,
+        "y": 4
+      },
+      "kind": "wall",
+      "zIndex": 0
+    },
+    {
+      "id": "a-hut-002",
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 5,
+        "y": 4
+      },
+      "kind": "wall",
+      "zIndex": 0
+    },
+    {
+      "id": "a-hut-003",
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 4,
+        "y": 5
+      },
+      "kind": "wall",
+      "zIndex": 0
+    },
+    {
+      "id": "a-hut-004",
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 5,
+        "y": 5
+      },
+      "kind": "wall",
+      "zIndex": 0
+    },
+    {
+      "id": "a-hut-door-001",
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 4,
+        "y": 4
+      },
+      "kind": "door",
+      "open": false,
+      "zIndex": 1
+    },
+    {
+      "id": "a-hut-2-001",
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 11,
+        "y": 11
+      },
+      "kind": "wall",
+      "zIndex": 0
+    },
+    {
+      "id": "a-hut-2-002",
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 12,
+        "y": 11
+      },
+      "kind": "wall",
+      "zIndex": 0
+    },
+    {
+      "id": "a-hut-2-003",
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 11,
+        "y": 12
+      },
+      "kind": "wall",
+      "zIndex": 0
+    },
+    {
+      "id": "a-hut-2-004",
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 12,
+        "y": 12
+      },
+      "kind": "wall",
+      "zIndex": 0
+    },
+    {
+      "id": "a-hut-2-door-001",
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 11,
+        "y": 11
+      },
+      "kind": "door",
+      "open": false,
+      "zIndex": 1
+    },
+    {
+      "id": "a-campfire-001",
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 8,
+        "y": 6
+      },
+      "kind": "campfire",
+      "tint": 16711680,
+      "zIndex": 1
+    },
+    {
+      "id": "a-torch-001",
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 3,
+        "y": 3
+      },
+      "kind": "torch",
+      "tint": 16711680,
+      "zIndex": 1
+    },
+    {
+      "id": "a-torch-002",
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 13,
+        "y": 13
+      },
+      "kind": "torch",
+      "tint": 16711680,
+      "zIndex": 1
+    },
+    {
+      "id": "a-weapon-001",
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 6,
+        "y": 4
+      },
+      "kind": "spear",
+      "zIndex": 1
+    },
+    {
+      "id": "a-weapon-002",
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 10,
+        "y": 12
+      },
+      "kind": "bow",
+      "zIndex": 1
+    },
+    {
+      "id": "a-weapon-003",
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 7,
+        "y": 7
+      },
+      "kind": "axe",
+      "zIndex": 1
+    },
+    {
+      "id": "a-treasure-001",
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 9,
+        "y": 9
+      },
+      "kind": "chest",
+      "zIndex": 1
+    },
+    {
+      "id": "a-treasure-002",
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 6,
+        "y": 6
+      },
+      "kind": "coins",
+      "zIndex": 0
+    },
+    {
+      "id": "a-treasure-003",
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 10,
+        "y": 10
+      },
+      "kind": "gem",
+      "zIndex": 0
+    },
+    {
+      "id": "a-food-001",
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 7,
+        "y": 8
+      },
+      "kind": "fish",
+      "zIndex": 0
+    },
+    {
+      "id": "a-food-002",
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 9,
+        "y": 7
+      },
+      "kind": "apple",
+      "zIndex": 0
+    },
+    {
+      "id": "a-food-003",
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 8,
+        "y": 9
+      },
+      "kind": "bread",
+      "zIndex": 0
+    },
+    {
+      "id": "a-kitchen-001",
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 6,
+        "y": 5
+      },
+      "kind": "cauldron",
+      "zIndex": 1
+    },
+    {
+      "id": "a-kitchen-002",
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 10,
+        "y": 11
+      },
+      "kind": "pot",
+      "zIndex": 1
+    },
+    {
+      "id": "a-kitchen-003",
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 5,
+        "y": 6
+      },
+      "kind": "knife",
+      "zIndex": 0
+    },
+    {
+      "id": "a-animal-001",
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 3,
+        "y": 7
+      },
+      "kind": "bird",
+      "zIndex": 1
+    },
+    {
+      "id": "a-animal-002",
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 13,
+        "y": 9
+      },
+      "kind": "frog",
+      "zIndex": 0
+    },
+    {
+      "id": "a-animal-003",
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 7,
+        "y": 3
+      },
+      "kind": "butterfly",
+      "zIndex": 1
+    },
+    {
+      "id": "a-insect-001",
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 9,
+        "y": 3
+      },
+      "kind": "bee",
+      "zIndex": 1
+    },
+    {
+      "id": "a-insect-002",
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 11,
+        "y": 7
+      },
+      "kind": "dragonfly",
+      "zIndex": 1
+    },
+    {
+      "id": "a-clothing-001",
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 4,
+        "y": 6
+      },
+      "kind": "cloak",
+      "zIndex": 0
+    },
+    {
+      "id": "a-clothing-002",
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 12,
+        "y": 10
+      },
+      "kind": "hat",
+      "zIndex": 0
+    },
+    {
+      "id": "a-armor-001",
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 5,
+        "y": 7
+      },
+      "kind": "shield",
+      "zIndex": 1
+    },
+    {
+      "id": "a-armor-002",
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 11,
+        "y": 9
+      },
+      "kind": "helmet",
+      "zIndex": 0
+    },
+    {
+      "id": "a-tool-001",
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 6,
+        "y": 7
+      },
+      "kind": "rope",
+      "zIndex": 0
+    },
+    {
+      "id": "a-tool-002",
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 10,
+        "y": 8
+      },
+      "kind": "key",
+      "zIndex": 0
+    },
+    {
+      "id": "a-furniture-001",
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 7,
+        "y": 6
+      },
+      "kind": "stool",
+      "zIndex": 1
+    },
+    {
+      "id": "a-furniture-002",
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 9,
+        "y": 10
+      },
+      "kind": "bench",
+      "zIndex": 1
+    },
+    {
+      "id": "a-magic-001",
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 8,
+        "y": 5
+      },
+      "kind": "potion",
+      "zIndex": 1
+    },
+    {
+      "id": "a-magic-002",
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 8,
+        "y": 11
+      },
+      "kind": "crystal",
+      "zIndex": 1
+    },
+    {
+      "id": "a-book-001",
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 5,
+        "y": 8
+      },
+      "kind": "scroll",
+      "zIndex": 0
+    },
+    {
+      "id": "a-nature-001",
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 3,
+        "y": 9
+      },
+      "kind": "flower",
+      "zIndex": 0
+    },
+    {
+      "id": "a-nature-002",
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 13,
+        "y": 7
+      },
+      "kind": "mushroom",
+      "zIndex": 0
+    },
+    {
+      "id": "a-nature-003",
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 7,
+        "y": 9
+      },
+      "kind": "vine",
+      "zIndex": 0
+    },
+    {
+      "id": "a-nature-004",
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 9,
+        "y": 8
+      },
+      "kind": "log",
+      "zIndex": 1
+    }
+  ],
+  "events": [],
+  "floors": [
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 0,
+        "y": 0
+      },
+      "kind": "water"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 1,
+        "y": 0
+      },
+      "kind": "water"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 2,
+        "y": 0
+      },
+      "kind": "water"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 3,
+        "y": 0
+      },
+      "kind": "water"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 4,
+        "y": 0
+      },
+      "kind": "water"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 5,
+        "y": 0
+      },
+      "kind": "water"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 6,
+        "y": 0
+      },
+      "kind": "water"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 7,
+        "y": 0
+      },
+      "kind": "water"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 8,
+        "y": 0
+      },
+      "kind": "water"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 9,
+        "y": 0
+      },
+      "kind": "water"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 10,
+        "y": 0
+      },
+      "kind": "water"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 11,
+        "y": 0
+      },
+      "kind": "water"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 12,
+        "y": 0
+      },
+      "kind": "water"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 13,
+        "y": 0
+      },
+      "kind": "water"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 14,
+        "y": 0
+      },
+      "kind": "water"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 15,
+        "y": 0
+      },
+      "kind": "water"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 16,
+        "y": 0
+      },
+      "kind": "water"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 0,
+        "y": 1
+      },
+      "kind": "water"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 1,
+        "y": 1
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 2,
+        "y": 1
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 3,
+        "y": 1
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 4,
+        "y": 1
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 5,
+        "y": 1
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 6,
+        "y": 1
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 7,
+        "y": 1
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 8,
+        "y": 1
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 9,
+        "y": 1
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 10,
+        "y": 1
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 11,
+        "y": 1
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 12,
+        "y": 1
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 13,
+        "y": 1
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 14,
+        "y": 1
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 15,
+        "y": 1
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 16,
+        "y": 1
+      },
+      "kind": "water"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 0,
+        "y": 2
+      },
+      "kind": "water"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 1,
+        "y": 2
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 2,
+        "y": 2
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 3,
+        "y": 2
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 4,
+        "y": 2
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 5,
+        "y": 2
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 6,
+        "y": 2
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 7,
+        "y": 2
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 8,
+        "y": 2
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 9,
+        "y": 2
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 10,
+        "y": 2
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 11,
+        "y": 2
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 12,
+        "y": 2
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 13,
+        "y": 2
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 14,
+        "y": 2
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 15,
+        "y": 2
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 16,
+        "y": 2
+      },
+      "kind": "water"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 0,
+        "y": 3
+      },
+      "kind": "water"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 1,
+        "y": 3
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 2,
+        "y": 3
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 3,
+        "y": 3
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 4,
+        "y": 3
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 5,
+        "y": 3
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 6,
+        "y": 3
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 7,
+        "y": 3
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 8,
+        "y": 3
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 9,
+        "y": 3
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 10,
+        "y": 3
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 11,
+        "y": 3
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 12,
+        "y": 3
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 13,
+        "y": 3
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 14,
+        "y": 3
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 15,
+        "y": 3
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 16,
+        "y": 3
+      },
+      "kind": "water"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 0,
+        "y": 4
+      },
+      "kind": "water"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 1,
+        "y": 4
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 2,
+        "y": 4
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 3,
+        "y": 4
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 4,
+        "y": 4
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 5,
+        "y": 4
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 6,
+        "y": 4
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 7,
+        "y": 4
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 8,
+        "y": 4
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 9,
+        "y": 4
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 10,
+        "y": 4
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 11,
+        "y": 4
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 12,
+        "y": 4
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 13,
+        "y": 4
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 14,
+        "y": 4
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 15,
+        "y": 4
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 16,
+        "y": 4
+      },
+      "kind": "water"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 0,
+        "y": 5
+      },
+      "kind": "water"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 1,
+        "y": 5
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 2,
+        "y": 5
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 3,
+        "y": 5
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 4,
+        "y": 5
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 5,
+        "y": 5
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 6,
+        "y": 5
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 7,
+        "y": 5
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 8,
+        "y": 5
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 9,
+        "y": 5
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 10,
+        "y": 5
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 11,
+        "y": 5
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 12,
+        "y": 5
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 13,
+        "y": 5
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 14,
+        "y": 5
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 15,
+        "y": 5
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 16,
+        "y": 5
+      },
+      "kind": "water"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 0,
+        "y": 6
+      },
+      "kind": "water"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 1,
+        "y": 6
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 2,
+        "y": 6
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 3,
+        "y": 6
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 4,
+        "y": 6
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 5,
+        "y": 6
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 6,
+        "y": 6
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 7,
+        "y": 6
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 8,
+        "y": 6
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 9,
+        "y": 6
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 10,
+        "y": 6
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 11,
+        "y": 6
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 12,
+        "y": 6
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 13,
+        "y": 6
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 14,
+        "y": 6
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 15,
+        "y": 6
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 16,
+        "y": 6
+      },
+      "kind": "water"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 0,
+        "y": 7
+      },
+      "kind": "water"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 1,
+        "y": 7
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 2,
+        "y": 7
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 3,
+        "y": 7
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 4,
+        "y": 7
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 5,
+        "y": 7
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 6,
+        "y": 7
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 7,
+        "y": 7
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 8,
+        "y": 7
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 9,
+        "y": 7
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 10,
+        "y": 7
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 11,
+        "y": 7
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 12,
+        "y": 7
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 13,
+        "y": 7
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 14,
+        "y": 7
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 15,
+        "y": 7
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 16,
+        "y": 7
+      },
+      "kind": "water"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 0,
+        "y": 8
+      },
+      "kind": "water"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 1,
+        "y": 8
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 2,
+        "y": 8
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 3,
+        "y": 8
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 4,
+        "y": 8
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 5,
+        "y": 8
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 6,
+        "y": 8
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 7,
+        "y": 8
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 8,
+        "y": 8
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 7,
+        "y": 8
+      },
+      "kind": "path"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 6,
+        "y": 8
+      },
+      "kind": "path"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 5,
+        "y": 8
+      },
+      "kind": "path"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 4,
+        "y": 8
+      },
+      "kind": "path"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 8,
+        "y": 7
+      },
+      "kind": "path"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 8,
+        "y": 6
+      },
+      "kind": "path"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 8,
+        "y": 5
+      },
+      "kind": "path"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 8,
+        "y": 4
+      },
+      "kind": "path"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 9,
+        "y": 8
+      },
+      "kind": "path"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 10,
+        "y": 8
+      },
+      "kind": "path"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 11,
+        "y": 8
+      },
+      "kind": "path"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 12,
+        "y": 8
+      },
+      "kind": "path"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 8,
+        "y": 9
+      },
+      "kind": "path"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 8,
+        "y": 10
+      },
+      "kind": "path"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 8,
+        "y": 11
+      },
+      "kind": "path"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 8,
+        "y": 12
+      },
+      "kind": "path"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 4,
+        "y": 4
+      },
+      "kind": "grass"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 5,
+        "y": 4
+      },
+      "kind": "grass"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 4,
+        "y": 5
+      },
+      "kind": "grass"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 5,
+        "y": 5
+      },
+      "kind": "grass"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 11,
+        "y": 11
+      },
+      "kind": "grass"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 12,
+        "y": 11
+      },
+      "kind": "grass"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 11,
+        "y": 12
+      },
+      "kind": "grass"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 12,
+        "y": 12
+      },
+      "kind": "grass"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 9,
+        "y": 8
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 10,
+        "y": 8
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 11,
+        "y": 8
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 12,
+        "y": 8
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 13,
+        "y": 8
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 14,
+        "y": 8
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 15,
+        "y": 8
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 16,
+        "y": 8
+      },
+      "kind": "water"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 0,
+        "y": 9
+      },
+      "kind": "water"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 1,
+        "y": 9
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 2,
+        "y": 9
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 3,
+        "y": 9
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 4,
+        "y": 9
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 5,
+        "y": 9
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 6,
+        "y": 9
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 7,
+        "y": 9
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 8,
+        "y": 9
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 9,
+        "y": 9
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 10,
+        "y": 9
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 11,
+        "y": 9
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 12,
+        "y": 9
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 13,
+        "y": 9
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 14,
+        "y": 9
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 15,
+        "y": 9
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 16,
+        "y": 9
+      },
+      "kind": "water"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 0,
+        "y": 10
+      },
+      "kind": "water"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 1,
+        "y": 10
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 2,
+        "y": 10
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 3,
+        "y": 10
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 4,
+        "y": 10
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 5,
+        "y": 10
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 6,
+        "y": 10
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 7,
+        "y": 10
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 8,
+        "y": 10
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 9,
+        "y": 10
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 10,
+        "y": 10
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 11,
+        "y": 10
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 12,
+        "y": 10
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 13,
+        "y": 10
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 14,
+        "y": 10
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 15,
+        "y": 10
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 16,
+        "y": 10
+      },
+      "kind": "water"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 0,
+        "y": 11
+      },
+      "kind": "water"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 1,
+        "y": 11
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 2,
+        "y": 11
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 3,
+        "y": 11
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 4,
+        "y": 11
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 5,
+        "y": 11
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 6,
+        "y": 11
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 7,
+        "y": 11
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 8,
+        "y": 11
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 9,
+        "y": 11
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 10,
+        "y": 11
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 11,
+        "y": 11
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 12,
+        "y": 11
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 13,
+        "y": 11
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 14,
+        "y": 11
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 15,
+        "y": 11
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 16,
+        "y": 11
+      },
+      "kind": "water"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 0,
+        "y": 12
+      },
+      "kind": "water"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 1,
+        "y": 12
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 2,
+        "y": 12
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 3,
+        "y": 12
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 4,
+        "y": 12
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 5,
+        "y": 12
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 6,
+        "y": 12
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 7,
+        "y": 12
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 8,
+        "y": 12
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 9,
+        "y": 12
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 10,
+        "y": 12
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 11,
+        "y": 12
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 12,
+        "y": 12
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 13,
+        "y": 12
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 14,
+        "y": 12
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 15,
+        "y": 12
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 16,
+        "y": 12
+      },
+      "kind": "water"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 0,
+        "y": 13
+      },
+      "kind": "water"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 1,
+        "y": 13
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 2,
+        "y": 13
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 3,
+        "y": 13
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 4,
+        "y": 13
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 5,
+        "y": 13
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 6,
+        "y": 13
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 7,
+        "y": 13
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 8,
+        "y": 13
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 9,
+        "y": 13
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 10,
+        "y": 13
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 11,
+        "y": 13
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 12,
+        "y": 13
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 13,
+        "y": 13
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 14,
+        "y": 13
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 15,
+        "y": 13
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 16,
+        "y": 13
+      },
+      "kind": "water"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 0,
+        "y": 14
+      },
+      "kind": "water"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 1,
+        "y": 14
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 2,
+        "y": 14
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 3,
+        "y": 14
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 4,
+        "y": 14
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 5,
+        "y": 14
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 6,
+        "y": 14
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 7,
+        "y": 14
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 8,
+        "y": 14
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 9,
+        "y": 14
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 10,
+        "y": 14
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 11,
+        "y": 14
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 12,
+        "y": 14
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 13,
+        "y": 14
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 14,
+        "y": 14
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 15,
+        "y": 14
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 16,
+        "y": 14
+      },
+      "kind": "water"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 0,
+        "y": 15
+      },
+      "kind": "water"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 1,
+        "y": 15
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 2,
+        "y": 15
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 3,
+        "y": 15
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 4,
+        "y": 15
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 5,
+        "y": 15
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 6,
+        "y": 15
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 7,
+        "y": 15
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 8,
+        "y": 15
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 9,
+        "y": 15
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 10,
+        "y": 15
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 11,
+        "y": 15
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 12,
+        "y": 15
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 13,
+        "y": 15
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 14,
+        "y": 15
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 15,
+        "y": 15
+      },
+      "kind": "sand"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 16,
+        "y": 15
+      },
+      "kind": "water"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 0,
+        "y": 16
+      },
+      "kind": "water"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 1,
+        "y": 16
+      },
+      "kind": "water"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 2,
+        "y": 16
+      },
+      "kind": "water"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 3,
+        "y": 16
+      },
+      "kind": "water"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 4,
+        "y": 16
+      },
+      "kind": "water"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 5,
+        "y": 16
+      },
+      "kind": "water"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 6,
+        "y": 16
+      },
+      "kind": "water"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 7,
+        "y": 16
+      },
+      "kind": "water"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 8,
+        "y": 16
+      },
+      "kind": "water"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 9,
+        "y": 16
+      },
+      "kind": "water"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 10,
+        "y": 16
+      },
+      "kind": "water"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 11,
+        "y": 16
+      },
+      "kind": "water"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 12,
+        "y": 16
+      },
+      "kind": "water"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 13,
+        "y": 16
+      },
+      "kind": "water"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 14,
+        "y": 16
+      },
+      "kind": "water"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 15,
+        "y": 16
+      },
+      "kind": "water"
+    },
+    {
+      "levelId": "lvl-island-main-001",
+      "pos": {
+        "x": 16,
+        "y": 16
+      },
+      "kind": "water"
+    }
+  ]
+}

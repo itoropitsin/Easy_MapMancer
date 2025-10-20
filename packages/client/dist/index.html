@@ -967,8 +967,160 @@
       .toggle-text {
         user-select: none;
       }
+
+      /* Bottom Asset Menu */
+      #bottom-asset-menu {
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        right: 600px; /* Much narrower - leave more space for map */
+        height: 160px; /* Reduced height */
+        background: var(--surface-strong);
+        border-top: 1px solid var(--border-subtle);
+        z-index: 1000;
+        display: flex;
+        flex-direction: column;
+        backdrop-filter: blur(10px);
+      }
+
+      #asset-menu-header {
+        display: flex;
+        align-items: center;
+        padding: 4px 8px; /* Further reduced padding */
+        border-bottom: 1px solid var(--border-subtle);
+        gap: 6px; /* Further reduced gap */
+        flex-shrink: 0;
+      }
+
+      #asset-search {
+        width: 120px; /* Fixed narrow width instead of flex: 1 */
+        background: var(--surface-soft);
+        border: 1px solid var(--border-subtle);
+        border-radius: 8px; /* Restored border radius */
+        padding: 8px 12px; /* Restored padding */
+        color: #e8eaed;
+        font-size: 14px; /* Restored font size */
+        outline: none;
+      }
+
+      #asset-search:focus {
+        border-color: var(--accent);
+        box-shadow: 0 0 0 2px rgba(96, 165, 250, 0.2);
+      }
+
+      #asset-search::placeholder {
+        color: var(--text-muted);
+      }
+
+      #asset-category-tabs {
+        display: flex;
+        gap: 2px; /* Reduced gap */
+        overflow-x: auto;
+        flex-shrink: 0;
+      }
+
+      .asset-category-tab {
+        background: var(--surface-soft);
+        border: 1px solid var(--border-subtle);
+        border-radius: 6px; /* Restored border radius */
+        padding: 6px 12px; /* Restored padding */
+        font-size: 12px; /* Restored font size */
+        cursor: pointer;
+        white-space: nowrap;
+        transition: all 0.2s ease;
+      }
+
+      .asset-category-tab:hover {
+        background: var(--surface-hover);
+        border-color: rgba(96, 165, 250, 0.45);
+      }
+
+      .asset-category-tab.active {
+        background: rgba(96, 165, 250, 0.28);
+        border-color: rgba(96, 165, 250, 0.6);
+        color: var(--accent);
+      }
+
+      #asset-content {
+        flex: 1;
+        overflow-y: auto;
+        padding: 6px 8px; /* Further reduced padding */
+      }
+
+      .asset-section {
+        margin-bottom: 8px; /* Further reduced margin */
+      }
+
+      .asset-section-title {
+        font-size: 12px; /* Restored font size */
+        font-weight: 600;
+        color: var(--text-muted);
+        margin-bottom: 8px; /* Restored margin */
+        text-transform: uppercase;
+        letter-spacing: 0.5px; /* Restored letter spacing */
+      }
+
+      .asset-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(70px, 1fr)); /* Slightly larger min width */
+        gap: 3px; /* Further reduced gap */
+      }
+
+      .asset-item {
+        background: var(--surface-soft);
+        border: 1px solid var(--border-subtle);
+        border-radius: 8px; /* Restored border radius */
+        padding: 8px; /* Restored padding */
+        cursor: pointer;
+        transition: all 0.2s ease;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 4px; /* Restored gap */
+        min-height: 60px; /* Restored height */
+        justify-content: center;
+      }
+
+      .asset-item:hover {
+        background: var(--surface-hover);
+        border-color: rgba(96, 165, 250, 0.45);
+        transform: translateY(-1px);
+      }
+
+      .asset-item.selected {
+        background: rgba(96, 165, 250, 0.28);
+        border-color: rgba(96, 165, 250, 0.6);
+        box-shadow: 0 0 0 1px rgba(96, 165, 250, 0.35) inset;
+      }
+
+      .asset-emoji {
+        font-size: 20px; /* Restored emoji size */
+        line-height: 1;
+      }
+
+      .asset-name {
+        font-size: 10px; /* Restored font size */
+        color: var(--text-muted);
+        text-align: center;
+        line-height: 1.2; /* Restored line height */
+        word-break: break-word;
+      }
+
+      .asset-item.selected .asset-name {
+        color: var(--accent);
+      }
+
+      /* Hide sections when searching */
+      .asset-section.hidden {
+        display: none;
+      }
+
+      /* Adjust main content to account for bottom menu */
+      body {
+        padding-bottom: 160px;
+      }
     </style>
-    <script type="module" crossorigin src="/assets/index-BgK3GVtf.js"></script>
+    <script type="module" crossorigin src="/assets/index-DVNpABG5.js"></script>
   </head>
   <body>
     <div id="app"></div>
@@ -1058,14 +1210,6 @@
             <path d="M12 12.5a4.25 4.25 0 1 0-3.5-6.7A4.25 4.25 0 0 0 12 12.5ZM7 13.8A4 4 0 0 0 3 17.8v2.2a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-2.2a4 4 0 0 0-4-4h-10Z" />
           </svg>
         </button>
-        <button class="icon-button dock-btn" data-panel="panel-assets" data-label="Ассеты" data-group="assets" aria-label="Ассеты">
-          <svg viewBox="0 0 24 24" aria-hidden="true">
-            <rect x="4" y="6" width="16" height="12" rx="2" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" fill="none" />
-            <path d="M4 10h16" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" />
-            <path d="M12 10v4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" />
-            <path d="M9 14h6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" />
-          </svg>
-        </button>
         <button class="icon-button dock-btn" data-panel="panel-floors" data-label="Пол" data-group="floors" aria-label="Пол и покрытия">
           <svg viewBox="0 0 24 24" aria-hidden="true">
             <path d="M4.5 4h15A2.5 2.5 0 0 1 22 6.5v11A2.5 2.5 0 0 1 19.5 20h-15A2.5 2.5 0 0 1 2 17.5v-11A2.5 2.5 0 0 1 4.5 4Zm0 1.5A1 1 0 0 0 3.5 6.5v11a1 1 0 0 0 1 1h15a1 1 0 0 0 1-1v-11a1 1 0 0 0-1-1h-15Zm2.5 7h10a1 1 0 1 1 0 2h-10a1 1 0 0 1 0-2Z" />
@@ -1122,41 +1266,39 @@
           </div>
         </div>
       </div>
-      <div id="panel-assets" class="tool-popover">
-        <div class="panel-group" id="assets">
-          <div class="panel-title">Ассеты</div>
-          <div class="row">
-            <button id="btn-tool-erase-objects" title="Ластик ассетов">🧽 Ластик ассетов</button>
-          </div>
-          <div class="panel-title panel-subtitle">Предметы</div>
-          <div class="row">
-            <button class="asset" id="asset-tree" title="Дерево">🌳 Дерево</button>
-            <button class="asset" id="asset-rock" title="Камень">🪨 Камень</button>
-            <button class="asset" id="asset-bush" title="Куст">🌿 Куст</button>
-            <button class="asset" id="asset-chest" title="Сундук">📦 Сундук</button>
-            <button class="asset" id="asset-sword" title="Меч">🗡️ Меч</button>
-            <button class="asset" id="asset-bow" title="Лук">🏹 Лук</button>
-            <button class="asset" id="asset-coins" title="Монеты">🪙 Монеты</button>
-            <button class="asset" id="asset-other" title="Другие эмодзи">✨ Другое</button>
-          </div>
-          <div class="panel-title panel-subtitle">Здания</div>
-          <div class="row">
-            <button class="asset" id="asset-wall" title="Стена">🧱 Стена</button>
-            <button class="asset" id="asset-window" title="Окно">🪟 Окно</button>
-            <button class="asset" id="asset-door" title="Дверь">🚪 Дверь</button>
-          </div>
-        </div>
-      </div>
       <div id="panel-floors" class="tool-popover">
         <div class="panel-group" id="floors">
           <div class="panel-title">Пол</div>
           <div class="row">
             <button id="btn-tool-erase-space" title="Ластик пола">🧽 Ластик пола</button>
+          </div>
+          <div class="panel-title panel-subtitle">Основные</div>
+          <div class="row">
             <button class="asset" id="floor-stone" title="Пол: камень">🧱 Камень</button>
             <button class="asset" id="floor-wood" title="Пол: дерево">🪵 Дерево</button>
             <button class="asset" id="floor-water" title="Пол: вода">💧 Вода</button>
             <button class="asset" id="floor-sand" title="Пол: песок">🏖️ Песок</button>
             <button class="asset" id="floor-grass" title="Пол: трава">🌱 Трава</button>
+          </div>
+          <div class="panel-title panel-subtitle">Дорожки и мосты</div>
+          <div class="row">
+            <button class="asset" id="floor-path" title="Пол: дорожка">🛤️ Дорожка</button>
+            <button class="asset" id="floor-bridge" title="Пол: мост">🌉 Мост</button>
+          </div>
+          <div class="panel-title panel-subtitle">Покрытия</div>
+          <div class="row">
+            <button class="asset" id="floor-carpet" title="Пол: ковер">🟥 Ковер</button>
+            <button class="asset" id="floor-marble" title="Пол: мрамор">⚪ Мрамор</button>
+          </div>
+          <div class="panel-title panel-subtitle">Почва</div>
+          <div class="row">
+            <button class="asset" id="floor-dirt" title="Пол: земля">🟫 Земля</button>
+            <button class="asset" id="floor-mud" title="Пол: грязь">🟤 Грязь</button>
+          </div>
+          <div class="panel-title panel-subtitle">Зимние</div>
+          <div class="row">
+            <button class="asset" id="floor-snow" title="Пол: снег">⚪ Снег</button>
+            <button class="asset" id="floor-ice" title="Пол: лед">🔵 Лед</button>
           </div>
         </div>
       </div>
@@ -1165,6 +1307,35 @@
       <div class="title">Лист персонажа</div>
       <div style="opacity:.7">Нет выбранного токена</div>
     </aside>
+    <!-- Bottom Asset Menu -->
+    <div id="bottom-asset-menu">
+      <div id="asset-menu-header">
+        <input id="asset-search" type="text" placeholder="Поиск ассетов..." />
+        <div id="asset-category-tabs">
+          <button class="asset-category-tab active" data-category="all">Все</button>
+          <button class="asset-category-tab" data-category="nature">Природа</button>
+          <button class="asset-category-tab" data-category="fire">Огонь</button>
+          <button class="asset-category-tab" data-category="weapons">Оружие</button>
+          <button class="asset-category-tab" data-category="armor">Доспехи</button>
+          <button class="asset-category-tab" data-category="containers">Контейнеры</button>
+          <button class="asset-category-tab" data-category="kitchen">Кухня</button>
+          <button class="asset-category-tab" data-category="food">Еда</button>
+          <button class="asset-category-tab" data-category="clothing">Одежда</button>
+          <button class="asset-category-tab" data-category="animals">Животные</button>
+          <button class="asset-category-tab" data-category="insects">Насекомые</button>
+          <button class="asset-category-tab" data-category="treasure">Сокровища</button>
+          <button class="asset-category-tab" data-category="magic">Магия</button>
+          <button class="asset-category-tab" data-category="tools">Инструменты</button>
+          <button class="asset-category-tab" data-category="furniture">Мебель</button>
+          <button class="asset-category-tab" data-category="paths">Дорожки</button>
+          <button class="asset-category-tab" data-category="buildings">Здания</button>
+        </div>
+      </div>
+      <div id="asset-content">
+        <!-- Content will be populated by JavaScript -->
+      </div>
+    </div>
+
     <div id="emoji-modal">
       <div class="modal">
         <div style="display:flex; gap:10px; align-items:center;">

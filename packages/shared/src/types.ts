@@ -55,7 +55,7 @@ export interface Asset {
   hidden?: boolean; // if true, only DM can see this asset
 }
 
-export type FloorKind = "stone" | "wood" | "water" | "sand" | "grass";
+export type FloorKind = "stone" | "wood" | "water" | "sand" | "grass" | "path" | "bridge" | "carpet" | "marble" | "dirt" | "mud" | "snow" | "ice";
 
 export type FogMode = "automatic" | "manual";
 

@@ -67,7 +67,7 @@ export interface Asset {
     zIndex?: number;
     hidden?: boolean;
 }
-export type FloorKind = "stone" | "wood" | "water" | "sand" | "grass";
+export type FloorKind = "stone" | "wood" | "water" | "sand" | "grass" | "path" | "bridge" | "carpet" | "marble" | "dirt" | "mud" | "snow" | "ice";
 export type FogMode = "automatic" | "manual";
 export type Event = {
     type: "tokenMoved";

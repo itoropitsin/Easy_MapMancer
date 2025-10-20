@@ -394,11 +394,19 @@ function tileColor(gx: number, gy: number, seedStr: string): number {
 
 type FloorPalette = { light: number; mid: number; dark: number };
 const PAINTED_FLOOR_PALETTES: Record<FloorKind, FloorPalette> = {
-  stone: { light: 0x848b99, mid: 0x6b7280, dark: 0x4d5360 },
-  wood: { light: 0xa86b33, mid: 0x8b5a2b, dark: 0x70421f },
-  water: { light: 0x60a5fa, mid: 0x3b82f6, dark: 0x1d4ed8 },
-  sand: { light: 0xe3cfa8, mid: 0xd1b892, dark: 0xb9956b },
-  grass: { light: 0x62c15d, mid: 0x3f8f3e, dark: 0x2d6b2b },
+  stone: { light: 0x7a808a, mid: 0x6b7280, dark: 0x5c6470 },
+  wood: { light: 0x9c6b2b, mid: 0x8b5a2b, dark: 0x7a492b },
+  water: { light: 0x4a9cf0, mid: 0x3b82f6, dark: 0x2c68dc },
+  sand: { light: 0xd9c398, mid: 0xd1b892, dark: 0xc9ad8c },
+  grass: { light: 0x52b14d, mid: 0x3f8f3e, dark: 0x2c6d2f },
+  path: { light: 0x7b6345, mid: 0x6b5b47, dark: 0x5b5349 },
+  bridge: { light: 0x7b4a1b, mid: 0x70421f, dark: 0x653a23 },
+  carpet: { light: 0xd42626, mid: 0xb91c1c, dark: 0x9e1212 },
+  marble: { light: 0xf0f2f4, mid: 0xe2e8f0, dark: 0xd4dae2 },
+  dirt: { light: 0x82380e, mid: 0x78350f, dark: 0x6e3210 },
+  mud: { light: 0x6c2512, mid: 0x5c1d0a, dark: 0x4c1508 },
+  snow: { light: 0xf0f2f4, mid: 0xe2e8f0, dark: 0xd4dae2 },
+  ice: { light: 0xafc5ee, mid: 0x93c5fd, dark: 0x77a5cc },
 };
 
 function lerpChannel(a: number, b: number, t: number): number {
@@ -1459,14 +1467,140 @@ function drawAssets() {
       // Emoji-like for decorative items
       const emojiFor = (k: string): string => {
         switch (k) {
+          // Природа и растения
           case "tree": return "🌳";
           case "rock": return "🪨";
           case "bush": return "🌿";
-          case "chest": return "📦";
+          case "flower": return "🌸";
+          case "mushroom": return "🍄";
+          case "cactus": return "🌵";
+          case "vine": return "🌱";
+          case "log": return "🪵";
+          
+          // Огонь и освещение
+          case "fire": return "🔥";
+          case "torch": return "🕯️";
+          case "candle": return "🕯️";
+          case "lantern": return "🏮";
+          case "campfire": return "🔥";
+          
+          // Оружие
           case "sword": return "🗡️";
           case "bow": return "🏹";
+          case "axe": return "🪓";
+          case "spear": return "🔱";
+          case "mace": return "⚔️";
+          case "dagger": return "🗡️";
+          case "crossbow": return "🏹";
+          case "shield": return "🛡️";
+          
+          // Доспехи
+          case "helmet": return "⛑️";
+          case "armor": return "🛡️";
+          case "boots": return "👢";
+          case "gloves": return "🧤";
+          
+          // Сундуки и контейнеры
+          case "chest": return "📦";
+          case "barrel": return "🛢️";
+          case "crate": return "📦";
+          case "bag": return "🎒";
+          case "basket": return "🧺";
+          case "pot": return "🍯";
+          
+          // Кухонные принадлежности
+          case "cauldron": return "🍲";
+          case "pan": return "🍳";
+          case "plate": return "🍽️";
+          case "cup": return "☕";
+          case "bottle": return "🍾";
+          case "knife": return "🔪";
+          case "fork": return "🍴";
+          case "spoon": return "🥄";
+          
+          // Еда и продукты
+          case "bread": return "🍞";
+          case "apple": return "🍎";
+          case "meat": return "🥩";
+          case "fish": return "🐟";
+          case "cheese": return "🧀";
+          case "cake": return "🍰";
+          case "pie": return "🥧";
+          case "soup": return "🍲";
+          case "wine": return "🍷";
+          case "beer": return "🍺";
+          
+          // Одежда
+          case "hat": return "🎩";
+          case "cloak": return "🧥";
+          case "shirt": return "👕";
+          case "pants": return "👖";
+          case "dress": return "👗";
+          case "shoes": return "👟";
+          case "belt": return "👔";
+          
+          // Животные
+          case "cat": return "🐱";
+          case "dog": return "🐕";
+          case "horse": return "🐴";
+          case "bird": return "🐦";
+          case "owl": return "🦉";
+          case "rat": return "🐀";
+          case "spider": return "🕷️";
+          case "snake": return "🐍";
+          case "frog": return "🐸";
+          case "butterfly": return "🦋";
+          case "bee": return "🐝";
+          case "fish_animal": return "🐠";
+          
+          // Насекомые
+          case "ant": return "🐜";
+          case "fly": return "🪰";
+          case "mosquito": return "🦟";
+          case "beetle": return "🪲";
+          case "dragonfly": return "🦟";
+          
+          // Драгоценности и монеты
           case "coins": return "🪙";
+          case "gem": return "💎";
+          case "ring": return "💍";
+          case "necklace": return "📿";
+          case "crown": return "👑";
+          case "treasure": return "💰";
+          
+          // Книги и магия
+          case "book": return "📖";
+          case "scroll": return "📜";
+          case "potion": return "🧪";
+          case "crystal": return "🔮";
+          case "wand": return "🪄";
+          case "orb": return "🔮";
+          
+          // Инструменты
+          case "hammer": return "🔨";
+          case "pickaxe": return "⛏️";
+          case "shovel": return "🪣";
+          case "rope": return "🪢";
+          case "key": return "🗝️";
+          case "lock": return "🔒";
+          
+          // Мебель
+          case "chair": return "🪑";
+          case "table": return "🪑";
+          case "bed": return "🛏️";
+          case "stool": return "🪑";
+          case "bench": return "🪑";
+          
+          // Дорожки и тропы
+          case "path": return "🛤️";
+          case "bridge": return "🌉";
+          case "stairs": return "🪜";
+          
+          // Разное
           case "other": return "✨";
+          case "mystery": return "❓";
+          case "magic": return "✨";
+          
           default: return "✨";
         }
       };
@@ -2297,6 +2431,14 @@ function connect() {
   const btnFloorWater = document.getElementById("floor-water") as HTMLButtonElement | null;
   const btnFloorSand = document.getElementById("floor-sand") as HTMLButtonElement | null;
   const btnFloorGrass = document.getElementById("floor-grass") as HTMLButtonElement | null;
+  const btnFloorPath = document.getElementById("floor-path") as HTMLButtonElement | null;
+  const btnFloorBridge = document.getElementById("floor-bridge") as HTMLButtonElement | null;
+  const btnFloorCarpet = document.getElementById("floor-carpet") as HTMLButtonElement | null;
+  const btnFloorMarble = document.getElementById("floor-marble") as HTMLButtonElement | null;
+  const btnFloorDirt = document.getElementById("floor-dirt") as HTMLButtonElement | null;
+  const btnFloorMud = document.getElementById("floor-mud") as HTMLButtonElement | null;
+  const btnFloorSnow = document.getElementById("floor-snow") as HTMLButtonElement | null;
+  const btnFloorIce = document.getElementById("floor-ice") as HTMLButtonElement | null;
   const btnNewMap = document.getElementById("btn-new-map") as HTMLButtonElement | null;
   const btnNewFolder = document.getElementById("btn-new-folder") as HTMLButtonElement | null;
   const btnAddPlayer = document.getElementById("btn-add-player") as HTMLButtonElement | null;
@@ -2796,6 +2938,14 @@ function connect() {
   btnFloorWater?.addEventListener("click", () => { selectedFloorKind = "water"; selectedAssetKind = null; selectedTokenKind = null; editorMode = "paint"; updateEditorUI(); });
   btnFloorSand?.addEventListener("click", () => { selectedFloorKind = "sand"; selectedAssetKind = null; selectedTokenKind = null; editorMode = "paint"; updateEditorUI(); });
   btnFloorGrass?.addEventListener("click", () => { selectedFloorKind = "grass"; selectedAssetKind = null; selectedTokenKind = null; editorMode = "paint"; updateEditorUI(); });
+  btnFloorPath?.addEventListener("click", () => { selectedFloorKind = "path"; selectedAssetKind = null; selectedTokenKind = null; editorMode = "paint"; updateEditorUI(); });
+  btnFloorBridge?.addEventListener("click", () => { selectedFloorKind = "bridge"; selectedAssetKind = null; selectedTokenKind = null; editorMode = "paint"; updateEditorUI(); });
+  btnFloorCarpet?.addEventListener("click", () => { selectedFloorKind = "carpet"; selectedAssetKind = null; selectedTokenKind = null; editorMode = "paint"; updateEditorUI(); });
+  btnFloorMarble?.addEventListener("click", () => { selectedFloorKind = "marble"; selectedAssetKind = null; selectedTokenKind = null; editorMode = "paint"; updateEditorUI(); });
+  btnFloorDirt?.addEventListener("click", () => { selectedFloorKind = "dirt"; selectedAssetKind = null; selectedTokenKind = null; editorMode = "paint"; updateEditorUI(); });
+  btnFloorMud?.addEventListener("click", () => { selectedFloorKind = "mud"; selectedAssetKind = null; selectedTokenKind = null; editorMode = "paint"; updateEditorUI(); });
+  btnFloorSnow?.addEventListener("click", () => { selectedFloorKind = "snow"; selectedAssetKind = null; selectedTokenKind = null; editorMode = "paint"; updateEditorUI(); });
+  btnFloorIce?.addEventListener("click", () => { selectedFloorKind = "ice"; selectedAssetKind = null; selectedTokenKind = null; editorMode = "paint"; updateEditorUI(); });
   btnBrush1?.addEventListener("click", () => { brushSize = 1; updateEditorUI(); });
   btnBrush2?.addEventListener("click", () => { brushSize = 2; updateEditorUI(); });
   btnBrush3?.addEventListener("click", () => { brushSize = 3; updateEditorUI(); });
@@ -3041,6 +3191,317 @@ function connect() {
 }
 
 connect();
+
+// Bottom Asset Menu Management
+function initializeBottomAssetMenu() {
+  const assetContent = document.getElementById('asset-content');
+  const assetSearch = document.getElementById('asset-search') as HTMLInputElement;
+  const categoryTabs = document.querySelectorAll('.asset-category-tab');
+  
+  // Asset data organized by categories
+  const assetCategories = {
+    nature: [
+      { id: 'tree', emoji: '🌳', name: 'Дерево' },
+      { id: 'rock', emoji: '🪨', name: 'Камень' },
+      { id: 'bush', emoji: '🌿', name: 'Куст' },
+      { id: 'flower', emoji: '🌸', name: 'Цветок' },
+      { id: 'mushroom', emoji: '🍄', name: 'Гриб' },
+      { id: 'cactus', emoji: '🌵', name: 'Кактус' },
+      { id: 'vine', emoji: '🌱', name: 'Лоза' },
+      { id: 'log', emoji: '🪵', name: 'Бревно' }
+    ],
+    fire: [
+      { id: 'fire', emoji: '🔥', name: 'Огонь' },
+      { id: 'torch', emoji: '🕯️', name: 'Факел' },
+      { id: 'candle', emoji: '🕯️', name: 'Свеча' },
+      { id: 'lantern', emoji: '🏮', name: 'Фонарь' },
+      { id: 'campfire', emoji: '🔥', name: 'Костер' }
+    ],
+    weapons: [
+      { id: 'sword', emoji: '🗡️', name: 'Меч' },
+      { id: 'bow', emoji: '🏹', name: 'Лук' },
+      { id: 'axe', emoji: '🪓', name: 'Топор' },
+      { id: 'spear', emoji: '🔱', name: 'Копье' },
+      { id: 'mace', emoji: '⚔️', name: 'Булава' },
+      { id: 'dagger', emoji: '🗡️', name: 'Кинжал' },
+      { id: 'crossbow', emoji: '🏹', name: 'Арбалет' },
+      { id: 'shield', emoji: '🛡️', name: 'Щит' }
+    ],
+    armor: [
+      { id: 'helmet', emoji: '⛑️', name: 'Шлем' },
+      { id: 'armor', emoji: '🛡️', name: 'Доспех' },
+      { id: 'boots', emoji: '👢', name: 'Сапоги' },
+      { id: 'gloves', emoji: '🧤', name: 'Перчатки' }
+    ],
+    containers: [
+      { id: 'chest', emoji: '📦', name: 'Сундук' },
+      { id: 'barrel', emoji: '🛢️', name: 'Бочка' },
+      { id: 'crate', emoji: '📦', name: 'Ящик' },
+      { id: 'bag', emoji: '🎒', name: 'Мешок' },
+      { id: 'basket', emoji: '🧺', name: 'Корзина' },
+      { id: 'pot', emoji: '🍯', name: 'Горшок' }
+    ],
+    kitchen: [
+      { id: 'cauldron', emoji: '🍲', name: 'Котел' },
+      { id: 'pan', emoji: '🍳', name: 'Сковорода' },
+      { id: 'plate', emoji: '🍽️', name: 'Тарелка' },
+      { id: 'cup', emoji: '☕', name: 'Чашка' },
+      { id: 'bottle', emoji: '🍾', name: 'Бутылка' },
+      { id: 'knife', emoji: '🔪', name: 'Нож' },
+      { id: 'fork', emoji: '🍴', name: 'Вилка' },
+      { id: 'spoon', emoji: '🥄', name: 'Ложка' }
+    ],
+    food: [
+      { id: 'bread', emoji: '🍞', name: 'Хлеб' },
+      { id: 'apple', emoji: '🍎', name: 'Яблоко' },
+      { id: 'meat', emoji: '🥩', name: 'Мясо' },
+      { id: 'fish', emoji: '🐟', name: 'Рыба' },
+      { id: 'cheese', emoji: '🧀', name: 'Сыр' },
+      { id: 'cake', emoji: '🍰', name: 'Торт' },
+      { id: 'pie', emoji: '🥧', name: 'Пирог' },
+      { id: 'soup', emoji: '🍲', name: 'Суп' },
+      { id: 'wine', emoji: '🍷', name: 'Вино' },
+      { id: 'beer', emoji: '🍺', name: 'Пиво' }
+    ],
+    clothing: [
+      { id: 'hat', emoji: '🎩', name: 'Шляпа' },
+      { id: 'cloak', emoji: '🧥', name: 'Плащ' },
+      { id: 'shirt', emoji: '👕', name: 'Рубашка' },
+      { id: 'pants', emoji: '👖', name: 'Брюки' },
+      { id: 'dress', emoji: '👗', name: 'Платье' },
+      { id: 'shoes', emoji: '👟', name: 'Обувь' },
+      { id: 'belt', emoji: '👔', name: 'Ремень' }
+    ],
+    animals: [
+      { id: 'cat', emoji: '🐱', name: 'Кот' },
+      { id: 'dog', emoji: '🐕', name: 'Собака' },
+      { id: 'horse', emoji: '🐴', name: 'Лошадь' },
+      { id: 'bird', emoji: '🐦', name: 'Птица' },
+      { id: 'owl', emoji: '🦉', name: 'Сова' },
+      { id: 'rat', emoji: '🐀', name: 'Крыса' },
+      { id: 'spider', emoji: '🕷️', name: 'Паук' },
+      { id: 'snake', emoji: '🐍', name: 'Змея' },
+      { id: 'frog', emoji: '🐸', name: 'Лягушка' },
+      { id: 'butterfly', emoji: '🦋', name: 'Бабочка' },
+      { id: 'bee', emoji: '🐝', name: 'Пчела' },
+      { id: 'fish_animal', emoji: '🐠', name: 'Рыба' }
+    ],
+    insects: [
+      { id: 'ant', emoji: '🐜', name: 'Муравей' },
+      { id: 'fly', emoji: '🪰', name: 'Муха' },
+      { id: 'mosquito', emoji: '🦟', name: 'Комар' },
+      { id: 'beetle', emoji: '🪲', name: 'Жук' },
+      { id: 'dragonfly', emoji: '🦟', name: 'Стрекоза' }
+    ],
+    treasure: [
+      { id: 'coins', emoji: '🪙', name: 'Монеты' },
+      { id: 'gem', emoji: '💎', name: 'Драгоценность' },
+      { id: 'ring', emoji: '💍', name: 'Кольцо' },
+      { id: 'necklace', emoji: '📿', name: 'Ожерелье' },
+      { id: 'crown', emoji: '👑', name: 'Корона' },
+      { id: 'treasure', emoji: '💰', name: 'Сокровище' }
+    ],
+    magic: [
+      { id: 'book', emoji: '📖', name: 'Книга' },
+      { id: 'scroll', emoji: '📜', name: 'Свиток' },
+      { id: 'potion', emoji: '🧪', name: 'Зелье' },
+      { id: 'crystal', emoji: '🔮', name: 'Кристалл' },
+      { id: 'wand', emoji: '🪄', name: 'Посох' },
+      { id: 'orb', emoji: '🔮', name: 'Сфера' }
+    ],
+    tools: [
+      { id: 'hammer', emoji: '🔨', name: 'Молоток' },
+      { id: 'pickaxe', emoji: '⛏️', name: 'Кирка' },
+      { id: 'shovel', emoji: '🪣', name: 'Лопата' },
+      { id: 'rope', emoji: '🪢', name: 'Веревка' },
+      { id: 'key', emoji: '🗝️', name: 'Ключ' },
+      { id: 'lock', emoji: '🔒', name: 'Замок' }
+    ],
+    furniture: [
+      { id: 'chair', emoji: '🪑', name: 'Стул' },
+      { id: 'table', emoji: '🪑', name: 'Стол' },
+      { id: 'bed', emoji: '🛏️', name: 'Кровать' },
+      { id: 'stool', emoji: '🪑', name: 'Табурет' },
+      { id: 'bench', emoji: '🪑', name: 'Скамья' }
+    ],
+    paths: [
+      { id: 'path', emoji: '🛤️', name: 'Дорожка' },
+      { id: 'bridge', emoji: '🌉', name: 'Мост' },
+      { id: 'stairs', emoji: '🪜', name: 'Лестница' }
+    ],
+    buildings: [
+      { id: 'wall', emoji: '🧱', name: 'Стена' },
+      { id: 'window', emoji: '🪟', name: 'Окно' },
+      { id: 'door', emoji: '🚪', name: 'Дверь' }
+    ]
+  };
+
+  let currentCategory = 'all';
+  let currentSearchTerm = '';
+
+  function renderAssets() {
+    if (!assetContent) return;
+
+    let assetsToShow: any[] = [];
+    
+    if (currentCategory === 'all') {
+      // Show all assets
+      Object.values(assetCategories).forEach(categoryAssets => {
+        assetsToShow.push(...categoryAssets);
+      });
+    } else {
+      // Show specific category
+      assetsToShow = assetCategories[currentCategory as keyof typeof assetCategories] || [];
+    }
+
+    // Filter by search term
+    if (currentSearchTerm) {
+      assetsToShow = assetsToShow.filter(asset => 
+        asset.name.toLowerCase().includes(currentSearchTerm.toLowerCase()) ||
+        asset.id.toLowerCase().includes(currentSearchTerm.toLowerCase())
+      );
+    }
+
+    // Group by category for display
+    const groupedAssets: { [key: string]: any[] } = {};
+    assetsToShow.forEach(asset => {
+      // Find which category this asset belongs to
+      let category = 'other';
+      for (const [catName, catAssets] of Object.entries(assetCategories)) {
+        if (catAssets.some(a => a.id === asset.id)) {
+          category = catName;
+          break;
+        }
+      }
+      
+      if (!groupedAssets[category]) {
+        groupedAssets[category] = [];
+      }
+      groupedAssets[category].push(asset);
+    });
+
+    // Render the assets
+    assetContent.innerHTML = '';
+    
+    Object.entries(groupedAssets).forEach(([category, assets]) => {
+      const section = document.createElement('div');
+      section.className = 'asset-section';
+      
+      const title = document.createElement('div');
+      title.className = 'asset-section-title';
+      title.textContent = getCategoryDisplayName(category);
+      section.appendChild(title);
+      
+      const grid = document.createElement('div');
+      grid.className = 'asset-grid';
+      
+      assets.forEach(asset => {
+        const item = document.createElement('div');
+        item.className = 'asset-item';
+        item.dataset.assetId = asset.id;
+        
+        const emoji = document.createElement('div');
+        emoji.className = 'asset-emoji';
+        emoji.textContent = asset.emoji;
+        
+        const name = document.createElement('div');
+        name.className = 'asset-name';
+        name.textContent = asset.name;
+        
+        item.appendChild(emoji);
+        item.appendChild(name);
+        
+        // Add click handler
+        item.addEventListener('click', () => {
+          selectAsset(asset.id);
+        });
+        
+        grid.appendChild(item);
+      });
+      
+      section.appendChild(grid);
+      assetContent.appendChild(section);
+    });
+  }
+
+  function getCategoryDisplayName(category: string): string {
+    const names: { [key: string]: string } = {
+      nature: 'Природа и растения',
+      fire: 'Огонь и освещение',
+      weapons: 'Оружие',
+      armor: 'Доспехи',
+      containers: 'Сундуки и контейнеры',
+      kitchen: 'Кухонные принадлежности',
+      food: 'Еда и продукты',
+      clothing: 'Одежда',
+      animals: 'Животные',
+      insects: 'Насекомые',
+      treasure: 'Драгоценности и монеты',
+      magic: 'Книги и магия',
+      tools: 'Инструменты',
+      furniture: 'Мебель',
+      paths: 'Дорожки и тропы',
+      buildings: 'Здания',
+      other: 'Разное'
+    };
+    return names[category] || category;
+  }
+
+  function selectAsset(assetId: string) {
+    // Remove previous selection
+    document.querySelectorAll('.asset-item.selected').forEach(item => {
+      item.classList.remove('selected');
+    });
+    
+    // Add selection to clicked item
+    const selectedItem = document.querySelector(`[data-asset-id="${assetId}"]`);
+    if (selectedItem) {
+      selectedItem.classList.add('selected');
+    }
+    
+    // Set the selected asset for placement
+    selectedAssetKind = assetId;
+    editorMode = 'paint';
+    
+    // Update UI to show paint mode
+    updateEditorUI();
+  }
+
+  // Category tab handlers
+  categoryTabs.forEach(tab => {
+    tab.addEventListener('click', () => {
+      // Remove active class from all tabs
+      categoryTabs.forEach(t => t.classList.remove('active'));
+      
+      // Add active class to clicked tab
+      tab.classList.add('active');
+      
+      // Update current category
+      currentCategory = tab.getAttribute('data-category') || 'all';
+      
+      // Re-render assets
+      renderAssets();
+    });
+  });
+
+  // Search handler
+  if (assetSearch) {
+    assetSearch.addEventListener('input', (e) => {
+      currentSearchTerm = (e.target as HTMLInputElement).value;
+      renderAssets();
+    });
+  }
+
+  // Initial render
+  renderAssets();
+}
+
+// Initialize the bottom asset menu when DOM is ready
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', initializeBottomAssetMenu);
+} else {
+  initializeBottomAssetMenu();
+}
 
 function centerOn(v: Vec2) {
   const s = world.scale.x || 1;
