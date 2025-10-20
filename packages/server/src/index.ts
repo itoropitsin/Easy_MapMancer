@@ -1525,6 +1525,41 @@ function onMessage(client: ClientRec, data: any) {
       })();
       break;
     }
+    case "renameLocation": {
+      if (client.role !== "DM") return;
+      (async () => {
+        await ensureDataRoot();
+        const newName = String(msg.newName || "").replace(/\s+/g, " ").trim();
+        if (!newName) return send(client.socket, { t: "error", message: "Invalid location name" });
+        
+        // Update current location name
+        if (state.location) {
+          state.location.name = newName;
+          
+          // Save the updated location
+          if (currentSavePath) {
+            try {
+              const snap = createGameSnapshot();
+              const fileAbs = withinDataRoot(currentSavePath);
+              if (fileAbs) {
+                await writeJSON(fileAbs, snap);
+                console.log(`[server] renamed location to: ${newName}`);
+              }
+            } catch (e) {
+              console.error("[server] failed to save renamed location:", e);
+              return send(client.socket, { t: "error", message: "Failed to save location" });
+            }
+          }
+          
+          // Broadcast the name change to all clients
+          const broadcastMsg: ServerToClient = { t: "locationRenamed", newName };
+          for (const c of state.clients.values()) {
+            send(c.socket, broadcastMsg);
+          }
+        }
+      })();
+      break;
+    }
     case "loadLocationById": {
       // Allow any client to load a location by ID
       (async () => {

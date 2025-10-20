@@ -24,6 +24,7 @@ export type ClientToServer =
   | { t: "deleteLocation"; path: string } // delete a location file, e.g. "my/maps/test.json"
   | { t: "moveLocation"; from: string; toFolder: string } // move a file into folder; keeps file name
   | { t: "renameFolder"; path: string; newName: string } // rename a folder at path (folder paths may end with "/")
+  | { t: "renameLocation"; newName: string } // rename current location
   | { t: "loadLocation"; path: string }
   | { t: "loadLocationById"; locationId: ID }
   | { t: "updateToken"; tokenId: ID; patch: Partial<Token> }
@@ -47,5 +48,6 @@ export type ServerToClient =
   | { t: "locationsTree"; tree: LocationTreeNode[]; lastUsedPath?: string }
   | { t: "savedOk"; path: string }
   | { t: "roleChanged"; role: Role }
+  | { t: "locationRenamed"; newName: string }
   | { t: "undoRedoState"; undoStack: ActionSnapshot[]; redoStack: ActionSnapshot[] }
   | { t: "gameStateRestored" };

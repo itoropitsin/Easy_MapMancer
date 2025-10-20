@@ -296,6 +296,33 @@
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
+        cursor: pointer;
+        transition: background-color 0.2s ease;
+        padding: 4px 8px;
+        border-radius: 6px;
+        margin: -4px -8px;
+      }
+
+      #map-info:hover {
+        background-color: rgba(96, 165, 250, 0.1);
+      }
+
+      #map-info.editing {
+        background-color: rgba(96, 165, 250, 0.15);
+        cursor: text;
+      }
+
+      #map-info input {
+        background: transparent;
+        border: none;
+        outline: none;
+        color: inherit;
+        font-size: inherit;
+        font-weight: inherit;
+        letter-spacing: inherit;
+        width: 100%;
+        padding: 0;
+        margin: 0;
       }
 
       #status {
@@ -941,7 +968,7 @@
         user-select: none;
       }
     </style>
-    <script type="module" crossorigin src="/assets/index-yBFobjdy.js"></script>
+    <script type="module" crossorigin src="/assets/index-BgK3GVtf.js"></script>
   </head>
   <body>
     <div id="app"></div>

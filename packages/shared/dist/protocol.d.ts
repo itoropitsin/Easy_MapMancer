@@ -79,6 +79,9 @@ export type ClientToServer = {
     path: string;
     newName: string;
 } | {
+    t: "renameLocation";
+    newName: string;
+} | {
     t: "loadLocation";
     path: string;
 } | {
@@ -142,6 +145,9 @@ export type ServerToClient = {
 } | {
     t: "roleChanged";
     role: Role;
+} | {
+    t: "locationRenamed";
+    newName: string;
 } | {
     t: "undoRedoState";
     undoStack: ActionSnapshot[];

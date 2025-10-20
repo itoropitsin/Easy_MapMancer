@@ -1710,6 +1710,70 @@ function connect() {
     mapInfoEl.setAttribute("title", value);
     refreshShareButton();
   };
+
+  // Map name editing functionality
+  let isEditingMapName = false;
+  let originalMapName = "";
+
+  const startEditingMapName = () => {
+    if (!mapInfoEl || !socket || myRole !== "DM" || isEditingMapName) return;
+    
+    originalMapName = currentLocation?.name || "";
+    isEditingMapName = true;
+    mapInfoEl.classList.add("editing");
+    
+    const input = document.createElement("input");
+    input.type = "text";
+    input.value = originalMapName;
+    input.maxLength = 50;
+    
+    mapInfoEl.textContent = "";
+    mapInfoEl.appendChild(input);
+    input.focus();
+    input.select();
+    
+    const finishEditing = (save: boolean) => {
+      if (!isEditingMapName || !mapInfoEl) return;
+      
+      isEditingMapName = false;
+      mapInfoEl.classList.remove("editing");
+      
+      if (save && input.value.trim() !== originalMapName) {
+        const newName = input.value.trim();
+        if (newName && newName !== originalMapName) {
+          const msg: ClientToServer = { t: "renameLocation", newName };
+          socket.send(JSON.stringify(msg));
+        }
+      }
+      
+      mapInfoEl.removeChild(input);
+      setMapName(currentLocation?.name);
+    };
+    
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        finishEditing(true);
+      } else if (e.key === "Escape") {
+        e.preventDefault();
+        finishEditing(false);
+      }
+    };
+    
+    const handleBlur = () => {
+      finishEditing(true);
+    };
+    
+    input.addEventListener("keydown", handleKeyDown);
+    input.addEventListener("blur", handleBlur);
+  };
+
+  // Add click handler to map name for editing
+  mapInfoEl?.addEventListener("click", (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    startEditingMapName();
+  });
   setStatus("WS: connecting...", "connecting");
   setMapName(null);
   refreshShareButton();
@@ -2085,6 +2149,13 @@ function connect() {
         try { (updateEditorUI as any)(); } catch {}
         try { (updateUserMenu as any)(); } catch {}
         hudToast(`Роль изменена на: ${myRole === "DM" ? "Администратор" : "Игрок"}`);
+      } else if (msg.t === "locationRenamed") {
+        const newName = (msg as any).newName;
+        if (currentLocation) {
+          currentLocation.name = newName;
+          setMapName(newName);
+          hudToast(`Карта переименована в: ${newName}`);
+        }
       } else if (msg.t === "undoRedoState") {
         console.log(`[CLIENT] Received undoRedoState:`, (msg as any).undoStack.length, (msg as any).redoStack.length);
         updateUndoRedoButtons((msg as any).undoStack, (msg as any).redoStack);
