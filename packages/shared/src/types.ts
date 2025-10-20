@@ -35,6 +35,7 @@ export interface Token {
   tint?: number;
   stats?: { str?: number; dex?: number; con?: number; int?: number; wis?: number; cha?: number; hp?: number; ac?: number };
   notes?: string;
+  zIndex?: number; // rendering layer order within same cell
 }
 
 export interface Asset {
@@ -47,6 +48,7 @@ export interface Asset {
   tint?: number;
   // for interactive assets like door
   open?: boolean;
+  zIndex?: number; // rendering layer order within same cell
 }
 
 export type FloorKind = "stone" | "wood" | "water" | "sand" | "grass";
