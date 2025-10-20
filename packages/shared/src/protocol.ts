@@ -24,9 +24,7 @@ export type ClientToServer =
   | { t: "moveLocation"; from: string; toFolder: string } // move a file into folder; keeps file name
   | { t: "renameFolder"; path: string; newName: string } // rename a folder at path (folder paths may end with "/")
   | { t: "loadLocation"; path: string }
-  | { t: "updateToken"; tokenId: ID; patch: Partial<Token> }
-  | { t: "reorderToken"; tokenId: ID; direction: "top" | "up" | "down" | "bottom" }
-  | { t: "reorderAsset"; assetId: ID; direction: "top" | "up" | "down" | "bottom" };
+  | { t: "updateToken"; tokenId: ID; patch: Partial<Token> };
 
 export type ServerToClient =
   | { t: "welcome"; playerId: ID; role: Role; snapshot: GameSnapshot }

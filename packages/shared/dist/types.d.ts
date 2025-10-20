@@ -50,7 +50,6 @@ export interface Token {
         ac?: number;
     };
     notes?: string;
-    zIndex?: number;
 }
 export interface Asset {
     id: ID;
@@ -61,7 +60,6 @@ export interface Asset {
     scale?: number;
     tint?: number;
     open?: boolean;
-    zIndex?: number;
 }
 export type FloorKind = "stone" | "wood" | "water" | "sand" | "grass";
 export type Event = {

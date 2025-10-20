@@ -91,8 +91,8 @@ let currentSeed: string | null = null;
 let myRole: "DM" | "PLAYER" | null = null;
 const revealedByLevel: Map<ID, Set<string>> = new Map();
 const assets = new Map<ID, Asset>();
-type EditorMode = "cursor" | "paint" | "eraseObjects" | "eraseSpace" | "revealFog" | "eraseFog" | "eraseTokens" | "spawnToken";
-let editorMode: EditorMode = "cursor";
+let editorMode: "cursor" | "paint" | "eraseObjects" | "eraseSpace" | "revealFog" | "eraseFog" | "eraseTokens" | "spawnToken" = "cursor";
+type EditorMode = typeof editorMode;
 const BRUSH_MODES: EditorMode[] = ["paint", "eraseObjects", "eraseSpace", "revealFog", "eraseFog"];
 let selectedTokenId: ID | null = null;
 let selectedAssetKind: string | null = null; // when null, floor tools may be used
@@ -249,11 +249,6 @@ function setFloorOverride(level: ID, pos: Vec2, kind: FloorKind | null) {
 const app = new Application();
 await app.init({ background: "#0b0e13", antialias: true, resizeTo: window });
 document.getElementById("app")!.appendChild(app.canvas);
-
-// Prevent browser's default context menu on the canvas
-app.canvas.addEventListener("contextmenu", (e) => {
-  e.preventDefault();
-});
 
 const world = new Container();
 world.sortableChildren = true;
@@ -560,6 +555,17 @@ window.addEventListener("resize", () => {
   positionMinimap();
 });
 
+const tokenLayer = new Container();
+tokenLayer.zIndex = 500;
+world.addChild(tokenLayer);
+// place fog layer after token layer (zIndex also ensures ordering)
+world.addChild(fogLayer);
+
+// Tokens that the local user can control are drawn above fog
+const myTokensLayer = new Container();
+myTokensLayer.zIndex = 1100;
+world.addChild(myTokensLayer);
+
 // Walls & objects layers
 const wallsLayer = new Graphics();
 wallsLayer.zIndex = 200;
@@ -567,25 +573,10 @@ world.addChild(wallsLayer);
 const objectsLayer = new Graphics();
 objectsLayer.zIndex = 300;
 world.addChild(objectsLayer);
-
-// Unified layer for all game objects (tokens + assets) to allow z-index sorting between them
-const gameObjectsLayer = new Container();
-gameObjectsLayer.zIndex = 400;
-gameObjectsLayer.sortableChildren = true;
-world.addChild(gameObjectsLayer);
-
-// place fog layer after game objects
-world.addChild(fogLayer);
-
-// Tokens that the local user can control are drawn above fog
-const myTokensLayer = new Container();
-myTokensLayer.zIndex = 1100;
-myTokensLayer.sortableChildren = true;
-world.addChild(myTokensLayer);
-
-// Legacy layers (kept for compatibility but not used for new rendering)
-const tokenLayer = new Container();
+// Assets layer (editable props)
 const assetsLayer = new Container();
+assetsLayer.zIndex = 400;
+world.addChild(assetsLayer);
 
 // Now that layers exist, draw static content
 drawWalls();
@@ -731,156 +722,11 @@ function onDragEnd(e: any) {
   app.stage.off("pointerupoutside", onDragEnd);
 }
 
-// Context menu for object z-index management
-let contextMenu: HTMLDivElement | null = null;
-let contextMenuTarget: { type: "token"; id: ID } | { type: "asset"; id: ID } | null = null;
-
-function createContextMenu() {
-  if (contextMenu) return contextMenu;
-  const menu = document.createElement("div");
-  menu.id = "object-context-menu";
-  menu.style.cssText = `
-    position: fixed;
-    background: #202124;
-    border: 1px solid #5f6368;
-    border-radius: 4px;
-    padding: 4px 0;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.3);
-    z-index: 10000;
-    display: none;
-    min-width: 180px;
-    font-family: Inter, system-ui, sans-serif;
-    font-size: 13px;
-  `;
-  document.body.appendChild(menu);
-  contextMenu = menu;
-  
-  // Close on click outside
-  document.addEventListener("click", () => hideContextMenu());
-  
-  return menu;
-}
-
-function showContextMenu(x: number, y: number, target: { type: "token"; id: ID } | { type: "asset"; id: ID }) {
-  console.log(`[CLIENT] showContextMenu called with target:`, target);
-  const menu = createContextMenu();
-  contextMenuTarget = target;
-  
-  menu.innerHTML = "";
-  
-  const addItem = (label: string, action: () => void) => {
-    const item = document.createElement("div");
-    item.textContent = label;
-    item.style.cssText = `
-      padding: 6px 12px;
-      cursor: pointer;
-      color: #e8eaed;
-    `;
-    item.onmouseenter = () => { item.style.background = "#3c4043"; };
-    item.onmouseleave = () => { item.style.background = "transparent"; };
-    item.onclick = (e) => {
-      e.stopPropagation();
-      action();
-      hideContextMenu();
-    };
-    menu.appendChild(item);
-  };
-  
-  addItem("⬆️ На самый верх", () => {
-    if (!socket || !contextMenuTarget) return;
-    if (contextMenuTarget.type === "token") {
-      const msg: ClientToServer = { t: "reorderToken", tokenId: contextMenuTarget.id, direction: "top" };
-      console.log(`[CLIENT] Sending reorderToken:`, msg);
-      socket.send(JSON.stringify(msg));
-    } else {
-      const msg: ClientToServer = { t: "reorderAsset", assetId: contextMenuTarget.id, direction: "top" };
-      console.log(`[CLIENT] Sending reorderAsset:`, msg);
-      socket.send(JSON.stringify(msg));
-    }
-  });
-  
-  addItem("⬆ Выше", () => {
-    if (!socket || !contextMenuTarget) return;
-    if (contextMenuTarget.type === "token") {
-      const msg: ClientToServer = { t: "reorderToken", tokenId: contextMenuTarget.id, direction: "up" };
-      socket.send(JSON.stringify(msg));
-    } else {
-      const msg: ClientToServer = { t: "reorderAsset", assetId: contextMenuTarget.id, direction: "up" };
-      socket.send(JSON.stringify(msg));
-    }
-  });
-  
-  addItem("⬇ Ниже", () => {
-    if (!socket || !contextMenuTarget) return;
-    if (contextMenuTarget.type === "token") {
-      const msg: ClientToServer = { t: "reorderToken", tokenId: contextMenuTarget.id, direction: "down" };
-      socket.send(JSON.stringify(msg));
-    } else {
-      const msg: ClientToServer = { t: "reorderAsset", assetId: contextMenuTarget.id, direction: "down" };
-      socket.send(JSON.stringify(msg));
-    }
-  });
-  
-  addItem("⬇️ На самый низ", () => {
-    if (!socket || !contextMenuTarget) return;
-    if (contextMenuTarget.type === "token") {
-      const msg: ClientToServer = { t: "reorderToken", tokenId: contextMenuTarget.id, direction: "bottom" };
-      socket.send(JSON.stringify(msg));
-    } else {
-      const msg: ClientToServer = { t: "reorderAsset", assetId: contextMenuTarget.id, direction: "bottom" };
-      socket.send(JSON.stringify(msg));
-    }
-  });
-  
-  // Position menu
-  menu.style.left = `${x}px`;
-  menu.style.top = `${y}px`;
-  menu.style.display = "block";
-  
-  // Adjust if off-screen
-  setTimeout(() => {
-    const rect = menu.getBoundingClientRect();
-    if (rect.right > window.innerWidth) {
-      menu.style.left = `${window.innerWidth - rect.width - 10}px`;
-    }
-    if (rect.bottom > window.innerHeight) {
-      menu.style.top = `${window.innerHeight - rect.height - 10}px`;
-    }
-  }, 0);
-}
-
-function hideContextMenu() {
-  if (contextMenu) {
-    contextMenu.style.display = "none";
-  }
-  contextMenuTarget = null;
-}
-
 function drawTokens() {
-  console.log(`=== drawTokens() called, myRole=${myRole}, playerId=${playerId}, tokens.size=${tokens.size} ===`);
-  
-  // Remove existing token nodes from gameObjectsLayer and myTokensLayer
+  tokenLayer.removeChildren();
   myTokensLayer.removeChildren();
-  // Remove token nodes from gameObjectsLayer
-  for (let i = gameObjectsLayer.children.length - 1; i >= 0; i--) {
-    const child = gameObjectsLayer.children[i];
-    if ((child as any).userData?.type === "token") {
-      gameObjectsLayer.removeChild(child);
-    }
-  }
-  
   const revealed = levelId ? getRevealed(levelId) : undefined;
-  
-  // Sort tokens by zIndex (lower first = drawn first = behind)
-  const sortedTokens = Array.from(tokens.values()).sort((a, b) => {
-    const zA = (a as any).zIndex ?? 0;
-    const zB = (b as any).zIndex ?? 0;
-    return zA - zB;
-  });
-  
-  console.log(`Sorted tokens count: ${sortedTokens.length}`);
-  
-  for (const tok of sortedTokens) {
+  for (const tok of tokens.values()) {
     if (myRole !== "DM" && revealed && tok.id !== myTokenId && !revealed.has(`${tok.pos.x},${tok.pos.y}`)) {
       // hide non-owned tokens in unrevealed cells for player
       continue;
@@ -932,18 +778,8 @@ function drawTokens() {
       node.addChild(label);
     }
     node.position.set(tok.pos.x * CELL + CELL / 2, tok.pos.y * CELL + CELL / 2);
-    // Mark as token for cleanup
-    (node as any).userData = { type: "token" };
     // Enlarge hit area to make grabbing easier
     try { (node as any).hitArea = new Circle(0, 0, CELL * 0.55); } catch {}
-    
-    // Set zIndex for proper layering (default offset 100 to be above most assets)
-    node.zIndex = 100 + ((tok as any).zIndex ?? 0);
-    
-    // Decide which layer to use
-    const shouldBeAboveFog = myRole === "PLAYER" && tok.owner === playerId;
-    console.log(`Token processing: name=${tok.name}, owner=${tok.owner}, myRole=${myRole}, playerId=${playerId}, shouldBeAboveFog=${shouldBeAboveFog}, canControl=${canControl(tok)}`);
-    
     // Drag & drop
     if (canControl(tok)) {
       // @ts-ignore v8 event model
@@ -978,22 +814,8 @@ function drawTokens() {
           renderCharacterPanel();
         }
       });
-      // Right-click context menu for z-index management
-      node.on("rightclick", (e: any) => {
-        e.stopPropagation?.();
-        showContextMenu(e.global.x, e.global.y, { type: "token", id: tok.id });
-      });
-      
-      // Add to appropriate layer
-      if (shouldBeAboveFog) {
-        myTokensLayer.addChild(node);
-        console.log(`Token ${tok.name || 'unnamed'} (controllable) at (${tok.pos.x}, ${tok.pos.y}) with zIndex=${node.zIndex} → myTokensLayer`);
-      } else {
-        gameObjectsLayer.addChild(node);
-        console.log(`Token ${tok.name || 'unnamed'} (controllable) at (${tok.pos.x}, ${tok.pos.y}) with zIndex=${node.zIndex} → gameObjectsLayer`);
-      }
+      myTokensLayer.addChild(node);
     } else {
-      // Non-controllable tokens
       // @ts-ignore
       node.eventMode = "static";
       node.on("pointertap", (e: any) => { 
@@ -1006,25 +828,9 @@ function drawTokens() {
           renderCharacterPanel();
         }
       });
-      // Right-click context menu for z-index management
-      node.on("rightclick", (e: any) => {
-        e.stopPropagation?.();
-        showContextMenu(e.global.x, e.global.y, { type: "token", id: tok.id });
-      });
-      
-      // Add to appropriate layer
-      if (shouldBeAboveFog) {
-        myTokensLayer.addChild(node);
-        console.log(`Token ${tok.name || 'unnamed'} at (${tok.pos.x}, ${tok.pos.y}) with zIndex=${node.zIndex} → myTokensLayer`);
-      } else {
-        gameObjectsLayer.addChild(node);
-        console.log(`Token ${tok.name || 'unnamed'} at (${tok.pos.x}, ${tok.pos.y}) with zIndex=${node.zIndex} → gameObjectsLayer`);
-      }
+      tokenLayer.addChild(node);
     }
   }
-  // Force sort children by zIndex
-  gameObjectsLayer.sortChildren();
-  console.log(`=== drawTokens() complete. gameObjectsLayer children: ${gameObjectsLayer.children.length}, myTokensLayer children: ${myTokensLayer.children.length} ===`);
 }
 
 // Simple character panel renderer. Expects an element with id "right-panel" to exist.
@@ -1203,34 +1009,14 @@ function renderCharacterPanel() {
 }
 
 function drawAssets() {
-  console.log(`=== drawAssets() called, gameObjectsLayer.children.length BEFORE cleanup: ${gameObjectsLayer.children.length} ===`);
-  
-  // Remove existing asset nodes from gameObjectsLayer
-  for (let i = gameObjectsLayer.children.length - 1; i >= 0; i--) {
-    const child = gameObjectsLayer.children[i];
-    if ((child as any).userData?.type === "asset") {
-      gameObjectsLayer.removeChild(child);
-    }
-  }
-  
-  console.log(`gameObjectsLayer.children.length AFTER cleanup: ${gameObjectsLayer.children.length}`);
-  
+  assetsLayer.removeChildren();
   if (!levelId) return;
   const revealed = getRevealed(levelId);
-  
-  // Sort assets by zIndex (lower first = drawn first = behind)
-  const sortedAssets = Array.from(assets.values())
-    .filter(a => a.levelId === levelId)
-    .filter(a => myRole === "DM" || revealed.has(`${a.pos.x},${a.pos.y}`))
-    .sort((a, b) => {
-      const zA = (a as any).zIndex ?? 0;
-      const zB = (b as any).zIndex ?? 0;
-      return zA - zB;
-    });
-  
   // Build occupancy map for structural connections (walls/windows/doors)
   const byKey = new Map<string, { kind: string; open?: boolean }>();
-  for (const a of sortedAssets) {
+  for (const a of assets.values()) {
+    if (a.levelId !== levelId) continue;
+    if (myRole !== "DM" && !revealed.has(`${a.pos.x},${a.pos.y}`)) continue;
     byKey.set(`${a.pos.x},${a.pos.y}`, { kind: a.kind, open: (a as any).open });
   }
   const isWallLike = (cell: { kind: string; open?: boolean } | undefined) => {
@@ -1238,8 +1024,9 @@ function drawAssets() {
     if (cell.kind === "door") return !cell.open; // closed door behaves like wall
     return cell.kind === "wall" || cell.kind === "window";
   };
-  for (const a of sortedAssets) {
-    console.log(`[CLIENT] Drawing asset: kind=${a.kind}, id=${a.id}, pos=(${a.pos.x}, ${a.pos.y})`);
+  for (const a of assets.values()) {
+    if (a.levelId !== levelId) continue;
+    if (myRole !== "DM" && !revealed.has(`${a.pos.x},${a.pos.y}`)) continue;
     const node = new Container();
     // Linear, connected styles for building structures
     if (a.kind === "wall" || a.kind === "window" || a.kind === "door") {
@@ -1291,7 +1078,6 @@ function drawAssets() {
       }
       node.addChild(g as any);
       node.position.set(a.pos.x * CELL + CELL / 2, a.pos.y * CELL + CELL / 2);
-      (node as any).userData = { type: "asset" };
       if (typeof a.scale === "number") node.scale.set(a.scale);
       if (typeof a.rot === "number") node.rotation = a.rot;
       if (typeof a.tint === "number") (node as any).tint = a.tint;
@@ -1322,7 +1108,6 @@ function drawAssets() {
       label.position.set(0, 0);
       node.addChild(label as any);
       node.position.set(a.pos.x * CELL + CELL / 2, a.pos.y * CELL + CELL / 2);
-      (node as any).userData = { type: "asset" };
       if (typeof a.scale === "number") node.scale.set(a.scale);
       if (typeof a.rot === "number") node.rotation = a.rot;
       if (typeof a.tint === "number") (label as any).tint = a.tint;
@@ -1365,25 +1150,8 @@ function drawAssets() {
         e.stopPropagation?.();
       });
     }
-    // Right-click context menu for z-index management (for all assets)
-    if (myRole === "DM" || a.kind === "door") {
-      if (!node.eventMode || node.eventMode === "auto") {
-        // @ts-ignore
-        node.eventMode = "static";
-      }
-      node.on("rightclick", (e: any) => {
-        e.stopPropagation?.();
-        showContextMenu(e.global.x, e.global.y, { type: "asset", id: a.id });
-      });
-    }
-    // Add to gameObjectsLayer with zIndex (default 0, tokens default to 100, so assets are below by default)
-    node.zIndex = (a as any).zIndex ?? 0;
-    gameObjectsLayer.addChild(node);
-    console.log(`Asset ${a.kind} at (${a.pos.x}, ${a.pos.y}) with zIndex=${node.zIndex}`);
+    assetsLayer.addChild(node);
   }
-  // Force sort children by zIndex
-  gameObjectsLayer.sortChildren();
-  console.log(`Total objects in gameObjectsLayer: ${gameObjectsLayer.children.length}`);
 }
 
 type DraggingAsset = { assetId: ID; kind: string; sprite: Container; offset: { x: number; y: number }; from: Vec2 } | null;
@@ -1647,11 +1415,9 @@ function connect() {
         }
         // receive assets
         assets.clear();
-        console.log(`[CLIENT] Receiving snapshot with ${((msg.snapshot as any).assets ?? []).length} assets`);
         for (const a of (msg.snapshot as any).assets ?? []) {
           assets.set(a.id, a);
         }
-        console.log(`[CLIENT] First 5 asset IDs from snapshot:`, Array.from(assets.keys()).slice(0, 5));
         // receive floors
         const floorsArr = (msg.snapshot as any).floors as { levelId: ID; pos: Vec2; kind: FloorKind }[] | undefined;
         if (Array.isArray(floorsArr)) {
@@ -1812,11 +1578,9 @@ function connect() {
           } else if ((e as any).type === "assetPlaced") {
             const a = (e as any).asset as Asset;
             assets.set(a.id, a);
-            drawAssets(); // Redraw to reflect zIndex changes
           } else if ((e as any).type === "assetRemoved") {
             const id = (e as any).assetId as ID;
             assets.delete(id);
-            drawAssets();
           } else if ((e as any).type === "floorPainted") {
             const ev = e as any as { levelId: ID; pos: Vec2; kind: FloorKind | null };
             setFloorOverride(ev.levelId, ev.pos, ev.kind ?? null);
@@ -1825,14 +1589,12 @@ function connect() {
             if (anyE.token) {
               const full: any = anyE.token;
               tokens.set(full.id, full);
-              drawTokens(); // Redraw to reflect zIndex changes
               if (myRole === "DM") revealByVisionForToken(ws, full as any);
             } else {
               const ev = e as any as { type: string; tokenId: ID; patch: any };
               const t = tokens.get(ev.tokenId);
               if (t) {
                 Object.assign(t, ev.patch || {});
-                drawTokens(); // Redraw in case zIndex changed
                 if (myRole === "DM") revealByVisionForToken(ws, t as any);
               }
             }
