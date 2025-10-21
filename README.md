@@ -265,20 +265,3 @@ We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) f
 ## 📄 License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-<<<<<<< HEAD
-## License
-MIT
-=======
-## 🙏 Acknowledgments
-
-- Built with [PixiJS](https://pixijs.com/) for 2D graphics
-- Uses [Vite](https://vitejs.dev/) for fast development
-- Inspired by tabletop RPG communities
-
-## 📞 Support
-
-- 🐛 **Bug Reports**: [GitHub Issues](https://github.com/yourusername/dnd-map-maker/issues)
-- 💡 **Feature Requests**: [GitHub Discussions](https://github.com/yourusername/dnd-map-maker/discussions)
-- 📧 **Contact**: [Your Email](mailto:your.email@example.com)
->>>>>>> 446329b (WIP)
