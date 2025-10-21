@@ -308,6 +308,11 @@ await app.init({
 });
 document.getElementById("app")!.appendChild(app.canvas);
 
+// Minimap setup - will be initialized in connect()
+let minimapCanvas: HTMLCanvasElement | null = null;
+let minimapCtx: CanvasRenderingContext2D | null = null;
+let minimapViewport: HTMLElement | null = null;
+
 // Prevent browser's default context menu on the canvas
 app.canvas.addEventListener("contextmenu", (e) => {
   e.preventDefault();
@@ -743,6 +748,7 @@ function drawGrid() {
 drawFloor();
 drawGrid();
 drawFog();
+drawMinimap();
 window.addEventListener("resize", () => {
   updateStageHitArea();
   drawFloor();
@@ -751,6 +757,7 @@ window.addEventListener("resize", () => {
   drawObjects();
   drawAssets();
   drawFog();
+  drawMinimap();
 });
 
 // Walls & objects layers
@@ -783,6 +790,149 @@ const assetsLayer = new Container();
 // Now that layers exist, draw static content
 drawWalls();
 drawObjects();
+
+// Minimap functions
+function drawMinimap() {
+  console.log("[MINIMAP] drawMinimap called");
+  if (!minimapCanvas || !minimapCtx) {
+    console.log("[MINIMAP] Canvas or context not found");
+    return;
+  }
+  
+  const canvasWidth = minimapCanvas.width;
+  const canvasHeight = minimapCanvas.height;
+  
+  // Clear canvas
+  minimapCtx.fillStyle = "#0b0e13";
+  minimapCtx.fillRect(0, 0, canvasWidth, canvasHeight);
+  
+  if (!levelId) return;
+  
+  // Calculate minimap bounds (show a larger area than current view)
+  const mapSize = 50; // Show 50x50 tiles
+  const tileSize = Math.min(canvasWidth / mapSize, canvasHeight / mapSize);
+  const offsetX = (canvasWidth - mapSize * tileSize) / 2;
+  const offsetY = (canvasHeight - mapSize * tileSize) / 2;
+  
+  // Draw floor tiles
+  const seed = currentSeed || "demo-seed";
+  const revealed = getRevealed(levelId);
+  
+  for (let gy = 0; gy < mapSize; gy++) {
+    for (let gx = 0; gx < mapSize; gx++) {
+      const worldGx = gx - mapSize / 2;
+      const worldGy = gy - mapSize / 2;
+      
+      // Check if tile should be visible
+      if (myRole !== "DM" && revealed && isGround(worldGx, worldGy) && !revealed.has(`${worldGx},${worldGy}`)) {
+        continue;
+      }
+      
+      const x = offsetX + gx * tileSize;
+      const y = offsetY + gy * tileSize;
+      
+      // Draw floor
+      const ov = getFloorOverride(worldGx, worldGy);
+      if (ov) {
+        const col = paintedFloorColor(ov, worldGx, worldGy);
+        minimapCtx.fillStyle = `#${col.toString(16).padStart(6, '0')}`;
+        minimapCtx.fillRect(x, y, tileSize, tileSize);
+      } else if (isLand(worldGx, worldGy)) {
+        const color = tileColor(worldGx, worldGy, seed);
+        minimapCtx.fillStyle = `#${color.toString(16).padStart(6, '0')}`;
+        minimapCtx.fillRect(x, y, tileSize, tileSize);
+      }
+      
+      // Draw walls
+      if (isGround(worldGx, worldGy)) {
+        minimapCtx.fillStyle = "#6b7280";
+        minimapCtx.fillRect(x, y, tileSize, tileSize);
+      }
+    }
+  }
+  
+  // Draw tokens
+  for (const token of tokens.values()) {
+    if (token.levelId !== levelId) continue;
+    if (myRole !== "DM" && revealed && !revealed.has(`${token.pos.x},${token.pos.y}`)) continue;
+    
+    const x = offsetX + (token.pos.x + mapSize / 2) * tileSize;
+    const y = offsetY + (token.pos.y + mapSize / 2) * tileSize;
+    
+    if (x >= 0 && x < canvasWidth && y >= 0 && y < canvasHeight) {
+      // Определяем тип токена по его свойствам
+      const isPlayer = token.kind === "player" || (token as any).isPlayer;
+      minimapCtx.fillStyle = isPlayer ? "#60a5fa" : "#f59e0b";
+      minimapCtx.beginPath();
+      minimapCtx.arc(x + tileSize / 2, y + tileSize / 2, Math.max(2, tileSize / 4), 0, 2 * Math.PI);
+      minimapCtx.fill();
+    }
+  }
+  
+  // Draw assets (only important ones)
+  for (const asset of assets.values()) {
+    if (asset.levelId !== levelId) continue;
+    if (myRole !== "DM" && revealed && !revealed.has(`${asset.pos.x},${asset.pos.y}`)) continue;
+    
+    // Показываем только важные ассеты (стены, двери, окна)
+    if (!["wall", "door", "window"].includes(asset.kind)) continue;
+    
+    const x = offsetX + (asset.pos.x + mapSize / 2) * tileSize;
+    const y = offsetY + (asset.pos.y + mapSize / 2) * tileSize;
+    
+    if (x >= 0 && x < canvasWidth && y >= 0 && y < canvasHeight) {
+      minimapCtx.fillStyle = "#6b7280"; // Серый цвет для структур
+      minimapCtx.fillRect(x + tileSize * 0.2, y + tileSize * 0.2, tileSize * 0.6, tileSize * 0.6);
+    }
+  }
+  
+  updateMinimapViewport();
+}
+
+function updateMinimapViewport() {
+  if (!minimapViewport || !minimapCanvas) return;
+  
+  const canvasWidth = minimapCanvas.width;
+  const canvasHeight = minimapCanvas.height;
+  const mapSize = 50;
+  const tileSize = Math.min(canvasWidth / mapSize, canvasHeight / mapSize);
+  const offsetX = (canvasWidth - mapSize * tileSize) / 2;
+  const offsetY = (canvasHeight - mapSize * tileSize) / 2;
+  
+  // Calculate current viewport bounds in world coordinates
+  const s = world.scale.x || 1;
+  const worldCenterX = (-world.position.x + app.screen.width / 2) / s;
+  const worldCenterY = (-world.position.y + app.screen.height / 2) / s;
+  const viewW = app.screen.width / s;
+  const viewH = app.screen.height / s;
+  
+  // Convert world coordinates to minimap coordinates
+  // Минимарта показывает область от -mapSize/2 до +mapSize/2 в мировых координатах
+  const minimapCenterX = offsetX + mapSize * tileSize / 2;
+  const minimapCenterY = offsetY + mapSize * tileSize / 2;
+  
+  // Позиция центра viewport'а на минимарте
+  const viewportCenterX = minimapCenterX + (worldCenterX * tileSize);
+  const viewportCenterY = minimapCenterY + (worldCenterY * tileSize);
+  
+  // Размер viewport'а на минимарте
+  const viewportW = Math.max(8, Math.min(viewW * tileSize, canvasWidth * 0.6));
+  const viewportH = Math.max(8, Math.min(viewH * tileSize, canvasHeight * 0.6));
+  
+  // Позиция левого верхнего угла viewport'а
+  const viewportX = viewportCenterX - viewportW / 2;
+  const viewportY = viewportCenterY - viewportH / 2;
+  
+  // Ограничиваем viewport границами минимарты
+  const clampedX = Math.max(offsetX, Math.min(viewportX, offsetX + mapSize * tileSize - viewportW));
+  const clampedY = Math.max(offsetY, Math.min(viewportY, offsetY + mapSize * tileSize - viewportH));
+  
+  // Update viewport indicator
+  minimapViewport.style.left = `${clampedX}px`;
+  minimapViewport.style.top = `${clampedY}px`;
+  minimapViewport.style.width = `${viewportW}px`;
+  minimapViewport.style.height = `${viewportH}px`;
+}
 
 let socket: WebSocket | null = null;
 let pendingSocket: WebSocket | null = null;
@@ -2024,6 +2174,17 @@ function connect() {
   if (w.__DND_WS_CONNECT_SCHEDULED) { try { console.debug("[WS][client] connect() already scheduled, skipping"); } catch {} return; }
   w.__DND_WS_CONNECT_SCHEDULED = true;
 
+  // Initialize minimap elements
+  minimapCanvas = document.getElementById("minimap-canvas") as HTMLCanvasElement;
+  minimapCtx = minimapCanvas?.getContext("2d") || null;
+  minimapViewport = document.getElementById("minimap-viewport");
+  
+  console.log("[MINIMAP] Initialization:", {
+    canvas: !!minimapCanvas,
+    ctx: !!minimapCtx,
+    viewport: !!minimapViewport
+  });
+
   // HUD status (reuse if present)
   const hud = document.getElementById("hud");
   let statusEl = document.getElementById("status") as HTMLDivElement | null;
@@ -2385,6 +2546,7 @@ function connect() {
         drawTokens();
         centerOnMyToken();
         drawFog();
+        drawMinimap();
         renderCharacterPanel();
         // ensure locations list is refreshed after switching/creating maps
         try { requestLocationsList(); } catch {}
@@ -2450,6 +2612,7 @@ function connect() {
               const full: any = anyE.token;
               tokens.set(full.id, full);
               drawTokens(); // Redraw to reflect zIndex changes
+              drawMinimap();
               if (myRole === "DM") revealByVisionForToken(ws, full as any);
             } else {
               const ev = e as any as { type: string; tokenId: ID; patch: any };
@@ -2457,6 +2620,7 @@ function connect() {
               if (t) {
                 Object.assign(t, ev.patch || {});
                 drawTokens(); // Redraw in case zIndex changed
+                drawMinimap();
                 if (myRole === "DM") revealByVisionForToken(ws, t as any);
               }
             }
@@ -2464,6 +2628,7 @@ function connect() {
         }
         drawTokens();
         drawAssets();
+        drawMinimap();
         drawFloor();
         drawGrid();
         drawWalls();
@@ -2512,7 +2677,7 @@ function connect() {
         console.log(`[CLIENT] Received gameStateRestored, refreshing display`);
         console.log(`[CLIENT] Current assets count: ${assets.size}`);
         console.log(`[CLIENT] Current tokens count: ${tokens.size}`);
-        console.log(`[CLIENT] Current floors count: ${floors.size}`);
+        console.log(`[CLIENT] Current floors count: ${levelId ? getFloors(levelId).size : 0}`);
         // Refresh all visual elements after state restoration
         drawFloor();
         drawGrid();
@@ -2521,6 +2686,7 @@ function connect() {
         drawAssets();
         drawTokens();
         drawFog();
+        drawMinimap();
         renderCharacterPanel();
       } else if ((msg as any).t === "error") {
         // show error toast for server-side failures
@@ -3090,6 +3256,7 @@ function connect() {
     drawAssets();
     drawTokens();
     drawFog();
+    drawMinimap();
   }
 
   function updateUndoRedoButtons(undoStack: any[], redoStack: any[]) {
@@ -3570,6 +3737,40 @@ function connect() {
   // Update buttons after welcome determines role
   const observer = new MutationObserver(() => { updateEditorUI(); updateFogModeUI(); });
   observer.observe(document.body, { subtree: true, childList: true });
+
+  // Minimap click handler
+  if (minimapCanvas) {
+    minimapCanvas.addEventListener("click", (e) => {
+      const rect = minimapCanvas!.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const y = e.clientY - rect.top;
+      
+      const canvasWidth = minimapCanvas!.width;
+      const canvasHeight = minimapCanvas!.height;
+      const mapSize = 50;
+      const tileSize = Math.min(canvasWidth / mapSize, canvasHeight / mapSize);
+      const offsetX = (canvasWidth - mapSize * tileSize) / 2;
+      const offsetY = (canvasHeight - mapSize * tileSize) / 2;
+      
+      // Convert click position to minimap coordinates
+      const minimapX = x - offsetX;
+      const minimapY = y - offsetY;
+      
+      // Convert minimap coordinates to world coordinates
+      // Минимарта показывает область от -mapSize/2 до +mapSize/2 в мировых координатах
+      const worldX = (minimapX / tileSize) - mapSize / 2;
+      const worldY = (minimapY / tileSize) - mapSize / 2;
+      
+      // Center camera on clicked position
+      const targetX = -worldX * CELL;
+      const targetY = -worldY * CELL;
+      
+      world.position.set(targetX + app.screen.width / 2, targetY + app.screen.height / 2);
+      drawFloor(); drawGrid(); drawWalls(); drawObjects(); drawAssets(); drawFog();
+      drawMinimap();
+      updateMinimapViewport();
+    });
+  }
 }
 
 connect();
@@ -3892,6 +4093,8 @@ function centerOn(v: Vec2) {
   const cy = app.screen.height / 2 - pos.y * s;
   world.position.set(cx, cy);
   drawFloor(); drawGrid(); drawWalls(); drawObjects(); drawAssets(); drawFog();
+  drawMinimap();
+  updateMinimapViewport();
 }
 
 function centerOnMyToken() {
@@ -4005,6 +4208,8 @@ app.stage.on("pointermove", (e: any) => {
   const dy = e.global.y - panning.startY;
   world.position.set(panning.worldX + dx, panning.worldY + dy);
   drawFloor(); drawGrid(); drawWalls(); drawObjects(); drawAssets(); drawFog();
+  drawMinimap();
+  updateMinimapViewport();
 });
 function endPan() {
   if (painting) {
@@ -4041,6 +4246,8 @@ canvasEl.addEventListener("wheel", (ev) => {
     ev.preventDefault();
     world.position.set(world.position.x - ev.deltaX, world.position.y - ev.deltaY);
     drawFloor(); drawGrid(); drawWalls(); drawObjects(); drawAssets(); drawFog();
+    drawMinimap();
+    updateMinimapViewport();
     return;
   }
   
@@ -4073,6 +4280,8 @@ canvasEl.addEventListener("wheel", (ev) => {
     // adjust position so the same world point stays under cursor
     world.position.set(sx - wx * s, sy - wy * s);
     drawFloor(); drawGrid(); drawWalls(); drawObjects(); drawAssets(); drawFog();
+    drawMinimap();
+    updateMinimapViewport();
   }
 }, { passive: false });
 
