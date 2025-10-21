@@ -1,6 +1,8 @@
-# DnD Map Maker
+# Easy MapMancer
 
-A web application for creating and managing maps for tabletop role-playing games with real-time multiplayer support.
+Open-source map editor and lightweight virtual tabletop for tabletop RPGs (TTRPGs) with real-time multiplayer.
+
+Create, edit, and run sessions on grid-based maps in your browser. Host the server locally or deploy it anywhere Node.js runs.
 
 ## Tech Stack
 - **Client**: TypeScript + PixiJS v8 + Vite
