@@ -1291,13 +1291,34 @@
       }
 
       /* Minimap styles */
+      #minimap-panel {
+        position: fixed;
+        bottom: 24px;
+        right: 24px;
+        width: 220px;
+        background: var(--surface-strong);
+        border-radius: 16px;
+        padding: 12px 14px;
+        box-shadow: var(--shadow);
+        border: 1px solid rgba(255, 255, 255, 0.05);
+        z-index: 50;
+        pointer-events: auto;
+      }
+
+      .minimap-title {
+        font-size: 12px;
+        text-transform: uppercase;
+        color: var(--text-muted);
+        letter-spacing: 0.08em;
+        margin-bottom: 8px;
+      }
+
       #minimap-container {
         position: relative;
         background: rgba(15, 23, 42, 0.6);
         border: 1px solid rgba(255, 255, 255, 0.08);
         border-radius: 12px;
         padding: 8px;
-        margin-top: 8px;
       }
 
       #minimap-canvas {
@@ -1311,14 +1332,14 @@
 
       #minimap-viewport {
         position: absolute;
-        border: 2px solid #60a5fa;
-        background: rgba(96, 165, 250, 0.2);
+        border: 1px solid #60a5fa;
+        background: rgba(96, 165, 250, 0.1);
         pointer-events: none;
         border-radius: 2px;
         transition: all 0.1s ease;
       }
     </style>
-    <script type="module" crossorigin src="/assets/index-BtOJjiqZ.js"></script>
+    <script type="module" crossorigin src="/assets/index-BjsUWgca.js"></script>
   </head>
   <body>
     <div id="app"></div>
@@ -1504,13 +1525,16 @@
     <aside id="right-panel">
       <div class="title">Character sheet</div>
       <div style="opacity:.7">No selected token</div>
-      
-      <div class="title" style="margin-top: 20px;">Minimap</div>
+    </aside>
+    
+    <!-- Minimap in bottom right corner -->
+    <div id="minimap-panel">
+      <div class="minimap-title">Minimap</div>
       <div id="minimap-container">
         <canvas id="minimap-canvas" width="200" height="150"></canvas>
         <div id="minimap-viewport"></div>
       </div>
-    </aside>
+    </div>
     <!-- Bottom Asset Menu -->
     <div id="bottom-asset-menu">
       <div id="asset-menu-header">

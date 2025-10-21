@@ -1,14 +1,33 @@
+<<<<<<< HEAD
 # Easy MapMancer
 
 Open-source map editor and lightweight virtual tabletop for tabletop RPGs (TTRPGs) with real-time multiplayer.
 
 Create, edit, and run sessions on grid-based maps in your browser. Host the server locally or deploy it anywhere Node.js runs.
+=======
+# DnD Map Maker 🗺️
 
-## Tech Stack
-- **Client**: TypeScript + PixiJS v8 + Vite
-- **Server**: Node.js + ws (WebSocket)
-- **Shared Types/Protocol**: `@dnd/shared` package
-- **Build System**: npm workspaces + TypeScript
+A modern web application for creating and managing interactive maps for tabletop role-playing games with real-time multiplayer support. Built with TypeScript, PixiJS, and WebSockets.
+>>>>>>> 446329b (WIP)
+
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Node.js](https://img.shields.io/badge/Node.js-18%2B-green.svg)](https://nodejs.org/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.5%2B-blue.svg)](https://www.typescriptlang.org/)
+
+## 🚀 Live Demo
+
+Try the application online: [Demo Link](https://your-demo-url.com) (coming soon)
+
+## ✨ Features
+
+## 🛠️ Tech Stack
+
+- **Frontend**: TypeScript + PixiJS v8 + Vite
+- **Backend**: Node.js + WebSocket (ws)
+- **Architecture**: Monorepo with npm workspaces
+- **Build System**: TypeScript + Vite
+- **Real-time**: WebSocket communication
+- **Graphics**: PixiJS for 2D rendering
 
 **Requirements**: Node.js >= 18, npm >= 9
 
@@ -116,24 +135,35 @@ Create, edit, and run sessions on grid-based maps in your browser. Host the serv
 └─ .gitignore
 ```
 
-## Quick Start
+## 🚀 Quick Start
 
-### Installation and Setup
-1. **Install dependencies**:
+### Prerequisites
+- Node.js 18 or higher
+- npm 9 or higher
+
+### Installation
+
+1. **Clone the repository**:
+```bash
+git clone https://github.com/yourusername/dnd-map-maker.git
+cd dnd-map-maker
+```
+
+2. **Install dependencies**:
 ```bash
 npm install
 ```
 
-2. **Run in development mode**:
+3. **Start development server**:
 ```bash
 npm run dev
 ```
 
-3. **Open the application**:
+4. **Open the application**:
 - **DM (Dungeon Master)**: http://localhost:5173/?inv=dm-local
 - **Player**: http://localhost:5173/?inv=pl-local
 
-### Controls
+### 🎮 Controls
 - **Move tokens**: Drag with mouse (snap to grid)
 - **Pan map**: Drag empty space with left mouse button
 - **Zoom**: Mouse wheel (zoom with focus under cursor)
@@ -145,7 +175,7 @@ npm run dev
 - **WebSocket**: ws://localhost:8080/ws
 - **HTTP check**: http://localhost:8080/
 
-## Available Commands
+## 📋 Available Commands
 
 ### Development
 - `npm run dev` — Run server and client simultaneously
@@ -158,17 +188,17 @@ npm run dev
 - `npm run server:start` — Server only from build
 - `npm run client:preview` — Preview built client
 
-### Formatting
+### Code Quality
 - `npm run format` — Format code with Prettier
 
-## Production Deployment
+## 🚀 Production Deployment
 
-### Build
+### Build for Production
 ```bash
 npm run build
 ```
 
-### Run
+### Run Production Build
 ```bash
 npm start
 ```
@@ -179,7 +209,27 @@ npm start
 - **DM**: http://localhost:5173/?inv=dm-local
 - **Player**: http://localhost:5173/?inv=pl-local
 
-## Technical Information
+### Environment Variables
+- `PORT` — HTTP/WS server port (default: 8080)
+- `LOCATIONS_DIR` — Directory for saving maps (default: `packages/server/data/locations`)
+- `MAX_PORT` — Maximum port for automatic free port search (default: PORT + 20)
+
+### Usage Examples
+```bash
+# Run on port 9090
+PORT=9090 npm start
+
+# Use different directory for maps
+LOCATIONS_DIR=/path/to/maps npm start
+```
+
+### Connecting to Different Server
+Client can connect to server on different port:
+```
+http://localhost:5173/?inv=dm-local&port=9090
+```
+
+## 🔧 Technical Information
 
 ### WebSocket Protocol
 **Client → Server:**
@@ -209,27 +259,32 @@ npm start
 - **Authoritative server** for validating all actions
 - **Event-driven** architecture for state synchronization
 
-## Configuration
+## 🤝 Contributing
 
-### Environment Variables
-- `PORT` — HTTP/WS server port (default: 8080)
-- `LOCATIONS_DIR` — Directory for saving maps (default: `packages/server/data/locations`)
-- `MAX_PORT` — Maximum port for automatic free port search (default: PORT + 20)
+We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) for details on how to:
 
-### Usage Examples
-```bash
-# Run on port 9090
-PORT=9090 npm start
+- Report bugs
+- Suggest new features
+- Submit pull requests
+- Set up the development environment
 
-# Use different directory for maps
-LOCATIONS_DIR=/path/to/maps npm start
-```
+## 📄 License
 
-### Connecting to Different Server
-Client can connect to server on different port:
-```
-http://localhost:5173/?inv=dm-local&port=9090
-```
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
+<<<<<<< HEAD
 ## License
 MIT
+=======
+## 🙏 Acknowledgments
+
+- Built with [PixiJS](https://pixijs.com/) for 2D graphics
+- Uses [Vite](https://vitejs.dev/) for fast development
+- Inspired by tabletop RPG communities
+
+## 📞 Support
+
+- 🐛 **Bug Reports**: [GitHub Issues](https://github.com/yourusername/dnd-map-maker/issues)
+- 💡 **Feature Requests**: [GitHub Discussions](https://github.com/yourusername/dnd-map-maker/discussions)
+- 📧 **Contact**: [Your Email](mailto:your.email@example.com)
+>>>>>>> 446329b (WIP)
