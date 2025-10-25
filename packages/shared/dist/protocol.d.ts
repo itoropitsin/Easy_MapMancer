@@ -1,4 +1,4 @@
-import type { ID, Vec2, Role, GameSnapshot, FloorKind, LocationTreeNode, Token, FogMode, ActionSnapshot } from "./types";
+import type { ID, Vec2, Role, GameSnapshot, FloorKind, LocationTreeNode, Token, FogMode, ActionSnapshot, LoginRequest, CreateUserRequest } from "./types";
 export type ClientToServer = {
     t: "join";
     name?: string;
@@ -115,6 +115,35 @@ export type ClientToServer = {
     t: "undo";
 } | {
     t: "redo";
+} | {
+    t: "login";
+    data: LoginRequest;
+} | {
+    t: "resumeSession";
+    token: string;
+} | {
+    t: "logout";
+} | {
+    t: "createUser";
+    data: CreateUserRequest;
+} | {
+    t: "createFirstUser";
+    data: CreateUserRequest;
+} | {
+    t: "checkFirstUser";
+} | {
+    t: "listUsers";
+} | {
+    t: "updateUserRole";
+    userId: ID;
+    role: "master" | "user";
+} | {
+    t: "deleteUser";
+    userId: ID;
+} | {
+    t: "resetUserPassword";
+    userId: ID;
+    password?: string;
 };
 export type ServerToClient = {
     t: "welcome";
@@ -154,4 +183,51 @@ export type ServerToClient = {
     redoStack: ActionSnapshot[];
 } | {
     t: "gameStateRestored";
+} | {
+    t: "loginResponse";
+    success: boolean;
+    user?: any;
+    token?: string;
+    error?: string;
+} | {
+    t: "resumeSessionResponse";
+    success: boolean;
+    user?: any;
+    token?: string;
+    error?: string;
+} | {
+    t: "logoutResponse";
+    success: boolean;
+} | {
+    t: "createUserResponse";
+    success: boolean;
+    user?: any;
+    generatedPassword?: string;
+    error?: string;
+} | {
+    t: "createFirstUserResponse";
+    success: boolean;
+    user?: any;
+    generatedPassword?: string;
+    error?: string;
+} | {
+    t: "firstUserCheckResponse";
+    needsFirstUser: boolean;
+} | {
+    t: "userListResponse";
+    users: any[];
+} | {
+    t: "updateUserRoleResponse";
+    success: boolean;
+    error?: string;
+} | {
+    t: "deleteUserResponse";
+    success: boolean;
+    error?: string;
+} | {
+    t: "resetUserPasswordResponse";
+    success: boolean;
+    userId?: ID;
+    generatedPassword?: string;
+    error?: string;
 };

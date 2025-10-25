@@ -8,10 +8,6 @@ A modern web application for creating and managing interactive maps for tabletop
 [![Node.js](https://img.shields.io/badge/Node.js-18%2B-green.svg)](https://nodejs.org/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.5%2B-blue.svg)](https://www.typescriptlang.org/)
 
-## 🚀 Live Demo
-
-Try the application online: [Demo Link](https://your-demo-url.com) (coming soon)
-
 ## ✨ Features
 
 ## 🛠️ Tech Stack
@@ -175,6 +171,11 @@ npm run dev
 - `npm run dev` — Run server and client simultaneously
 - `npm run server:dev` — Server only in watch mode
 - `npm run client:dev` — Client only (Vite dev server)
+
+### Testing
+- `npm run test` — Run all tests (integration + unit)
+- `npm run test:integration` — Run integration tests only
+- `node tests/integration/user-database.test.js` — Run specific test
 
 ### Build and Production
 - `npm run build` — Build all packages (shared → server → client)

@@ -1,4 +1,4 @@
-import type { ID, Vec2, Role, GameSnapshot, FloorKind, LocationTreeNode, Token, FogMode, ActionSnapshot } from "./types";
+import type { ID, Vec2, Role, GameSnapshot, FloorKind, LocationTreeNode, Token, FogMode, ActionSnapshot, LoginRequest, CreateUserRequest, ChangePasswordRequest } from "./types";
 
 export type ClientToServer =
   | { t: "join"; name?: string; invite?: string; preferredRole?: Role }
@@ -35,7 +35,19 @@ export type ClientToServer =
   | { t: "switchRole"; role: Role }
   | { t: "setFogMode"; fogMode: FogMode }
   | { t: "undo" }
-  | { t: "redo" };
+  | { t: "redo" }
+  // User authentication
+  | { t: "login"; data: LoginRequest }
+  | { t: "resumeSession"; token: string }
+  | { t: "logout" }
+  | { t: "createUser"; data: CreateUserRequest }
+  | { t: "createFirstUser"; data: CreateUserRequest }
+  | { t: "checkFirstUser" }
+  | { t: "listUsers" }
+  | { t: "updateUserRole"; userId: ID; role: "master" | "user" }
+  | { t: "deleteUser"; userId: ID }
+  | { t: "resetUserPassword"; userId: ID; password?: string }
+  | { t: "changeOwnPassword"; data: ChangePasswordRequest };
 
 export type ServerToClient =
   | { t: "welcome"; playerId: ID; role: Role; snapshot: GameSnapshot }
@@ -50,4 +62,16 @@ export type ServerToClient =
   | { t: "roleChanged"; role: Role }
   | { t: "locationRenamed"; newName: string }
   | { t: "undoRedoState"; undoStack: ActionSnapshot[]; redoStack: ActionSnapshot[] }
-  | { t: "gameStateRestored" };
+  | { t: "gameStateRestored" }
+  // User authentication responses
+  | { t: "loginResponse"; success: boolean; user?: any; token?: string; error?: string }
+  | { t: "resumeSessionResponse"; success: boolean; user?: any; token?: string; error?: string }
+  | { t: "logoutResponse"; success: boolean }
+  | { t: "createUserResponse"; success: boolean; user?: any; generatedPassword?: string; error?: string }
+  | { t: "createFirstUserResponse"; success: boolean; user?: any; generatedPassword?: string; error?: string }
+  | { t: "firstUserCheckResponse"; needsFirstUser: boolean }
+  | { t: "userListResponse"; users: any[] }
+  | { t: "updateUserRoleResponse"; success: boolean; error?: string }
+  | { t: "deleteUserResponse"; success: boolean; error?: string }
+  | { t: "resetUserPasswordResponse"; success: boolean; userId?: ID; generatedPassword?: string; error?: string }
+  | { t: "changePasswordResponse"; success: boolean; error?: string; message?: string; forceLogout?: boolean };

@@ -12,6 +12,8 @@
     "start": "concurrently -n server,client -c yellow,cyan \"npm:server:start\" \"npm:client:preview\"",
     "server:start": "npm run -w @dnd/server start",
     "client:preview": "npm run -w @dnd/client preview",
+    "test": "node run-tests.js",
+    "test:integration": "node tests/integration/user-database.test.js",
     "format": "prettier -w ."
   },
   "devDependencies": {

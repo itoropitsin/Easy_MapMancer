@@ -48,8 +48,11 @@ import type {
   ClientToServer,
   LocationTreeNode,
   Event,
+  User,
+  AuthState,
   GameSnapshot,
-  FogMode
+  FogMode,
+  UserRole
 } from "@dnd/shared";
 
 // Small top-level toast helper for reuse outside connect()
@@ -100,6 +103,771 @@ let selectedTokenId: ID | null = null;
 let selectedAssetKind: string | null = null; // when null, floor tools may be used
 let selectedFloorKind: FloorKind | null = null;
 let selectedTokenKind: "player" | "npc" | null = null;
+
+// Authentication state
+let authState: AuthState = { isAuthenticated: false };
+let currentUser: User | null = null;
+let logoutTimeout: ReturnType<typeof setTimeout> | null = null;
+let createUserPending = false;
+let pendingPasswordUserId: string | null = null;
+let pendingPasswordUsername: string | null = null;
+let userManagementInitialized = false;
+let profileModalInitialized = false;
+let profileChangePending = false;
+let profileModalEl: HTMLElement | null = null;
+let profileErrorEl: HTMLElement | null = null;
+let profileCurrentInput: HTMLInputElement | null = null;
+let profileNewInput: HTMLInputElement | null = null;
+let profileConfirmInput: HTMLInputElement | null = null;
+let profileSubmitBtn: HTMLButtonElement | null = null;
+
+// Session management functions
+function saveSession(user: User, token: string) {
+  try {
+    localStorage.setItem('dnd_session', JSON.stringify({ user, token, timestamp: Date.now() }));
+    console.log("[DEBUG] Session saved to localStorage");
+  } catch (error) {
+    console.error("[DEBUG] Failed to save session:", error);
+  }
+}
+
+function loadSession(): { user: User; token: string } | null {
+  try {
+    const sessionData = localStorage.getItem('dnd_session');
+    if (!sessionData) return null;
+    
+    const { user, token, timestamp } = JSON.parse(sessionData);
+    
+    // Check if session is not too old (24 hours)
+    const maxAge = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
+    if (Date.now() - timestamp > maxAge) {
+      console.log("[DEBUG] Session expired, clearing");
+      clearSession();
+      return null;
+    }
+    
+    console.log("[DEBUG] Session loaded from localStorage");
+    return { user, token };
+  } catch (error) {
+    console.error("[DEBUG] Failed to load session:", error);
+    clearSession();
+    return null;
+  }
+}
+
+function clearSession() {
+  try {
+    localStorage.removeItem('dnd_session');
+    console.log("[DEBUG] Session cleared from localStorage");
+  } catch (error) {
+    console.error("[DEBUG] Failed to clear session:", error);
+  }
+}
+
+// Authentication functions
+function showFirstUserScreen() {
+  const firstUserScreen = document.getElementById('first-user-screen');
+  const loginScreen = document.getElementById('login-screen');
+  const mainApp = document.getElementById('main-app');
+  if (firstUserScreen && loginScreen && mainApp) {
+    firstUserScreen.style.display = 'flex';
+    loginScreen.style.display = 'none';
+    mainApp.style.display = 'none';
+  }
+}
+
+function resetLoginForm() {
+  const loginForm = document.getElementById('login-form') as HTMLFormElement | null;
+  if (!loginForm) return;
+
+  const submitBtn = loginForm.querySelector('button[type="submit"]') as HTMLButtonElement | null;
+  if (submitBtn) {
+    submitBtn.disabled = false;
+    submitBtn.textContent = 'Login';
+  }
+}
+
+function showLoginScreen() {
+  const firstUserScreen = document.getElementById('first-user-screen');
+  const loginScreen = document.getElementById('login-screen');
+  const mainApp = document.getElementById('main-app');
+  if (firstUserScreen && loginScreen && mainApp) {
+    firstUserScreen.style.display = 'none';
+    loginScreen.style.display = 'flex';
+    mainApp.style.display = 'none';
+  }
+  resetLoginForm();
+}
+
+function hideLoginScreen() {
+  const firstUserScreen = document.getElementById('first-user-screen');
+  const loginScreen = document.getElementById('login-screen');
+  const mainApp = document.getElementById('main-app');
+  if (firstUserScreen && loginScreen && mainApp) {
+    firstUserScreen.style.display = 'none';
+    loginScreen.style.display = 'none';
+    mainApp.style.display = 'block';
+  }
+}
+
+function showError(message: string) {
+  const errorEl = document.getElementById('login-error');
+  if (errorEl) {
+    errorEl.textContent = message;
+    errorEl.style.display = 'block';
+  }
+}
+
+function hideError() {
+  const errorEl = document.getElementById('login-error');
+  if (errorEl) {
+    errorEl.style.display = 'none';
+  }
+}
+
+function showFirstUserError(message: string) {
+  const errorEl = document.getElementById('first-user-error');
+  if (errorEl) {
+    errorEl.textContent = message;
+    errorEl.style.display = 'block';
+  }
+}
+
+function hideFirstUserError() {
+  const errorEl = document.getElementById('first-user-error');
+  if (errorEl) {
+    errorEl.style.display = 'none';
+  }
+}
+
+function setupLoginForm() {
+  const loginForm = document.getElementById('login-form') as HTMLFormElement;
+  if (!loginForm) return;
+
+  loginForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const formData = new FormData(loginForm);
+    const usernameOrEmailRaw = formData.get('usernameOrEmail') as string;
+    const passwordRaw = formData.get('password') as string;
+    const usernameOrEmail = (usernameOrEmailRaw || "").trim();
+    const password = (passwordRaw || "").trim();
+
+    if (!usernameOrEmail || !password) {
+      showError('Please fill in all fields');
+      return;
+    }
+
+    hideError();
+    
+    // Disable form during login
+    const submitBtn = loginForm.querySelector('button[type="submit"]') as HTMLButtonElement;
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Logging in...';
+
+    try {
+      // Store login data for WebSocket connection
+      (window as any).pendingLogin = { usernameOrEmail, password };
+      console.log("[DEBUG] Stored pending login:", { usernameOrEmail, password: "***" });
+      
+      // Check if WebSocket is already connected
+      if (socket && socket.readyState === WebSocket.OPEN) {
+        // Send login message directly
+        const loginMsg: ClientToServer = { 
+          t: "login", 
+          data: { 
+            usernameOrEmail, 
+            password 
+          } 
+        };
+        console.log("[DEBUG] Sending login message directly:", loginMsg);
+        socket.send(JSON.stringify(loginMsg));
+      } else {
+        // Connect to WebSocket (will handle login)
+        connect();
+      }
+    } catch (error) {
+      showError('Login failed. Please try again.');
+      submitBtn.disabled = false;
+      submitBtn.textContent = 'Login';
+    }
+  });
+}
+
+function setupFirstUserForm() {
+  const firstUserForm = document.getElementById('first-user-form') as HTMLFormElement;
+  if (!firstUserForm) return;
+
+  firstUserForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const formData = new FormData(firstUserForm);
+    const username = (formData.get('username') as string || "").trim();
+    const email = (formData.get('email') as string || "").trim().toLowerCase();
+
+    if (!username || !email) {
+      showFirstUserError('Please fill in all fields');
+      return;
+    }
+
+    hideFirstUserError();
+    
+    // Disable form during creation
+    const submitBtn = firstUserForm.querySelector('button[type="submit"]') as HTMLButtonElement;
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Creating...';
+
+    try {
+      if (socket && socket.readyState === WebSocket.OPEN) {
+        socket.send(JSON.stringify({
+          t: 'createFirstUser',
+          data: { username, email }
+        }));
+      } else {
+        showFirstUserError('Not connected to server');
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Create Master Account';
+      }
+    } catch (error) {
+      showFirstUserError('Failed to create user');
+      submitBtn.disabled = false;
+      submitBtn.textContent = 'Create Master Account';
+    }
+  });
+}
+
+function setupUserManagement() {
+  const usersPanel = document.getElementById('users-panel') as HTMLElement;
+  const createUserBtn = document.getElementById('create-user-btn') as HTMLButtonElement;
+  const createUserModal = document.getElementById('create-user-modal') as HTMLElement;
+  const createUserForm = document.getElementById('create-user-form') as HTMLFormElement;
+  const passwordModal = document.getElementById('password-modal') as HTMLElement;
+  const usersCloseBtn = document.getElementById('users-close') as HTMLButtonElement | null;
+  const resetPasswordModal = document.getElementById('reset-password-modal') as HTMLElement | null;
+  const resetPasswordForm = document.getElementById('reset-password-form') as HTMLFormElement | null;
+  const resetPasswordInput = document.getElementById('reset-password-input') as HTMLInputElement | null;
+  const resetPasswordGenerate = document.getElementById('reset-password-generate') as HTMLButtonElement | null;
+  const resetPasswordCancel = document.getElementById('reset-password-cancel') as HTMLButtonElement | null;
+  const resetPasswordClose = document.getElementById('reset-password-close') as HTMLButtonElement | null;
+  const resetPasswordSubmit = document.getElementById('reset-password-submit') as HTMLButtonElement | null;
+
+  if (!usersPanel || !createUserBtn || !createUserModal || !createUserForm || !passwordModal || !resetPasswordModal || !resetPasswordForm || !resetPasswordInput || !resetPasswordSubmit) return;
+
+  if (userManagementInitialized) return;
+  userManagementInitialized = true;
+
+  usersPanel.setAttribute('aria-hidden', usersPanel.classList.contains('open') ? 'false' : 'true');
+
+  // Create user button
+  createUserBtn.addEventListener('click', () => {
+    createUserModal.style.display = 'flex';
+  });
+
+  // Close modals
+  document.getElementById('create-user-close')?.addEventListener('click', () => {
+    createUserModal.style.display = 'none';
+  });
+
+  document.getElementById('create-user-cancel')?.addEventListener('click', () => {
+    createUserModal.style.display = 'none';
+  });
+
+  document.getElementById('password-close')?.addEventListener('click', () => {
+    passwordModal.style.display = 'none';
+  });
+
+  document.getElementById('password-ok')?.addEventListener('click', () => {
+    passwordModal.style.display = 'none';
+  });
+
+  const closeResetModal = () => {
+    closeResetPasswordModal();
+  };
+
+  resetPasswordClose?.addEventListener('click', closeResetModal);
+  resetPasswordCancel?.addEventListener('click', closeResetModal);
+
+  resetPasswordGenerate?.addEventListener('click', (event) => {
+    event.preventDefault();
+    if (!resetPasswordInput) return;
+    resetPasswordInput.value = generateClientPassword();
+    resetPasswordInput.focus();
+    resetPasswordInput.select();
+  });
+
+  resetPasswordForm.addEventListener('submit', (event) => {
+    event.preventDefault();
+    if (!pendingPasswordUserId) {
+      hudToast('Select a user first.');
+      return;
+    }
+    if (!socket || socket.readyState !== WebSocket.OPEN) {
+      hudToast('Not connected to server.');
+      return;
+    }
+    const password = resetPasswordInput.value.trim();
+    if (resetPasswordSubmit) {
+      resetPasswordSubmit.disabled = true;
+      resetPasswordSubmit.textContent = 'Saving...';
+    }
+    socket.send(JSON.stringify({
+      t: 'resetUserPassword',
+      userId: pendingPasswordUserId,
+      password: password.length ? password : undefined
+    }));
+  });
+
+  resetPasswordModal.addEventListener('click', (event) => {
+    if (event.target === resetPasswordModal) {
+      closeResetPasswordModal();
+    }
+  });
+
+  // Close admin panel
+  if (usersCloseBtn) {
+    usersCloseBtn.addEventListener('click', () => {
+      closeUsersPanel();
+    });
+  }
+
+  usersPanel.addEventListener('click', (event) => {
+    if (event.target === usersPanel) {
+      closeUsersPanel();
+    }
+  });
+
+  document.addEventListener('keydown', (event) => {
+    if (event.key !== 'Escape') return;
+    const resetOpen = resetPasswordModal && resetPasswordModal.style.display === 'flex';
+    if (resetOpen) {
+      closeResetPasswordModal();
+      return;
+    }
+    if (usersPanel.classList.contains('open')) {
+      closeUsersPanel();
+    }
+  });
+
+  // Create user form
+  createUserForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    if (createUserPending) return;
+    const formData = new FormData(createUserForm);
+    const username = ((formData.get('username') as string) || "").trim();
+    const email = ((formData.get('email') as string) || "").trim().toLowerCase();
+    const role = ((formData.get('role') as string) || "user").trim();
+
+    if (!username || !email) {
+      showCreateUserError('Please fill in all fields');
+      return;
+    }
+
+    hideCreateUserError();
+    
+    const submitBtn = createUserForm.querySelector('button[type="submit"]') as HTMLButtonElement;
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Creating...';
+    createUserPending = true;
+
+    try {
+      if (socket && socket.readyState === WebSocket.OPEN) {
+        socket.send(JSON.stringify({
+          t: 'createUser',
+          data: { username, email, role }
+        }));
+      } else {
+        showCreateUserError('Not connected to server');
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Create User';
+      }
+    } catch (error) {
+      showCreateUserError('Failed to create user');
+      submitBtn.disabled = false;
+      submitBtn.textContent = 'Create User';
+      createUserPending = false;
+    }
+  });
+
+}
+
+function showCreateUserError(message: string) {
+  const errorEl = document.getElementById('create-user-error');
+  if (errorEl) {
+    errorEl.textContent = message;
+    errorEl.style.display = 'block';
+  }
+}
+
+function hideCreateUserError() {
+  const errorEl = document.getElementById('create-user-error');
+  if (errorEl) {
+    errorEl.style.display = 'none';
+  }
+}
+
+function loadUsersList() {
+  if (socket && socket.readyState === WebSocket.OPEN) {
+    socket.send(JSON.stringify({ t: 'listUsers' }));
+  }
+}
+
+function renderUsersList(users: User[]) {
+  const usersList = document.getElementById('users-list');
+  if (!usersList) return;
+
+  if (!users.length) {
+    usersList.innerHTML = `
+      <div class="user-empty">
+        No users yet. Create an invite to bring players into your campaign.
+      </div>
+    `;
+    return;
+  }
+
+  const currentUserId = currentUser?.id;
+  const roleOptions: Array<{ value: UserRole; label: string }> = [
+    { value: 'master', label: 'Master' },
+    { value: 'user', label: 'Player' }
+  ];
+
+  usersList.innerHTML = users.map(user => {
+    const isSelf = currentUserId === user.id;
+    const safeName = escapeHtml(user.username);
+    const safeEmail = escapeHtml(user.email);
+    const roleSelect = roleOptions.map(option => `
+        <option value="${option.value}"${option.value === user.role ? ' selected' : ''}>
+          ${option.label}
+        </option>
+      `).join('');
+
+    return `
+      <div class="user-item" role="listitem" data-user-id="${user.id}">
+        <div class="user-info">
+          <div class="user-name">${safeName}</div>
+          <div class="user-email">${safeEmail}</div>
+        </div>
+        <div class="user-role-control">
+          <label class="user-role-label" for="role-${user.id}">Role</label>
+          <select id="role-${user.id}" class="user-role-select" data-user-id="${user.id}"${isSelf ? ' disabled' : ''}>
+            ${roleSelect}
+          </select>
+        </div>
+        <div class="user-actions">
+          <button class="user-action-btn reset" type="button" data-user-id="${user.id}" data-username="${safeName}">
+            Set Password
+          </button>
+          <button class="user-action-btn danger delete" type="button" data-user-id="${user.id}"${isSelf ? ' disabled' : ''}>
+            Delete
+          </button>
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  const roleSelects = Array.from(usersList.querySelectorAll<HTMLSelectElement>('.user-role-select'));
+  roleSelects.forEach(select => {
+    select.addEventListener('change', () => {
+      const userId = select.dataset.userId;
+      const newRole = select.value as UserRole;
+      if (!userId || !socket || socket.readyState !== WebSocket.OPEN) {
+        hudToast('Unable to update role right now.');
+        select.value = select.getAttribute('data-prev') || select.value;
+        return;
+      }
+      select.disabled = true;
+      socket.send(JSON.stringify({
+        t: 'updateUserRole',
+        userId,
+        role: newRole
+      }));
+    });
+    select.setAttribute('data-prev', select.value);
+  });
+
+  const resetButtons = Array.from(usersList.querySelectorAll<HTMLButtonElement>('.user-action-btn.reset'));
+  resetButtons.forEach(button => {
+    button.addEventListener('click', () => {
+      const userId = button.dataset.userId;
+      const username = button.dataset.username || '';
+      if (userId) {
+        openResetPasswordModal(userId, username);
+      }
+    });
+  });
+
+  const deleteButtons = Array.from(usersList.querySelectorAll<HTMLButtonElement>('.user-action-btn.delete'));
+  deleteButtons.forEach(button => {
+    button.addEventListener('click', () => {
+      const userId = button.dataset.userId;
+      if (!userId) return;
+      confirmDeleteUser(userId);
+    });
+  });
+}
+
+function openUsersPanel() {
+  const usersPanel = document.getElementById('users-panel');
+  if (!usersPanel) return;
+
+  usersPanel.classList.add('open');
+  usersPanel.setAttribute('aria-hidden', 'false');
+  document.body?.classList.add('users-panel-open');
+
+  loadUsersList();
+}
+
+function closeUsersPanel() {
+  const usersPanel = document.getElementById('users-panel');
+  if (!usersPanel) return;
+
+  usersPanel.classList.remove('open');
+  usersPanel.setAttribute('aria-hidden', 'true');
+  document.body?.classList.remove('users-panel-open');
+  closeResetPasswordModal();
+}
+
+function confirmDeleteUser(userId: string) {
+  if (!socket || socket.readyState !== WebSocket.OPEN) {
+    hudToast('Unable to contact server.');
+    return;
+  }
+  if (currentUser && currentUser.id === userId) {
+    hudToast("You can't delete your own account while logged in.");
+    return;
+  }
+  if (confirm('Are you sure you want to delete this user?')) {
+    socket.send(JSON.stringify({
+      t: 'deleteUser',
+      userId
+    }));
+  }
+}
+
+function showPasswordModal(username: string, password: string, context: "created" | "reset" = "created") {
+  const passwordModal = document.getElementById('password-modal');
+  const titleEl = document.getElementById('password-modal-title');
+  const messageEl = document.getElementById('password-modal-message');
+  const generatedPassword = document.getElementById('generated-password') as HTMLInputElement | null;
+  if (!passwordModal || !titleEl || !messageEl || !generatedPassword) return;
+  const safeUsername = escapeHtml(username);
+  if (context === "created") {
+    titleEl.textContent = "User Created Successfully";
+    messageEl.innerHTML = `User <strong>${safeUsername}</strong> has been created successfully.`;
+  } else {
+    titleEl.textContent = "Password Updated";
+    messageEl.innerHTML = `Password for <strong>${safeUsername}</strong> has been reset.`;
+  }
+  generatedPassword.value = password;
+  passwordModal.style.display = 'flex';
+  generatedPassword.focus();
+  generatedPassword.select();
+}
+
+function generateClientPassword(length = 12): string {
+  const uppercase = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+  const lowercase = "abcdefghijklmnopqrstuvwxyz";
+  const digits = "0123456789";
+  const symbols = "!@#$%^&*";
+  const allChars = uppercase + lowercase + digits + symbols;
+
+  const randomIndex = (max: number, fallback: number) => {
+    if (typeof window !== "undefined" && window.crypto?.getRandomValues) {
+      const buffer = new Uint32Array(1);
+      window.crypto.getRandomValues(buffer);
+      return buffer[0] % max;
+    }
+    return fallback % max;
+  };
+
+  const ensureChar = (pool: string, fallback: number) => pool.charAt(randomIndex(pool.length, fallback));
+
+  const passwordChars: string[] = [
+    ensureChar(uppercase, 0),
+    ensureChar(lowercase, 1),
+    ensureChar(digits, 2),
+    ensureChar(symbols, 3)
+  ];
+
+  while (passwordChars.length < length) {
+    const fallback = Math.floor(Math.random() * allChars.length);
+    passwordChars.push(allChars.charAt(randomIndex(allChars.length, fallback)));
+  }
+
+  for (let i = passwordChars.length - 1; i > 0; i--) {
+    const j = randomIndex(i + 1, Math.floor(Math.random() * (i + 1)));
+    const tmp = passwordChars[i];
+    passwordChars[i] = passwordChars[j];
+    passwordChars[j] = tmp;
+  }
+
+  return passwordChars.join("");
+}
+
+function openResetPasswordModal(userId: string, username: string) {
+  const modal = document.getElementById('reset-password-modal');
+  const nameField = document.getElementById('reset-password-username');
+  const input = document.getElementById('reset-password-input') as HTMLInputElement | null;
+  const submitBtn = document.getElementById('reset-password-submit') as HTMLButtonElement | null;
+  if (!modal || !nameField || !input || !submitBtn) return;
+  pendingPasswordUserId = userId;
+  pendingPasswordUsername = username;
+  nameField.textContent = username;
+  input.value = "";
+  input.focus();
+  submitBtn.disabled = false;
+  submitBtn.textContent = 'Set Password';
+  modal.style.display = 'flex';
+}
+
+function closeResetPasswordModal() {
+  const modal = document.getElementById('reset-password-modal');
+  if (modal) {
+    modal.style.display = 'none';
+  }
+  const input = document.getElementById('reset-password-input') as HTMLInputElement | null;
+  if (input) input.value = "";
+  const submitBtn = document.getElementById('reset-password-submit') as HTMLButtonElement | null;
+  if (submitBtn) {
+    submitBtn.disabled = false;
+    submitBtn.textContent = 'Set Password';
+  }
+  pendingPasswordUserId = null;
+  pendingPasswordUsername = null;
+}
+
+function clearProfileError() {
+  if (profileErrorEl) {
+    profileErrorEl.textContent = '';
+    profileErrorEl.style.display = 'none';
+  }
+}
+
+function showProfileError(message: string) {
+  if (!profileErrorEl) return;
+  profileErrorEl.textContent = message;
+  profileErrorEl.style.display = 'block';
+}
+
+function resetProfileForm() {
+  profileChangePending = false;
+  if (profileCurrentInput) profileCurrentInput.value = "";
+  if (profileNewInput) profileNewInput.value = "";
+  if (profileConfirmInput) profileConfirmInput.value = "";
+  if (profileSubmitBtn) {
+    profileSubmitBtn.disabled = false;
+    profileSubmitBtn.textContent = 'Update Password';
+  }
+  clearProfileError();
+}
+
+function closeProfileModal() {
+  if (!profileModalEl) profileModalEl = document.getElementById('profile-modal') as HTMLElement | null;
+  if (profileModalEl) {
+    profileModalEl.style.display = 'none';
+  }
+  resetProfileForm();
+}
+
+function openProfileModal() {
+  setupProfileModal();
+  if (!profileModalEl || !currentUser) return;
+
+  const usernameEl = document.getElementById('profile-display-username');
+  const emailEl = document.getElementById('profile-display-email');
+  const roleEl = document.getElementById('profile-display-role');
+  if (usernameEl) usernameEl.textContent = currentUser.username;
+  if (emailEl) emailEl.textContent = currentUser.email;
+  if (roleEl) roleEl.textContent = currentUser.role === 'master' ? 'Master' : 'Player';
+
+  resetProfileForm();
+  profileModalEl.style.display = 'flex';
+  profileCurrentInput?.focus();
+}
+
+function setupProfileModal() {
+  if (profileModalInitialized) return;
+
+  profileModalEl = document.getElementById('profile-modal');
+  profileErrorEl = document.getElementById('profile-error');
+  profileCurrentInput = document.getElementById('profile-current-password') as HTMLInputElement | null;
+  profileNewInput = document.getElementById('profile-new-password') as HTMLInputElement | null;
+  profileConfirmInput = document.getElementById('profile-confirm-password') as HTMLInputElement | null;
+  profileSubmitBtn = document.getElementById('profile-password-submit') as HTMLButtonElement | null;
+  const profileCloseBtn = document.getElementById('profile-close');
+  const profileCancelBtn = document.getElementById('profile-cancel');
+  const profileForm = document.getElementById('profile-form') as HTMLFormElement | null;
+
+  if (!profileModalEl || !profileForm || !profileCurrentInput || !profileNewInput || !profileConfirmInput || !profileSubmitBtn) {
+    console.warn('[Profile] Missing elements for profile modal setup');
+    return;
+  }
+
+  profileModalInitialized = true;
+
+  const handleClose = () => closeProfileModal();
+  profileCloseBtn?.addEventListener('click', handleClose);
+  profileCancelBtn?.addEventListener('click', handleClose);
+
+  profileModalEl.addEventListener('click', (event) => {
+    if (event.target === profileModalEl) {
+      closeProfileModal();
+    }
+  });
+
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && profileModalEl.style.display === 'flex') {
+      closeProfileModal();
+    }
+  });
+
+  profileForm.addEventListener('submit', (event) => {
+    event.preventDefault();
+    if (!socket || socket.readyState !== WebSocket.OPEN) {
+      showProfileError('Not connected to server.');
+      return;
+    }
+    if (!currentUser) {
+      showProfileError('You must be logged in to change your password.');
+      return;
+    }
+    if (profileChangePending) return;
+
+    const currentPassword = profileCurrentInput!.value.trim();
+    const newPassword = profileNewInput!.value.trim();
+    const confirmPassword = profileConfirmInput!.value.trim();
+
+    clearProfileError();
+
+    if (!currentPassword || !newPassword || !confirmPassword) {
+      showProfileError('Please fill in all password fields.');
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      showProfileError('New passwords do not match.');
+      return;
+    }
+    if (newPassword.length < 12) {
+      showProfileError('New password must be at least 12 characters long.');
+      return;
+    }
+    if (newPassword === currentPassword) {
+      showProfileError('New password must be different from the current password.');
+      return;
+    }
+
+    profileChangePending = true;
+    if (profileSubmitBtn) {
+      profileSubmitBtn.disabled = true;
+      profileSubmitBtn.textContent = 'Updating...';
+    }
+
+    socket.send(JSON.stringify({
+      t: 'changeOwnPassword',
+      data: {
+        currentPassword,
+        newPassword
+      }
+    }));
+  });
+}
 let painting = false;
 let lastPaintKey: string | null = null;
 let lastPaintCell: Vec2 | null = null;
@@ -115,22 +883,18 @@ try { const s = localStorage.getItem("recentLocations"); if (s) recentLocations 
 let starredLocations: string[] = [];
 try { const s = localStorage.getItem("starredLocations"); if (s) starredLocations = JSON.parse(s); } catch {}
 
-// Available character icons
+// Available character icons shared between players and NPCs
+const SHARED_CHARACTER_ICONS = [
+  "🧙", "🧙‍♂️", "🧙‍♀️", "🧝", "🧝‍♂️", "🧝‍♀️", "🧛", "🧛‍♂️", "🧛‍♀️",
+  "🧚", "🧚‍♂️", "🧚‍♀️", "🧞", "🧞‍♂️", "🧞‍♀️", "🧜", "🧜‍♂️", "🧜‍♀️",
+  "🧟", "🧟‍♂️", "🧟‍♀️", "🧌", "🥷", "🤺", "🦸", "🦸‍♂️", "🦸‍♀️",
+  "🦹", "🦹‍♂️", "🦹‍♀️", "🤴", "👸", "🐺", "🐻", "🦁", "🐯", "🐗",
+  "🐴", "🐉", "🐲", "🦅", "🦉", "🦇", "🦊"
+];
+
 const CHARACTER_ICONS = {
-  players: [
-    "🧙", "🧙‍♂️", "🧙‍♀️", "⚔️", "🛡️", "🏹", "🗡️", "🔮", "⚡", "🔥", 
-    "❄️", "🌊", "🌪️", "🌱", "🌿", "🍀", "🌸", "🌺", "🌻", "🌹",
-    "👑", "💎", "⭐", "🌟", "✨", "💫", "🌈", "🦄", "🐉", "🐲",
-    "🦅", "🦆", "🦇", "🦉", "🦊", "🦋", "🦌", "🦍", "🦎", "🦏",
-    "🦐", "🦑", "🦒", "🦓", "🦔", "🦕", "🦖", "🦗", "🦘", "🦙"
-  ],
-  npcs: [
-    "🧟", "🧟‍♂️", "🧟‍♀️", "👹", "👺", "💀", "☠️", "👻", "🎭", "🎪",
-    "🤖", "👽", "👾", "🤡", "👹", "👺", "💀", "☠️", "👻", "🎭",
-    "🐺", "🐻", "🐻‍❄️", "🐨", "🐯", "🦁", "🐮", "🐷", "🐸", "🐵",
-    "🙈", "🙉", "🙊", "🐒", "🦍", "🦧", "🐶", "🐕", "🐩", "🐕‍🦺",
-    "🐈", "🐈‍⬛", "🐱", "🐯", "🦁", "🐮", "🐷", "🐸", "🐵", "🙈"
-  ]
+  players: [...SHARED_CHARACTER_ICONS],
+  npcs: [...SHARED_CHARACTER_ICONS]
 };
 function saveRecents() { try { localStorage.setItem("recentLocations", JSON.stringify(recentLocations.slice(0, 10))); } catch {} }
 function saveStarred() { try { localStorage.setItem("starredLocations", JSON.stringify(starredLocations)); } catch {} }
@@ -163,7 +927,7 @@ function isStarred(path: string): boolean {
 }
 
 function requestLocationsList() {
-  if (!socket) return;
+  if (!socket || socket.readyState !== WebSocket.OPEN) return;
   const msg: ClientToServer = { t: "listLocations" };
   socket.send(JSON.stringify(msg));
 }
@@ -221,11 +985,11 @@ function applyBrushAtCell(cell: Vec2): BrushResult {
         setFloorOverride(lvl, c, selectedFloorKind);
         touchedFloor = true;
         acted = true;
-        if (socket) {
+        if (socket && socket.readyState === WebSocket.OPEN) {
           const msg: ClientToServer = { t: "paintFloor", levelId: lvl, pos: c, kind: selectedFloorKind };
           socket.send(JSON.stringify(msg));
         }
-      } else if (socket) {
+      } else if (socket && socket.readyState === WebSocket.OPEN) {
         const kind = selectedAssetKind ?? "tree";
         const msg: ClientToServer = { t: "placeAsset", levelId: lvl, pos: c, kind };
         socket.send(JSON.stringify(msg));
@@ -236,7 +1000,7 @@ function applyBrushAtCell(cell: Vec2): BrushResult {
   }
   if (editorMode === "eraseObjects") {
     const lvl = resolveActiveLevel();
-    if (!socket || !lvl) return { acted, touchedFloor };
+    if (!socket || !lvl || socket.readyState !== WebSocket.OPEN) return { acted, touchedFloor };
     for (const c of cells) {
       const msg: ClientToServer = { t: "removeAssetAt", levelId: lvl, pos: c };
       socket.send(JSON.stringify(msg));
@@ -248,14 +1012,14 @@ function applyBrushAtCell(cell: Vec2): BrushResult {
     const lvl = resolveActiveLevel();
     if (!lvl) return { acted, touchedFloor };
     for (const c of cells) {
-      if (socket) {
+      if (socket && socket.readyState === WebSocket.OPEN) {
         const rm: ClientToServer = { t: "removeAssetAt", levelId: lvl, pos: c };
         socket.send(JSON.stringify(rm));
       }
       setFloorOverride(lvl, c, null);
       touchedFloor = true;
       acted = true;
-      if (socket) {
+      if (socket && socket.readyState === WebSocket.OPEN) {
         const fl: ClientToServer = { t: "paintFloor", levelId: lvl, pos: c, kind: null };
         socket.send(JSON.stringify(fl));
       }
@@ -263,7 +1027,7 @@ function applyBrushAtCell(cell: Vec2): BrushResult {
     return { acted, touchedFloor };
   }
   if (editorMode === "revealFog") {
-    if (socket && levelId) {
+    if (socket && socket.readyState === WebSocket.OPEN && levelId) {
       const msg: ClientToServer = { t: "revealFog", levelId, cells };
       socket.send(JSON.stringify(msg));
       acted = true;
@@ -271,7 +1035,7 @@ function applyBrushAtCell(cell: Vec2): BrushResult {
     return { acted, touchedFloor };
   }
   if (editorMode === "eraseFog") {
-    if (socket && levelId) {
+    if (socket && socket.readyState === WebSocket.OPEN && levelId) {
       const msg: ClientToServer = { t: "obscureFog", levelId, cells };
       socket.send(JSON.stringify(msg));
       acted = true;
@@ -1421,7 +2185,7 @@ function drawTokens() {
       node.on("pointerupoutside", () => { (node as any).cursor = "grab"; });
       node.on("pointertap", (e: any) => { 
         e.stopPropagation?.();
-        if (editorMode === "eraseTokens" && myRole === "DM" && socket) {
+        if (editorMode === "eraseTokens" && myRole === "DM" && socket && socket.readyState === WebSocket.OPEN) {
           const msg: ClientToServer = { t: "removeTokenAt", levelId: tok.levelId, pos: { x: Math.floor(tok.pos.x), y: Math.floor(tok.pos.y) } };
           socket.send(JSON.stringify(msg));
         } else {
@@ -1449,7 +2213,7 @@ function drawTokens() {
       node.eventMode = "static";
       node.on("pointertap", (e: any) => { 
         e.stopPropagation?.();
-        if (editorMode === "eraseTokens" && myRole === "DM" && socket) {
+        if (editorMode === "eraseTokens" && myRole === "DM" && socket && socket.readyState === WebSocket.OPEN) {
           const msg: ClientToServer = { t: "removeTokenAt", levelId: tok.levelId, pos: { x: Math.floor(tok.pos.x), y: Math.floor(tok.pos.y) } };
           socket.send(JSON.stringify(msg));
         } else {
@@ -1710,6 +2474,10 @@ function drawAssets() {
     const child = gameObjectsLayer.children[i];
     if ((child as any).userData?.type === "asset") {
       gameObjectsLayer.removeChild(child);
+      // Properly destroy PixiJS objects to prevent memory leaks
+      if (child.destroy) {
+        child.destroy({ children: true });
+      }
     }
   }
   
@@ -2253,7 +3021,7 @@ function connect() {
       
       if (save && input.value.trim() !== originalMapName) {
         const newName = input.value.trim();
-        if (newName && newName !== originalMapName) {
+        if (newName && newName !== originalMapName && socket && socket.readyState === WebSocket.OPEN) {
           const msg: ClientToServer = { t: "renameLocation", newName };
           socket.send(JSON.stringify(msg));
         }
@@ -2450,8 +3218,6 @@ function connect() {
         centerOnMyToken();
         // update UI state based on role
         try { (updateEditorUI as any)(); } catch {}
-        // update user menu
-        try { (updateUserMenu as any)(); } catch {}
         // auto-reveal around DM token on join to make map visible
         if (myRole === "DM") {
           for (const t of tokens.values()) {
@@ -2661,7 +3427,6 @@ function connect() {
       } else if (msg.t === "roleChanged") {
         myRole = (msg as any).role;
         try { (updateEditorUI as any)(); } catch {}
-        try { (updateUserMenu as any)(); } catch {}
         hudToast(`Role changed to: ${myRole === "DM" ? "Administrator" : "Player"}`);
       } else if (msg.t === "locationRenamed") {
         const newName = (msg as any).newName;
@@ -2688,6 +3453,226 @@ function connect() {
         drawFog();
         drawMinimap();
         renderCharacterPanel();
+      } else if (msg.t === "loginResponse") {
+        const loginMsg = msg as any;
+        console.log("[DEBUG] Login response received:", loginMsg);
+        if (loginMsg.success) {
+          authState = { isAuthenticated: true, user: loginMsg.user, token: loginMsg.token };
+          currentUser = loginMsg.user;
+          
+          // Save session to localStorage
+          saveSession(loginMsg.user, loginMsg.token);
+          
+          // Update user dropdown
+          updateUserDropdown();
+          
+          // Hide login screen and show main app
+          hideLoginScreen();
+          
+          // Send join message after successful login
+          if (currentUser) {
+            const preferredRole = currentUser.role === 'master' ? 'DM' : 'PLAYER';
+            const joinMsg: ClientToServer = { t: "join", name: currentUser.username, invite: inv, preferredRole };
+            try { ws.send(JSON.stringify(joinMsg)); } catch {}
+            
+            // Load location by ID if specified in URL
+            if (mapId) {
+              const loadMsg: ClientToServer = { t: "loadLocationById", locationId: mapId };
+              try { ws.send(JSON.stringify(loadMsg)); } catch {}
+            }
+            
+          }
+        } else {
+          showError(loginMsg.error || 'Login failed');
+          const submitBtn = document.querySelector('#login-form button[type="submit"]') as HTMLButtonElement;
+          if (submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.textContent = 'Login';
+          }
+        }
+      } else if (msg.t === "resumeSessionResponse") {
+        const resumeMsg = msg as any;
+        console.log("[DEBUG] Resume session response received:", resumeMsg);
+        if (resumeMsg.success && resumeMsg.user && resumeMsg.token) {
+          authState = { isAuthenticated: true, user: resumeMsg.user, token: resumeMsg.token };
+          currentUser = resumeMsg.user;
+
+          // Refresh session data
+          saveSession(resumeMsg.user, resumeMsg.token);
+
+          updateUserDropdown();
+          hideLoginScreen();
+
+          if (currentUser) {
+            const preferredRole = currentUser.role === 'master' ? 'DM' : 'PLAYER';
+            const joinMsg: ClientToServer = { t: "join", name: currentUser.username, invite: inv, preferredRole };
+            try { ws.send(JSON.stringify(joinMsg)); } catch {}
+
+            if (mapId) {
+              const loadMsg: ClientToServer = { t: "loadLocationById", locationId: mapId };
+              try { ws.send(JSON.stringify(loadMsg)); } catch {}
+            }
+          }
+        } else {
+          console.warn("[DEBUG] Session resume failed:", resumeMsg.error);
+          authState = { isAuthenticated: false };
+          currentUser = null;
+          clearSession();
+          showError('Session expired. Please log in again.');
+          closeUsersPanel();
+          showLoginScreen();
+          try { ws.send(JSON.stringify({ t: "checkFirstUser" })); } catch {}
+        }
+      } else if (msg.t === "logoutResponse") {
+        console.log('Logout response received:', msg);
+        if (logoutTimeout) {
+          clearTimeout(logoutTimeout);
+          logoutTimeout = null;
+        }
+        authState = { isAuthenticated: false };
+        currentUser = null;
+        clearSession();
+        showLoginScreen();
+        closeUsersPanel();
+        try { ws.send(JSON.stringify({ t: "checkFirstUser" })); } catch {}
+      } else if (msg.t === "createUserResponse") {
+        const createMsg = msg as any;
+        const submitBtn = document.querySelector('#create-user-form button[type="submit"]') as HTMLButtonElement;
+        if (createMsg.success) {
+          showPasswordModal(createMsg.user.username, createMsg.generatedPassword, "created");
+          
+          // Close create user modal
+          const createUserModal = document.getElementById('create-user-modal');
+          if (createUserModal) {
+            createUserModal.style.display = 'none';
+          }
+
+          const createUserFormEl = document.getElementById('create-user-form') as HTMLFormElement | null;
+          createUserFormEl?.reset();
+          
+          // Refresh users list
+          loadUsersList();
+        } else {
+          showCreateUserError(createMsg.error || 'Failed to create user');
+        }
+        createUserPending = false;
+        
+        if (submitBtn) {
+          submitBtn.disabled = false;
+          submitBtn.textContent = 'Create User';
+        }
+      } else if (msg.t === "userListResponse") {
+        const userListMsg = msg as any;
+        renderUsersList(userListMsg.users);
+      } else if (msg.t === "updateUserRoleResponse") {
+        const updateMsg = msg as any;
+        if (updateMsg.success) {
+          loadUsersList(); // Refresh the list
+        } else {
+          alert(updateMsg.error || 'Failed to update user role');
+          loadUsersList();
+        }
+      } else if (msg.t === "deleteUserResponse") {
+        const deleteMsg = msg as any;
+        if (deleteMsg.success) {
+          loadUsersList(); // Refresh the list
+        } else {
+          alert(deleteMsg.error || 'Failed to delete user');
+          loadUsersList();
+        }
+      } else if (msg.t === "resetUserPasswordResponse") {
+        const resetMsg = msg as any;
+        const usernameForToast = pendingPasswordUsername;
+        closeResetPasswordModal();
+        if (resetMsg.success) {
+          if (usernameForToast) {
+            hudToast(`Password for ${usernameForToast} updated.`);
+          } else {
+            hudToast('Password updated.');
+          }
+          loadUsersList();
+        } else {
+          const resetSubmit = document.getElementById('reset-password-submit') as HTMLButtonElement | null;
+          if (resetSubmit) {
+            resetSubmit.disabled = false;
+            resetSubmit.textContent = 'Set Password';
+          }
+          hudToast(resetMsg.error || 'Failed to reset password');
+        }
+      } else if (msg.t === "changePasswordResponse") {
+        const changeMsg = msg as any;
+        profileChangePending = false;
+        if (!profileSubmitBtn) profileSubmitBtn = document.getElementById('profile-password-submit') as HTMLButtonElement | null;
+        if (profileSubmitBtn) {
+          profileSubmitBtn.disabled = false;
+          profileSubmitBtn.textContent = 'Update Password';
+        }
+
+        if (changeMsg.success) {
+          closeProfileModal();
+          authState = { isAuthenticated: false };
+          currentUser = null;
+          clearSession();
+          showLoginScreen();
+          closeUsersPanel();
+          const message = changeMsg.message || 'Password updated. Please log in again.';
+          showError(message);
+          hudToast(message);
+          try {
+            if (socket && socket.readyState === WebSocket.OPEN) {
+              socket.send(JSON.stringify({ t: "checkFirstUser" }));
+            }
+          } catch (err) {
+            console.warn("[DEBUG] Failed to send checkFirstUser after password change:", err);
+          }
+        } else {
+          showProfileError(changeMsg.error || 'Failed to change password');
+        }
+      } else if (msg.t === "firstUserCheckResponse") {
+        const checkMsg = msg as any;
+        if (checkMsg.needsFirstUser) {
+          showFirstUserScreen();
+          setupFirstUserForm();
+        } else {
+          showLoginScreen();
+          setupLoginForm();
+        }
+        setupUserManagement();
+      } else if (msg.t === "createFirstUserResponse") {
+        const createMsg = msg as any;
+        const submitBtn = document.querySelector('#first-user-form button[type="submit"]') as HTMLButtonElement;
+        if (createMsg.success) {
+          // Show password modal
+          const passwordModal = document.getElementById('password-modal');
+          const createdUsername = document.getElementById('created-username');
+          const generatedPassword = document.getElementById('generated-password');
+          
+          if (passwordModal && createdUsername && generatedPassword) {
+            createdUsername.textContent = createMsg.user.username;
+            (generatedPassword as HTMLInputElement).value = createMsg.generatedPassword;
+            passwordModal.style.display = 'flex';
+          }
+          
+          // Auto-login after first user creation
+          setTimeout(() => {
+            if (socket && socket.readyState === WebSocket.OPEN) {
+              socket.send(JSON.stringify({
+                t: 'login',
+                data: {
+                  usernameOrEmail: createMsg.user.username,
+                  password: createMsg.generatedPassword
+                }
+              }));
+            }
+          }, 2000);
+        } else {
+          showFirstUserError(createMsg.error || 'Failed to create user');
+        }
+        
+        if (submitBtn) {
+          submitBtn.disabled = false;
+          submitBtn.textContent = 'Create Master Account';
+        }
       } else if ((msg as any).t === "error") {
         // show error toast for server-side failures
         try { hudToast(`Error: ${(msg as any).message || "unknown error"}`); } catch {}
@@ -2749,20 +3734,51 @@ function connect() {
           if (attemptId !== activeAttemptId) { finish(false); return; }
           finish(false);
         };
-        ws.addEventListener("open", ok, { once: true } as any);
-        ws.addEventListener("error", fail, { once: true } as any);
-        ws.addEventListener("close", fail, { once: true } as any);
+        ws.addEventListener("open", () => {
+          console.log("[DEBUG] WebSocket opened");
+          ok();
+        }, { once: true } as any);
+        ws.addEventListener("error", (err) => {
+          console.log("[DEBUG] WebSocket error:", err);
+          fail();
+        }, { once: true } as any);
+        ws.addEventListener("close", (event) => {
+          console.log("[DEBUG] WebSocket closed:", event.code, event.reason);
+          fail();
+        }, { once: true } as any);
       });
       if (opened && attemptId === activeAttemptId) {
         try { console.log(`[WS][client] connected on :${port}`); } catch {}
-        const preferredRole = loadUserRole();
-        const joinMsg: ClientToServer = { t: "join", name: "Player", invite: inv, preferredRole };
-        try { ws.send(JSON.stringify(joinMsg)); } catch {}
         
-        // Load location by ID if specified in URL
-        if (mapId) {
-          const loadMsg: ClientToServer = { t: "loadLocationById", locationId: mapId };
-          try { ws.send(JSON.stringify(loadMsg)); } catch {}
+        // Check if we have pending login data
+        const pendingLogin = (window as any).pendingLogin;
+        if (pendingLogin) {
+          // Send login request first
+          const loginMsg: ClientToServer = { 
+            t: "login", 
+            data: { 
+              usernameOrEmail: pendingLogin.usernameOrEmail, 
+              password: pendingLogin.password 
+            } 
+          };
+          console.log("[DEBUG] Sending login message:", loginMsg);
+          try { ws.send(JSON.stringify(loginMsg)); } catch {}
+          // Clear pending login
+          delete (window as any).pendingLogin;
+        } else {
+          // Check if we have a saved session
+          const savedSession = loadSession();
+          if (savedSession) {
+            console.log("[DEBUG] Attempting session resume with stored token");
+            try {
+              ws.send(JSON.stringify({ t: "resumeSession", token: savedSession.token }));
+            } catch (err) {
+              console.error("[DEBUG] Failed to send resumeSession:", err);
+            }
+          } else {
+            // Check if first user is needed
+            try { ws.send(JSON.stringify({ t: "checkFirstUser" })); } catch {}
+          }
         }
         
         attachHandlers(ws, port, attemptId);
@@ -2977,107 +3993,6 @@ function connect() {
 
   setLocationsOpen(false);
 
-  // User menu handlers
-  const userIcon = document.getElementById("user-icon") as HTMLButtonElement | null;
-  const userDropdown = document.getElementById("user-dropdown") as HTMLDivElement | null;
-  const userRole = document.getElementById("user-role") as HTMLDivElement | null;
-  const userName = document.getElementById("user-name") as HTMLDivElement | null;
-  const switchToDmBtn = document.getElementById("switch-to-dm") as HTMLButtonElement | null;
-  const switchToPlayerBtn = document.getElementById("switch-to-player") as HTMLButtonElement | null;
-
-  let userMenuOpen = false;
-
-  function saveUserRole(role: "DM" | "PLAYER") {
-    try {
-      localStorage.setItem("dnd-user-role", role);
-    } catch (e) {
-      console.warn("Failed to save user role:", e);
-    }
-  }
-
-  function loadUserRole(): "DM" | "PLAYER" {
-    try {
-      const saved = localStorage.getItem("dnd-user-role");
-      console.log(`[CLIENT] loadUserRole: saved=${saved}`);
-      // If no saved role or it's PLAYER, default to DM
-      const role = (saved === "DM") ? "DM" : "DM";
-      console.log(`[CLIENT] loadUserRole: returning=${role}`);
-      return role;
-    } catch (e) {
-      console.warn("Failed to load user role:", e);
-      return "DM";
-    }
-  }
-
-  function updateUserMenu() {
-    if (!userRole || !userName || !switchToDmBtn || !switchToPlayerBtn || !userIcon) return;
-    
-    const isDM = myRole === "DM";
-    userRole.textContent = isDM ? "Master" : "Player";
-    userRole.className = `user-role ${isDM ? "dm" : ""}`;
-    userName.textContent = "User"; // Can add username later
-    
-    // Show button to switch to opposite role
-    switchToDmBtn.style.display = isDM ? "none" : "flex";
-    switchToPlayerBtn.style.display = isDM ? "flex" : "none";
-    
-    // Update icon
-    userIcon.className = `user-icon ${isDM ? "dm" : ""}`;
-  }
-
-  function toggleUserMenu() {
-    if (!userDropdown) return;
-    userMenuOpen = !userMenuOpen;
-    userDropdown.classList.toggle("open", userMenuOpen);
-    userIcon?.setAttribute("aria-expanded", userMenuOpen ? "true" : "false");
-  }
-
-  function closeUserMenu() {
-    if (!userDropdown) return;
-    userMenuOpen = false;
-    userDropdown.classList.remove("open");
-    userIcon?.setAttribute("aria-expanded", "false");
-  }
-
-  userIcon?.addEventListener("click", (ev) => {
-    ev.preventDefault();
-    ev.stopPropagation();
-    toggleUserMenu();
-  });
-
-  switchToDmBtn?.addEventListener("click", (ev) => {
-    ev.preventDefault();
-    ev.stopPropagation();
-    if (socket) {
-      // Send request to switch role to DM
-      const msg: ClientToServer = { t: "switchRole", role: "DM" };
-      socket.send(JSON.stringify(msg));
-      saveUserRole("DM");
-    }
-    closeUserMenu();
-  });
-
-  switchToPlayerBtn?.addEventListener("click", (ev) => {
-    ev.preventDefault();
-    ev.stopPropagation();
-    if (socket) {
-      // Send request to switch role to PLAYER
-      const msg: ClientToServer = { t: "switchRole", role: "PLAYER" };
-      socket.send(JSON.stringify(msg));
-      saveUserRole("PLAYER");
-    }
-    closeUserMenu();
-  });
-
-  // Close menu when clicking outside
-  document.addEventListener("click", (ev) => {
-    if (userMenuOpen && userDropdown && !userDropdown.contains(ev.target as Node) && !userIcon?.contains(ev.target as Node)) {
-      closeUserMenu();
-    }
-  });
-
-  // Initialize user menu
-  updateUserMenu();
 
   btnUndo?.addEventListener("click", (ev) => {
     ev.preventDefault();
@@ -3128,6 +4043,13 @@ function connect() {
 
   function updateEditorUI() {
     const isDM = myRole === "DM";
+    const bottomAssetMenu = document.getElementById("bottom-asset-menu") as HTMLElement | null;
+    if (bottomAssetMenu) {
+      bottomAssetMenu.style.display = isDM ? "flex" : "none";
+    }
+    if (document.body) {
+      document.body.style.paddingBottom = isDM ? "" : "0px";
+    }
     
     // Force close any open panels first and remove all open classes
     closeToolPanels();
@@ -3138,7 +4060,7 @@ function connect() {
       panel.classList.remove("open");
       // Force hide panels that should be hidden
       if (!isDM && (panel.id === 'panel-characters' || panel.id === 'panel-brush' || panel.id === 'panel-fog' || panel.id === 'panel-assets' || panel.id === 'panel-floors')) {
-        panel.style.display = 'none';
+        (panel as HTMLElement).style.display = 'none';
         panel.classList.remove("open");
       }
     });
@@ -3154,10 +4076,10 @@ function connect() {
       const panelId = panel.id;
       if (panelId === 'panel-characters') {
         // Characters panel is only for DM
-        panel.style.display = isDM ? 'block' : 'none';
+        (panel as HTMLElement).style.display = isDM ? 'block' : 'none';
       } else if (panelId === 'panel-brush' || panelId === 'panel-fog' || panelId === 'panel-assets' || panelId === 'panel-floors') {
         // These panels are only for DM
-        panel.style.display = isDM ? 'block' : 'none';
+        (panel as HTMLElement).style.display = isDM ? 'block' : 'none';
       }
     });
     
@@ -3167,10 +4089,10 @@ function connect() {
       const group = btn.getAttribute('data-group');
       if (group === 'characters') {
         // Characters button is only for DM
-        btn.style.display = isDM ? 'flex' : 'none';
+        (btn as HTMLElement).style.display = isDM ? 'flex' : 'none';
       } else if (group === 'brush' || group === 'fog' || group === 'assets' || group === 'floors') {
         // These buttons are only for DM
-        btn.style.display = isDM ? 'flex' : 'none';
+        (btn as HTMLElement).style.display = isDM ? 'flex' : 'none';
       }
     });
     
@@ -4047,7 +4969,7 @@ function initializeBottomAssetMenu() {
     editorMode = 'paint';
     
     // Update UI to show paint mode
-    updateEditorUI();
+    // UI will be updated by the existing updateEditorUI calls in event handlers
   }
 
   // Category tab handlers
@@ -4081,9 +5003,175 @@ function initializeBottomAssetMenu() {
 
 // Initialize the bottom asset menu when DOM is ready
 if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', initializeBottomAssetMenu);
+  document.addEventListener('DOMContentLoaded', () => {
+    initializeBottomAssetMenu();
+    initializeAuth();
+  });
 } else {
   initializeBottomAssetMenu();
+  initializeAuth();
+}
+
+function setupUserDropdown() {
+  const userIcon = document.getElementById('user-icon');
+  const userDropdown = document.getElementById('user-dropdown');
+  const logoutAction = document.getElementById('logout-action');
+  const profileAction = document.getElementById('profile-action');
+  const adminPanel = document.getElementById('admin-panel');
+
+  console.log('Setting up user dropdown:', { userIcon, userDropdown, logoutAction, adminPanel, profileAction });
+
+  if (!userIcon || !userDropdown || !logoutAction) {
+    console.log('Missing required elements for user dropdown');
+    return;
+  }
+
+  // Toggle dropdown
+  userIcon.addEventListener('click', () => {
+    const isOpen = userDropdown.classList.contains('open');
+    if (isOpen) {
+      userDropdown.classList.remove('open');
+      userDropdown.setAttribute('aria-hidden', 'true');
+      userIcon.setAttribute('aria-expanded', 'false');
+    } else {
+      userDropdown.classList.add('open');
+      userDropdown.setAttribute('aria-hidden', 'false');
+      userIcon.setAttribute('aria-expanded', 'true');
+    }
+  });
+
+  // Close dropdown when clicking outside
+  document.addEventListener('click', (e) => {
+    if (!userIcon.contains(e.target as Node) && !userDropdown.contains(e.target as Node)) {
+      userDropdown.classList.remove('open');
+      userDropdown.setAttribute('aria-hidden', 'true');
+      userIcon.setAttribute('aria-expanded', 'false');
+    }
+  });
+
+  if (profileAction) {
+    profileAction.addEventListener('click', () => {
+      userDropdown.classList.remove('open');
+      userDropdown.setAttribute('aria-hidden', 'true');
+      userIcon.setAttribute('aria-expanded', 'false');
+      openProfileModal();
+    });
+  }
+
+  // Logout functionality
+  logoutAction.addEventListener('click', () => {
+    console.log('Logout button clicked');
+    console.log('Socket state:', socket ? socket.readyState : 'no socket');
+    
+    // Close dropdown first to avoid aria-hidden issues
+    userDropdown.classList.remove('open');
+    userDropdown.setAttribute('aria-hidden', 'true');
+    userIcon.setAttribute('aria-expanded', 'false');
+    
+    if (socket && socket.readyState === WebSocket.OPEN) {
+      const logoutMsg: ClientToServer = { t: "logout" };
+      try { 
+        socket.send(JSON.stringify(logoutMsg)); 
+        console.log('Logout message sent to server:', logoutMsg);
+        if (logoutTimeout) {
+          clearTimeout(logoutTimeout);
+          logoutTimeout = null;
+        }
+        logoutTimeout = setTimeout(() => {
+          console.warn('[DEBUG] Logout server response timeout, clearing session locally');
+          authState = { isAuthenticated: false };
+          currentUser = null;
+          clearSession();
+          showLoginScreen();
+          closeUsersPanel();
+        }, 3000);
+      } catch (error) {
+        console.error('Error sending logout message:', error);
+      }
+    } else {
+      console.log('No WebSocket connection, clearing session locally');
+      // If no WebSocket connection, just clear session and show login
+      authState = { isAuthenticated: false };
+      currentUser = null;
+      clearSession();
+      showLoginScreen();
+      closeUsersPanel();
+      if (logoutTimeout) {
+        clearTimeout(logoutTimeout);
+        logoutTimeout = null;
+      }
+    }
+  });
+
+  // Admin panel functionality
+  if (adminPanel) {
+    console.log('Admin panel element found, adding event listener');
+    adminPanel.addEventListener('click', () => {
+      console.log('Admin panel button clicked');
+      
+      // Close dropdown first to avoid aria-hidden issues
+      userDropdown.classList.remove('open');
+      userDropdown.setAttribute('aria-hidden', 'true');
+      userIcon.setAttribute('aria-expanded', 'false');
+      
+      // Show users panel (admin functionality)
+      openUsersPanel();
+    });
+  } else {
+    console.log('Admin panel element not found');
+  }
+}
+
+function updateUserDropdown() {
+  const userRole = document.getElementById('user-role');
+  const userName = document.getElementById('user-name');
+  const userEmail = document.getElementById('user-email');
+  const adminPanel = document.getElementById('admin-panel');
+
+  console.log('updateUserDropdown called with currentUser:', currentUser);
+
+  if (!currentUser || !userRole || !userName || !userEmail) {
+    console.log('Missing elements or currentUser:', { currentUser, userRole, userName, userEmail });
+    return;
+  }
+
+  // Update user info
+  userRole.textContent = currentUser.role === 'master' ? 'Master' : 'User';
+  userName.textContent = currentUser.username;
+  userEmail.textContent = currentUser.email;
+
+  // Show/hide admin panel based on role
+  if (adminPanel) {
+    adminPanel.style.display = currentUser.role === 'master' ? 'flex' : 'none';
+    console.log('Admin panel display set to:', adminPanel.style.display, 'for role:', currentUser.role);
+  }
+}
+
+function initializeAuth() {
+  // Setup forms
+  setupLoginForm();
+  setupFirstUserForm();
+  setupUserManagement();
+  setupUserDropdown();
+  setupProfileModal();
+  
+  // Setup copy password functionality
+  const copyPasswordBtn = document.getElementById('copy-password');
+  if (copyPasswordBtn) {
+    copyPasswordBtn.addEventListener('click', () => {
+      const passwordInput = document.getElementById('generated-password') as HTMLInputElement;
+      if (passwordInput) {
+        passwordInput.select();
+        document.execCommand('copy');
+        copyPasswordBtn.textContent = 'Copied!';
+        setTimeout(() => {
+          copyPasswordBtn.textContent = 'Copy';
+        }, 2000);
+      }
+    });
+  }
+  
+  // Don't show any screen initially - wait for server response
 }
 
 function centerOn(v: Vec2) {
@@ -4284,5 +5372,3 @@ canvasEl.addEventListener("wheel", (ev) => {
     updateMinimapViewport();
   }
 }, { passive: false });
-
-

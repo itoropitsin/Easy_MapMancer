@@ -1,5 +1,15 @@
 export type ID = string;
 export type Role = "DM" | "PLAYER";
+export type UserRole = "master" | "user";
+export interface User {
+    id: ID;
+    username: string;
+    email: string;
+    passwordHash: string;
+    role: UserRole;
+    createdAt: number;
+    lastLoginAt?: number;
+}
 export interface Vec2 {
     x: number;
     y: number;
@@ -140,4 +150,33 @@ export interface UndoRedoState {
     undoStack: ActionSnapshot[];
     redoStack: ActionSnapshot[];
     maxStackSize: number;
+}
+export interface LoginRequest {
+    usernameOrEmail: string;
+    password: string;
+}
+export interface LoginResponse {
+    success: boolean;
+    user?: User;
+    token?: string;
+    error?: string;
+}
+export interface CreateUserRequest {
+    username: string;
+    email: string;
+    role?: UserRole;
+}
+export interface CreateUserResponse {
+    success: boolean;
+    user?: User;
+    generatedPassword?: string;
+    error?: string;
+}
+export interface UserListResponse {
+    users: User[];
+}
+export interface AuthState {
+    isAuthenticated: boolean;
+    user?: User;
+    token?: string;
 }

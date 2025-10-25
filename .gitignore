@@ -34,6 +34,10 @@ build/
 /user-data/
 *.backup
 
+# User database files
+packages/server/data/users.json
+packages/server/data/users.json.backup
+
 # Coverage
 coverage/
 .nyc_output/

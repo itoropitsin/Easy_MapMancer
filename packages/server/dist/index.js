@@ -4,6 +4,7 @@ import { promises as fs, statSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { WebSocketServer } from "ws";
+import { UserManager } from "./user-manager.js";
 const PORT = Number(process.env.PORT || 8080);
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -33,6 +34,8 @@ function resolveDataRoot() {
 }
 const DATA_ROOT = resolveDataRoot();
 const LAST_USED_FILE = path.resolve(DATA_ROOT, "last-used.json");
+// Initialize user manager
+const userManager = new UserManager();
 function applySnapshot(snap) {
     const payload = snap;
     const loc = payload.location;
@@ -177,11 +180,48 @@ const state = {
         undoStack: [],
         redoStack: [],
         maxStackSize: 50
-    }
+    },
+    commands: []
 };
 ensureDefaultFloorsForAllLevels();
 // Current file path for autosave (relative to DATA_ROOT)
 let currentSavePath = null;
+// Autosave debouncing
+let autosaveTimer = null;
+const AUTOSAVE_DELAY_MS = 2000; // Save only after 2 seconds of inactivity
+// Memory monitoring
+const MAX_MEMORY_MB = 1000; // Maximum memory usage before cleanup
+const FOG_CELL_LIMIT = 5000; // Maximum fog cells per level
+const MAX_MESSAGE_SIZE = 1024 * 1024; // 1MB max message size
+const MAX_CLIENTS = 50; // Maximum number of concurrent clients
+function checkMemoryAndCleanup() {
+    const memUsage = process.memoryUsage();
+    const memUsageMB = Math.round(memUsage.heapUsed / 1024 / 1024);
+    if (memUsageMB > MAX_MEMORY_MB) {
+        console.warn(`[SERVER] High memory usage detected: ${memUsageMB}MB, performing cleanup...`);
+        // Clean up old undo/redo history
+        if (state.undoRedo.undoStack.length > 10) {
+            const removed = state.undoRedo.undoStack.splice(0, state.undoRedo.undoStack.length - 10);
+            console.log(`[SERVER] Cleaned up ${removed.length} old undo actions`);
+        }
+        // Clean up fog cells if too many
+        for (const [levelId, fogSet] of state.fog.entries()) {
+            if (fogSet.size > FOG_CELL_LIMIT) {
+                const cellsArray = Array.from(fogSet);
+                const toRemove = cellsArray.slice(0, fogSet.size - FOG_CELL_LIMIT);
+                toRemove.forEach(cell => fogSet.delete(cell));
+                console.log(`[SERVER] Cleaned up ${toRemove.length} fog cells from level ${levelId}`);
+            }
+        }
+        // Force garbage collection if available
+        if (global.gc) {
+            global.gc();
+            const newMemUsage = process.memoryUsage();
+            const newMemUsageMB = Math.round(newMemUsage.heapUsed / 1024 / 1024);
+            console.log(`[SERVER] Memory after cleanup: ${newMemUsageMB}MB (freed ${memUsageMB - newMemUsageMB}MB)`);
+        }
+    }
+}
 // ---- Persistence helpers ----
 async function ensureDataRoot() {
     await fs.mkdir(DATA_ROOT, { recursive: true });
@@ -379,7 +419,17 @@ function roleFromInvite(inv) {
     return "DM";
 }
 function send(ws, msg) {
-    ws.send(JSON.stringify(msg));
+    try {
+        if (ws.readyState === ws.OPEN) {
+            ws.send(JSON.stringify(msg));
+        }
+        else {
+            console.warn(`[SERVER] Attempted to send message to closed WebSocket: ${ws.readyState}`);
+        }
+    }
+    catch (error) {
+        console.error(`[SERVER] Failed to send message:`, error);
+    }
 }
 function broadcast(events) {
     console.log(`[SERVER] Broadcasting ${events.length} events to ${state.clients.size} clients:`, events.map(e => e.type));
@@ -396,20 +446,27 @@ function createGameSnapshot() {
             floors.push({ levelId, pos: { x, y }, kind });
         }
     }
-    // Include fog state in events
+    // Include fog state in events - OPTIMIZED: only save fog deltas, not full state
     const events = [];
-    console.log(`[SERVER] createGameSnapshot: saving fog for ${state.fog.size} levels`);
+    const fogLevelsCount = state.fog.size;
+    let totalFogCells = 0;
     for (const [levelId, fogSet] of state.fog.entries()) {
         const cells = Array.from(fogSet).map((k) => {
             const [xs, ys] = k.split(",");
             return { x: Number(xs), y: Number(ys) };
         });
-        console.log(`[SERVER] createGameSnapshot: level ${levelId} has ${cells.length} revealed cells`);
-        if (cells.length > 0) {
+        totalFogCells += cells.length;
+        // Only include fog if there are revealed cells and it's not too many
+        if (cells.length > 0 && cells.length < FOG_CELL_LIMIT) {
             events.push({ type: "fogRevealed", levelId, cells });
         }
+        else if (cells.length >= FOG_CELL_LIMIT) {
+            console.warn(`[SERVER] Skipping fog save for level ${levelId}: too many cells (${cells.length})`);
+        }
     }
-    console.log(`[SERVER] createGameSnapshot: total events: ${events.length}`);
+    if (fogLevelsCount > 0) {
+        console.log(`[SERVER] createGameSnapshot: fog levels: ${fogLevelsCount}, total cells: ${totalFogCells}, events: ${events.length}`);
+    }
     return {
         location: state.location,
         tokens: Array.from(state.tokens.values()),
@@ -439,6 +496,8 @@ function pushToUndoStack(action) {
         undoRedo.undoStack.shift();
     }
     console.log(`[SERVER] Added action to undo stack: ${action.description}, stack size: ${undoRedo.undoStack.length}`);
+    // Check memory usage after adding action
+    checkMemoryAndCleanup();
     // Notify clients about undo/redo state
     broadcastUndoRedoState();
 }
@@ -532,29 +591,49 @@ function clearUndoRedoHistory() {
 function persistIfAutosave() {
     if (!currentSavePath)
         return;
-    (async () => {
+    // Clear existing timer
+    if (autosaveTimer) {
+        clearTimeout(autosaveTimer);
+    }
+    // Set new timer with debouncing
+    autosaveTimer = setTimeout(async () => {
         try {
             const safe = withinDataRoot(currentSavePath);
             if (!safe)
                 return;
+            // Check memory usage before saving
+            const memUsage = process.memoryUsage();
+            const memUsageMB = Math.round(memUsage.heapUsed / 1024 / 1024);
+            if (memUsageMB > 500) { // Warn if memory usage is high
+                console.warn(`[SERVER] High memory usage before autosave: ${memUsageMB}MB`);
+            }
             const { snapshot: snap } = snapshot();
             await writeJSON(safe, snap);
+            console.log(`[SERVER] Autosaved (memory: ${memUsageMB}MB)`);
         }
         catch (e) {
-            // ignore autosave errors for now
+            console.error("[SERVER] Autosave failed:", e);
         }
-    })();
+    }, AUTOSAVE_DELAY_MS);
 }
 function onMessage(client, data) {
     let msg;
     try {
-        msg = JSON.parse(String(data));
+        const dataStr = String(data);
+        if (dataStr.length > MAX_MESSAGE_SIZE) {
+            console.warn(`[SERVER] Message too large from client ${client.id}: ${dataStr.length} bytes`);
+            return send(client.socket, { t: "error", message: "Message too large" });
+        }
+        msg = JSON.parse(dataStr);
     }
     catch (e) {
+        console.warn(`[SERVER] Invalid JSON from client ${client.id}:`, e);
         return send(client.socket, { t: "error", message: "Invalid JSON" });
     }
-    if (!msg || typeof msg !== "object" || !("t" in msg))
+    if (!msg || typeof msg !== "object" || !("t" in msg)) {
+        console.warn(`[SERVER] Invalid message format from client ${client.id}:`, msg);
         return;
+    }
     switch (msg.t) {
         case "join": {
             // Handle role preference from client
@@ -915,16 +994,21 @@ function onMessage(client, data) {
         case "revealFog": {
             if (client.role !== "DM")
                 return;
+            // Check if adding these cells would exceed the limit
+            const levelFog = getFogSet(msg.levelId);
+            const currentSize = levelFog.size;
+            const newCells = msg.cells.filter(c => !levelFog.has(cellKey(c)));
+            if (currentSize + newCells.length > FOG_CELL_LIMIT) {
+                console.warn(`[SERVER] Reveal fog rejected: would exceed limit (${currentSize + newCells.length} > ${FOG_CELL_LIMIT})`);
+                return;
+            }
             // Create snapshot before action
             const beforeSnapshot = createGameSnapshot();
-            const levelFog = getFogSet(msg.levelId);
             const added = [];
-            for (const c of msg.cells) {
+            for (const c of newCells) {
                 const k = cellKey(c);
-                if (!levelFog.has(k)) {
-                    levelFog.add(k);
-                    added.push({ x: c.x, y: c.y });
-                }
+                levelFog.add(k);
+                added.push({ x: c.x, y: c.y });
             }
             if (added.length > 0) {
                 const ev = { type: "fogRevealed", levelId: msg.levelId, cells: added };
@@ -1661,6 +1745,148 @@ function onMessage(client, data) {
             }
             break;
         }
+        case "login": {
+            const loginData = msg.data;
+            userManager.login(loginData).then(result => {
+                if (result.success && result.user && result.token) {
+                    client.user = result.user;
+                    client.token = result.token;
+                    // Set role based on user role
+                    client.role = result.user.role === 'master' ? 'DM' : 'PLAYER';
+                    send(client.socket, { t: "loginResponse", success: true, user: result.user, token: result.token });
+                    console.log(`[SERVER] User ${result.user.username} logged in successfully`);
+                }
+                else {
+                    send(client.socket, { t: "loginResponse", success: false, error: result.error });
+                }
+            });
+            break;
+        }
+        case "createFirstUser": {
+            if (!userManager.needsFirstUser()) {
+                send(client.socket, { t: "createFirstUserResponse", success: false, error: "First user already exists" });
+                return;
+            }
+            const userData = msg.data;
+            userManager.createFirstUser(userData).then(result => {
+                send(client.socket, { t: "createFirstUserResponse", success: result.success, user: result.user, generatedPassword: result.generatedPassword, error: result.error });
+                if (result.success) {
+                    console.log(`[SERVER] First user ${result.user?.username} created successfully`);
+                }
+            });
+            break;
+        }
+        case "checkFirstUser": {
+            const needsFirstUser = userManager.needsFirstUser();
+            console.log(`[SERVER] checkFirstUser: needsFirstUser=${needsFirstUser}, total users=${userManager.getAllUsers().length}`);
+            send(client.socket, { t: "firstUserCheckResponse", needsFirstUser });
+            break;
+        }
+        case "resumeSession": {
+            const token = msg.token;
+            if (!token || typeof token !== "string") {
+                send(client.socket, { t: "resumeSessionResponse", success: false, error: "Invalid session token" });
+                break;
+            }
+            const user = userManager.getUserByToken(token);
+            if (!user) {
+                send(client.socket, { t: "resumeSessionResponse", success: false, error: "Session expired" });
+                break;
+            }
+            client.user = user;
+            client.token = token;
+            client.role = user.role === "master" ? "DM" : "PLAYER";
+            send(client.socket, { t: "resumeSessionResponse", success: true, user, token });
+            console.log(`[SERVER] Client ${client.id} resumed session as ${user.username}`);
+            break;
+        }
+        case "logout": {
+            if (client.token) {
+                userManager.logout(client.token);
+                client.user = undefined;
+                client.token = undefined;
+                send(client.socket, { t: "logoutResponse", success: true });
+                console.log(`[SERVER] Client ${client.id} logged out`);
+            }
+            break;
+        }
+        case "createUser": {
+            if (!client.user || !userManager.isMasterUser(client.user.id)) {
+                send(client.socket, { t: "createUserResponse", success: false, error: "Access denied" });
+                return;
+            }
+            const userData = msg.data;
+            userManager.createUser(userData).then(result => {
+                send(client.socket, { t: "createUserResponse", success: result.success, user: result.user, generatedPassword: result.generatedPassword, error: result.error });
+                if (result.success) {
+                    console.log(`[SERVER] User ${result.user?.username} created by ${client.user?.username}`);
+                }
+            });
+            break;
+        }
+        case "listUsers": {
+            if (!client.user || !userManager.isMasterUser(client.user.id)) {
+                send(client.socket, { t: "userListResponse", users: [] });
+                return;
+            }
+            const users = userManager.getAllUsers();
+            send(client.socket, { t: "userListResponse", users });
+            break;
+        }
+        case "updateUserRole": {
+            if (!client.user || !userManager.isMasterUser(client.user.id)) {
+                send(client.socket, { t: "updateUserRoleResponse", success: false, error: "Access denied" });
+                return;
+            }
+            const { userId, role } = msg;
+            if (typeof userId !== "string" || (role !== "master" && role !== "user")) {
+                send(client.socket, { t: "updateUserRoleResponse", success: false, error: "Invalid payload" });
+                return;
+            }
+            if (client.user.id === userId) {
+                send(client.socket, { t: "updateUserRoleResponse", success: false, error: "You cannot change your own role" });
+                return;
+            }
+            const success = userManager.updateUserRole(userId, role);
+            send(client.socket, { t: "updateUserRoleResponse", success, error: success ? undefined : "Failed to update user role" });
+            break;
+        }
+        case "deleteUser": {
+            if (!client.user || !userManager.isMasterUser(client.user.id)) {
+                send(client.socket, { t: "deleteUserResponse", success: false, error: "Access denied" });
+                return;
+            }
+            const { userId } = msg;
+            const success = userManager.deleteUser(userId);
+            send(client.socket, { t: "deleteUserResponse", success, error: success ? undefined : "Failed to delete user" });
+            break;
+        }
+        case "resetUserPassword": {
+            if (!client.user || !userManager.isMasterUser(client.user.id)) {
+                send(client.socket, { t: "resetUserPasswordResponse", success: false, error: "Access denied" });
+                return;
+            }
+            const { userId, password } = msg;
+            if (typeof userId !== "string") {
+                send(client.socket, { t: "resetUserPasswordResponse", success: false, error: "Invalid payload" });
+                return;
+            }
+            userManager.resetUserPassword(userId, typeof password === "string" ? password : undefined)
+                .then((result) => {
+                if (result.success) {
+                    send(client.socket, { t: "resetUserPasswordResponse", success: true, userId, generatedPassword: result.generatedPassword });
+                    console.log(`[SERVER] Password reset for user ${userId} by ${client.user?.username}`);
+                }
+                else {
+                    send(client.socket, { t: "resetUserPasswordResponse", success: false, error: "Failed to reset password" });
+                }
+            })
+                .catch((error) => {
+                console.error("[SERVER] resetUserPassword failed:", error);
+                send(client.socket, { t: "resetUserPasswordResponse", success: false, error: "Failed to reset password" });
+            });
+            break;
+        }
     }
 }
 function cellKey(v) { return `${v.x},${v.y}`; }
@@ -1708,21 +1934,16 @@ function randomBrightColor() {
     return (ch() << 16) | (ch() << 8) | ch();
 }
 // Available character icons
+const SHARED_CHARACTER_ICONS = [
+    "🧙", "🧙‍♂️", "🧙‍♀️", "🧝", "🧝‍♂️", "🧝‍♀️", "🧛", "🧛‍♂️", "🧛‍♀️",
+    "🧚", "🧚‍♂️", "🧚‍♀️", "🧞", "🧞‍♂️", "🧞‍♀️", "🧜", "🧜‍♂️", "🧜‍♀️",
+    "🧟", "🧟‍♂️", "🧟‍♀️", "🧌", "🥷", "🤺", "🦸", "🦸‍♂️", "🦸‍♀️",
+    "🦹", "🦹‍♂️", "🦹‍♀️", "🤴", "👸", "🐺", "🐻", "🦁", "🐯", "🐗",
+    "🐴", "🐉", "🐲", "🦅", "🦉", "🦇", "🦊"
+];
 const CHARACTER_ICONS = {
-    players: [
-        "🧙", "🧙‍♂️", "🧙‍♀️", "⚔️", "🛡️", "🏹", "🗡️", "🔮", "⚡", "🔥",
-        "❄️", "🌊", "🌪️", "🌱", "🌿", "🍀", "🌸", "🌺", "🌻", "🌹",
-        "👑", "💎", "⭐", "🌟", "✨", "💫", "🌈", "🦄", "🐉", "🐲",
-        "🦅", "🦆", "🦇", "🦉", "🦊", "🦋", "🦌", "🦍", "🦎", "🦏",
-        "🦐", "🦑", "🦒", "🦓", "🦔", "🦕", "🦖", "🦗", "🦘", "🦙"
-    ],
-    npcs: [
-        "🧟", "🧟‍♂️", "🧟‍♀️", "👹", "👺", "💀", "☠️", "👻", "🎭", "🎪",
-        "🤖", "👽", "👾", "🤡", "👹", "👺", "💀", "☠️", "👻", "🎭",
-        "🐺", "🐻", "🐻‍❄️", "🐨", "🐯", "🦁", "🐮", "🐷", "🐸", "🐵",
-        "🙈", "🙉", "🙊", "🐒", "🦍", "🦧", "🐶", "🐕", "🐩", "🐕‍🦺",
-        "🐈", "🐈‍⬛", "🐱", "🐯", "🦁", "🐮", "🐷", "🐸", "🐵", "🙈"
-    ]
+    players: [...SHARED_CHARACTER_ICONS],
+    npcs: [...SHARED_CHARACTER_ICONS]
 };
 function getRandomIcon(kind) {
     const icons = CHARACTER_ICONS[kind === "npc" ? "npcs" : "players"];
@@ -1741,6 +1962,9 @@ function makePlayerToken(playerId, levelId, spawn) {
         name: "Player",
         tint: randomBrightColor(),
         zIndex: 100, // Default above assets
+        hp: 1,
+        ac: 0,
+        stats: { str: 0, dex: 0, con: 0, int: 0, wis: 0, cha: 0, hp: 1, ac: 0 },
         icon: getRandomIcon("player"),
     };
 }
@@ -1757,6 +1981,9 @@ function makeNPCToken(owner, levelId, spawn) {
         name: "NPC",
         tint: randomBrightColor(),
         zIndex: 100, // Default above assets
+        hp: 1,
+        ac: 0,
+        stats: { str: 0, dex: 0, con: 0, int: 0, wis: 0, cha: 0, hp: 1, ac: 0 },
         icon: getRandomIcon("npc"),
     };
 }
@@ -1784,12 +2011,19 @@ function snapshot() {
     return { snapshot: { location: state.location, tokens: Array.from(state.tokens.values()), assets: Array.from(state.assets.values()), events, floors: floorsArr } };
 }
 function onConnection(ws, req) {
+    // Check client limit
+    if (state.clients.size >= MAX_CLIENTS) {
+        console.warn(`[SERVER] Client limit reached (${MAX_CLIENTS}), rejecting connection`);
+        ws.close(1013, "Server overloaded");
+        return;
+    }
     const url = new URL(req.url || "/", `http://${req.headers.host}`);
     const invite = url.searchParams.get("inv");
     const role = roleFromInvite(invite);
     const clientId = "p-" + randomUUID();
     const client = { id: clientId, role, socket: ws };
     state.clients.set(clientId, client);
+    console.log(`[SERVER] Client ${clientId} connected (${state.clients.size}/${MAX_CLIENTS} clients)`);
     const levelId = state.location.levels[0].id;
     const spawn = state.location.levels[0].spawnPoint;
     // Do NOT auto-spawn tokens on connect. Tokens are added explicitly via 'spawnToken'.
@@ -1808,6 +2042,11 @@ function onConnection(ws, req) {
     });
     ws.on("message", (data) => onMessage(client, data));
     ws.on("close", () => {
+        console.log(`[SERVER] Client ${clientId} disconnected`);
+        state.clients.delete(clientId);
+    });
+    ws.on("error", (error) => {
+        console.error(`[SERVER] WebSocket error for client ${clientId}:`, error);
         state.clients.delete(clientId);
     });
 }
@@ -1818,6 +2057,9 @@ async function start() {
         console.log(`[server] DATA_ROOT: ${DATA_ROOT}`);
     }
     catch { }
+    // Start memory monitoring
+    setInterval(checkMemoryAndCleanup, 30000); // Check every 30 seconds
+    console.log(`[server] Memory monitoring enabled (max: ${MAX_MEMORY_MB}MB, fog limit: ${FOG_CELL_LIMIT})`);
     // Autoload last used location if present
     try {
         const rel = await tryReadLastUsed();
