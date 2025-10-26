@@ -91,6 +91,11 @@ export interface GameSnapshot {
   assets: Asset[];
   floors?: { levelId: ID; pos: Vec2; kind: FloorKind }[];
   events?: Event[];
+  /**
+   * Optional list of level IDs represented in the snapshot's fog state.
+   * Used by the server for partial fog undo/redo without clearing other levels.
+   */
+  fogLevels?: ID[];
   history?: HistoryEvent[];
 }
 

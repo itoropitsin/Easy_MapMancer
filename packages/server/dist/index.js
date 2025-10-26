@@ -37,87 +37,142 @@ const LAST_USED_FILE = path.resolve(DATA_ROOT, "last-used.json");
 // Initialize user manager
 const userManager = new UserManager();
 function applySnapshot(snap) {
-    const payload = snap;
-    const loc = payload.location;
-    // replace state with defensive defaults so legacy saves still load
-    state.location = (loc && typeof loc === "object" && Array.isArray(loc.levels))
-        ? deepCopy(loc)
-        : makeDefaultLocation();
-    state.tokens.clear();
-    const tokens = Array.isArray(payload.tokens) ? payload.tokens : [];
-    for (const t of tokens) {
-        if (!t || !t.id)
-            continue;
-        state.tokens.set(t.id, deepCopy(t));
+    const payload = (snap ?? {});
+    const hasProp = (key) => Object.prototype.hasOwnProperty.call(payload, key);
+    const locationProvided = hasProp("location");
+    if (locationProvided) {
+        const loc = payload.location;
+        state.location = (loc && typeof loc === "object" && Array.isArray(loc.levels))
+            ? deepCopy(loc)
+            : makeDefaultLocation();
     }
-    state.assets.clear();
-    const assets = Array.isArray(payload.assets) ? payload.assets : [];
-    for (const a of assets) {
-        if (!a || !a.id)
-            continue;
-        state.assets.set(a.id, deepCopy(a));
-    }
-    console.log(`[SERVER] applySnapshot: clearing fog, current fog levels: ${state.fog.size}`);
-    state.fog.clear();
-    // rebuild fog from snapshot events if present
-    const events = Array.isArray(payload.events) ? payload.events : [];
-    console.log(`[SERVER] Loading snapshot with ${events.length} events`);
-    for (const e of events) {
-        if (e.type === "fogRevealed") {
-            const s = getFogSet(e.levelId);
-            console.log(`[SERVER] Restoring fog for level ${e.levelId}, ${e.cells.length} cells`);
-            for (const c of e.cells)
-                s.add(cellKey(c));
-        }
-    }
-    console.log(`[SERVER] applySnapshot: after restoration, fog levels: ${state.fog.size}`);
-    state.floors.clear();
-    const floors = Array.isArray(payload.floors)
-        ? payload.floors
-        : [];
-    for (const f of floors) {
-        if (!f?.levelId || !f.pos)
-            continue;
-        let m = state.floors.get(f.levelId);
-        if (!m) {
-            m = new Map();
-            state.floors.set(f.levelId, m);
-        }
-        m.set(`${f.pos.x},${f.pos.y}`, f.kind);
-    }
-    const addedFloors = ensureDefaultFloorsForAllLevels();
-    if (addedFloors.length > 0) {
-        const existing = new Set(Array.isArray(payload.floors)
-            ? payload.floors.map((f) => `${f.levelId}:${f.pos.x},${f.pos.y}`)
-            : []);
-        const merged = Array.isArray(payload.floors)
-            ? payload.floors.slice()
-            : [];
-        for (const f of addedFloors) {
-            const key = `${f.levelId}:${f.pos.x},${f.pos.y}`;
-            if (existing.has(key))
+    if (hasProp("tokens")) {
+        state.tokens.clear();
+        const tokens = Array.isArray(payload.tokens) ? payload.tokens : [];
+        for (const t of tokens) {
+            if (!t || !t.id)
                 continue;
-            existing.add(key);
-            merged.push({ levelId: f.levelId, pos: { ...f.pos }, kind: f.kind });
+            state.tokens.set(t.id, deepCopy(t));
         }
-        payload.floors = merged;
     }
-    // Auto-reveal fog for player tokens after loading
-    const isAutomaticMode = !state.location?.fogMode || state.location.fogMode === "automatic";
-    if (isAutomaticMode) {
-        console.log(`[SERVER] Auto-revealing fog for player tokens in automatic mode`);
-        for (const token of state.tokens.values()) {
-            const isNPC = token.kind === "npc";
-            if (!isNPC) {
-                const vr = Math.max(0, Math.min(20, Math.round(token.vision?.radius ?? 0)));
-                if (vr > 0) {
-                    const fog = getFogSet(token.levelId);
-                    const cells = cellsInRadius(token.pos, vr);
-                    console.log(`[SERVER] Auto-revealing fog for token ${token.id} at (${token.pos.x}, ${token.pos.y}), ${cells.length} cells`);
-                    for (const c of cells) {
-                        const k = cellKey(c);
-                        if (!fog.has(k)) {
-                            fog.add(k);
+    if (hasProp("assets")) {
+        state.assets.clear();
+        const assets = Array.isArray(payload.assets) ? payload.assets : [];
+        for (const a of assets) {
+            if (!a || !a.id)
+                continue;
+            state.assets.set(a.id, deepCopy(a));
+        }
+    }
+    const fogLevelsMeta = Array.isArray(payload.fogLevels) ? payload.fogLevels : undefined;
+    if (hasProp("events")) {
+        const events = Array.isArray(payload.events) ? payload.events : [];
+        if (!fogLevelsMeta) {
+            console.log(`[SERVER] applySnapshot: clearing all fog levels (full snapshot)`);
+            state.fog.clear();
+        }
+        else {
+            console.log(`[SERVER] applySnapshot: updating fog for levels: ${fogLevelsMeta.join(", ")}`);
+            for (const lvl of fogLevelsMeta) {
+                state.fog.set(lvl, new Set());
+            }
+        }
+        for (const e of events) {
+            if (e.type === "fogRevealed") {
+                const levelId = e.levelId;
+                let set = state.fog.get(levelId);
+                if (!set) {
+                    set = new Set();
+                    state.fog.set(levelId, set);
+                }
+                const cells = Array.isArray(e.cells) ? e.cells : [];
+                console.log(`[SERVER] Restoring fog for level ${levelId}, ${cells.length} cells`);
+                for (const c of cells) {
+                    set.add(cellKey(c));
+                }
+            }
+        }
+        if (fogLevelsMeta) {
+            for (const lvl of fogLevelsMeta) {
+                if (!state.fog.has(lvl)) {
+                    state.fog.set(lvl, new Set());
+                }
+            }
+        }
+        console.log(`[SERVER] applySnapshot: now tracking ${state.fog.size} fog levels`);
+    }
+    let floorsUpdated = false;
+    if (hasProp("floors")) {
+        floorsUpdated = true;
+        state.floors.clear();
+        const floors = Array.isArray(payload.floors)
+            ? payload.floors
+            : [];
+        for (const f of floors) {
+            if (!f?.levelId || !f.pos)
+                continue;
+            let m = state.floors.get(f.levelId);
+            if (!m) {
+                m = new Map();
+                state.floors.set(f.levelId, m);
+            }
+            m.set(`${f.pos.x},${f.pos.y}`, f.kind);
+        }
+    }
+    if (locationProvided || floorsUpdated) {
+        const addedFloors = ensureDefaultFloorsForAllLevels();
+        if (floorsUpdated && addedFloors.length > 0) {
+            const existing = new Set(Array.isArray(payload.floors)
+                ? payload.floors.map((f) => `${f.levelId}:${f.pos.x},${f.pos.y}`)
+                : []);
+            const merged = Array.isArray(payload.floors)
+                ? payload.floors.slice()
+                : [];
+            for (const f of addedFloors) {
+                const key = `${f.levelId}:${f.pos.x},${f.pos.y}`;
+                if (existing.has(key))
+                    continue;
+                existing.add(key);
+                merged.push({ levelId: f.levelId, pos: { ...f.pos }, kind: f.kind });
+            }
+            payload.floors = merged;
+        }
+    }
+    if (hasProp("history")) {
+        const history = Array.isArray(payload.history) ? payload.history : [];
+        state.history = history.map(ev => deepCopy(ev));
+        state.historyByAction.clear();
+        for (const ev of state.history) {
+            if (!ev.actionId)
+                continue;
+            const list = state.historyByAction.get(ev.actionId) ?? [];
+            list.push(ev);
+            state.historyByAction.set(ev.actionId, list);
+        }
+    }
+    else if (locationProvided) {
+        // Reset history when loading a brand new location snapshot
+        state.history = [];
+        state.historyByAction.clear();
+    }
+    if (locationProvided) {
+        // Auto-reveal fog for player tokens after loading a full location snapshot
+        const isAutomaticMode = !state.location?.fogMode || state.location.fogMode === "automatic";
+        if (isAutomaticMode) {
+            console.log(`[SERVER] Auto-revealing fog for player tokens in automatic mode`);
+            for (const token of state.tokens.values()) {
+                const isNPC = token.kind === "npc";
+                if (!isNPC) {
+                    const vr = Math.max(0, Math.min(20, Math.round(token.vision?.radius ?? 0)));
+                    if (vr > 0) {
+                        const fog = getFogSet(token.levelId);
+                        const cells = cellsInRadius(token.pos, vr);
+                        console.log(`[SERVER] Auto-revealing fog for token ${token.id} at (${token.pos.x}, ${token.pos.y}), ${cells.length} cells`);
+                        for (const c of cells) {
+                            const k = cellKey(c);
+                            if (!fog.has(k)) {
+                                fog.add(k);
+                            }
                         }
                     }
                 }
@@ -187,7 +242,8 @@ const state = {
         maxStackSize: 50
     },
     commands: [],
-    history: []
+    history: [],
+    historyByAction: new Map()
 };
 ensureDefaultFloorsForAllLevels();
 // Current file path for autosave (relative to DATA_ROOT)
@@ -493,6 +549,19 @@ function recordHistoryEvent(client, info) {
     if (state.history.length > MAX_HISTORY_EVENTS) {
         state.history.splice(0, state.history.length - MAX_HISTORY_EVENTS);
     }
+    if (info.actionId) {
+        let arr = state.historyByAction.get(info.actionId);
+        if (!arr) {
+            arr = [];
+            state.historyByAction.set(info.actionId, arr);
+        }
+        arr.push(event);
+        const actionRecord = state.undoRedo.undoStack.find(a => a.id === info.actionId) ||
+            state.undoRedo.redoStack.find(a => a.id === info.actionId);
+        if (actionRecord) {
+            actionRecord.historyEvents = actionRecord.historyEvents ? [...actionRecord.historyEvents, event] : [event];
+        }
+    }
     broadcastHistoryEvent(event);
     return event;
 }
@@ -539,6 +608,19 @@ function createGameSnapshot() {
         events
     };
 }
+function createFogSnapshot(levelIds) {
+    const ids = Array.isArray(levelIds) ? levelIds : [levelIds];
+    const events = [];
+    for (const levelId of ids) {
+        const fogSet = state.fog.get(levelId) ?? new Set();
+        const cells = Array.from(fogSet).map((key) => {
+            const [xs, ys] = key.split(",");
+            return { x: Number(xs), y: Number(ys) };
+        });
+        events.push({ type: "fogRevealed", levelId, cells });
+    }
+    return { events, fogLevels: ids };
+}
 function createActionSnapshot(actionType, description, beforeState, afterState) {
     return {
         id: randomUUID(),
@@ -578,27 +660,32 @@ function performUndo() {
     applySnapshot(action.beforeState);
     // Move to redo stack
     undoRedo.redoStack.push(action);
+    // Remove associated history events
+    const removedEvents = state.historyByAction.get(action.id) ?? action.historyEvents ?? [];
+    if (removedEvents.length > 0) {
+        const removedIds = new Set(removedEvents.map(ev => ev.id));
+        state.history = state.history.filter(ev => !removedIds.has(ev.id));
+        state.historyByAction.delete(action.id);
+        for (const client of state.clients.values()) {
+            if (client.role === "DM") {
+                if (removedIds.size > 0) {
+                    send(client.socket, { t: "historyRemoved", eventIds: Array.from(removedIds) });
+                }
+            }
+        }
+    }
     // Send events for all updated objects
     const events = [];
-    // Send asset updates for all assets
     for (const asset of state.assets.values()) {
         events.push({ type: "assetUpdated", asset });
     }
-    // Send token updates for all tokens
     for (const token of state.tokens.values()) {
         events.push({ type: "tokenUpdated", token });
     }
-    // Notify clients
     broadcastUndoRedoState();
     broadcast([{ type: "undoPerformed", actionId: action.id }]);
     if (events.length > 0) {
         broadcast(events);
-    }
-    // Send game state restored event to refresh client display
-    console.log(`[SERVER] Sending gameStateRestored to ${state.clients.size} clients after undo`);
-    for (const client of state.clients.values()) {
-        console.log(`[SERVER] Sending gameStateRestored to client ${client.id}`);
-        send(client.socket, { t: "gameStateRestored" });
     }
     console.log(`[SERVER] performUndo: completed, redo stack size: ${undoRedo.redoStack.length}`);
     return true;
@@ -609,31 +696,37 @@ function performRedo() {
         return false;
     }
     const action = undoRedo.redoStack.pop();
-    // Apply the after state
+    console.log(`[SERVER] performRedo: redoing action: ${action.description}`);
     applySnapshot(action.afterState);
-    // Move back to undo stack
     undoRedo.undoStack.push(action);
-    // Send events for all updated objects
     const events = [];
-    // Send asset updates for all assets
     for (const asset of state.assets.values()) {
         events.push({ type: "assetUpdated", asset });
     }
-    // Send token updates for all tokens
     for (const token of state.tokens.values()) {
         events.push({ type: "tokenUpdated", token });
     }
-    // Notify clients
+    const replayEvents = state.historyByAction.get(action.id) ?? action.historyEvents ?? [];
+    let historyAdded;
+    if (replayEvents.length > 0) {
+        const existingIds = new Set(state.history.map(ev => ev.id));
+        historyAdded = replayEvents
+            .filter(ev => !existingIds.has(ev.id))
+            .map(ev => ({ ...ev, timestamp: Date.now() }));
+        if (historyAdded && historyAdded.length > 0) {
+            state.history = [...historyAdded, ...state.history].slice(0, MAX_HISTORY_EVENTS);
+            state.historyByAction.set(action.id, historyAdded);
+            for (const client of state.clients.values()) {
+                if (client.role === "DM") {
+                    send(client.socket, { t: "historyAdded", events: historyAdded });
+                }
+            }
+        }
+    }
     broadcastUndoRedoState();
     broadcast([{ type: "redoPerformed", actionId: action.id }]);
     if (events.length > 0) {
         broadcast(events);
-    }
-    // Send game state restored event to refresh client display
-    console.log(`[SERVER] Sending gameStateRestored to ${state.clients.size} clients after redo`);
-    for (const client of state.clients.values()) {
-        console.log(`[SERVER] Sending gameStateRestored to client ${client.id}`);
-        send(client.socket, { t: "gameStateRestored" });
     }
     return true;
 }
@@ -780,7 +873,7 @@ function onMessage(client, data) {
             pushToUndoStack(action);
             const tokenLabel = describeToken(t);
             const tokenDisplay = tokenLabel.startsWith("Token ") ? tokenLabel : `"${tokenLabel}"`;
-            recordHistoryEvent(client, {
+            const history = recordHistoryEvent(client, {
                 actionType: action.actionType,
                 description: `Created ${kind === "npc" ? "NPC" : "player"} ${tokenDisplay} at ${formatCoords(pos)}`,
                 actionId: action.id,
@@ -793,6 +886,7 @@ function onMessage(client, data) {
                     to: { levelId: t.levelId, pos: { ...t.pos } }
                 }
             });
+            action.historyEvents = action.historyEvents ? [...action.historyEvents, history] : [history];
             broadcast([{ type: "tokenSpawned", token: t }]);
             persistIfAutosave();
             break;
@@ -852,7 +946,7 @@ function onMessage(client, data) {
                 const description = movedBetweenLevels
                     ? `Moved ${tokenDisplay} from ${previousLevel} ${formatCoords(previousPos)} to ${tok.levelId} ${formatCoords(pos)}`
                     : `Moved ${tokenDisplay} from ${formatCoords(previousPos)} to ${formatCoords(pos)}`;
-                recordHistoryEvent(client, {
+                const history = recordHistoryEvent(client, {
                     actionType: "moveToken",
                     description,
                     actionId: undoActionId,
@@ -866,6 +960,12 @@ function onMessage(client, data) {
                         to: { levelId: tok.levelId, pos: { ...pos } }
                     }
                 });
+                if (undoActionId) {
+                    const undoAction = state.undoRedo.undoStack.find(a => a.id === undoActionId);
+                    if (undoAction) {
+                        undoAction.historyEvents = undoAction.historyEvents ? [...undoAction.historyEvents, history] : [history];
+                    }
+                }
             }
             broadcast(events);
             persistIfAutosave();
@@ -1172,8 +1272,8 @@ function onMessage(client, data) {
                 console.warn(`[SERVER] Reveal fog rejected: would exceed limit (${currentSize + newCells.length} > ${FOG_CELL_LIMIT})`);
                 return;
             }
-            // Create snapshot before action
-            const beforeSnapshot = createGameSnapshot();
+            // Create snapshot before action (only captures fog state for the affected level)
+            const beforeSnapshot = createFogSnapshot(msg.levelId);
             const added = [];
             for (const c of newCells) {
                 const k = cellKey(c);
@@ -1184,7 +1284,7 @@ function onMessage(client, data) {
                 const ev = { type: "fogRevealed", levelId: msg.levelId, cells: added };
                 broadcast([ev]);
                 // Create snapshot after action and push to undo stack
-                const afterSnapshot = createGameSnapshot();
+                const afterSnapshot = createFogSnapshot(msg.levelId);
                 const action = createActionSnapshot("revealFog", `Revealing fog of war (${added.length} cells)`, beforeSnapshot, afterSnapshot);
                 pushToUndoStack(action);
                 persistIfAutosave();
@@ -1195,7 +1295,7 @@ function onMessage(client, data) {
             if (client.role !== "DM")
                 return;
             // Create snapshot before action
-            const beforeSnapshot = createGameSnapshot();
+            const beforeSnapshot = createFogSnapshot(msg.levelId);
             const levelFog = getFogSet(msg.levelId);
             const removed = [];
             for (const c of msg.cells) {
@@ -1209,7 +1309,7 @@ function onMessage(client, data) {
                 const ev = { type: "fogObscured", levelId: msg.levelId, cells: removed };
                 broadcast([ev]);
                 // Create snapshot after action and push to undo stack
-                const afterSnapshot = createGameSnapshot();
+                const afterSnapshot = createFogSnapshot(msg.levelId);
                 const action = createActionSnapshot("obscureFog", `Hiding fog of war (${removed.length} cells)`, beforeSnapshot, afterSnapshot);
                 pushToUndoStack(action);
                 persistIfAutosave();
@@ -1282,7 +1382,7 @@ function onMessage(client, data) {
             const action = createActionSnapshot("placeAsset", `Placing ${msg.kind} at (${gx}, ${gy})`, beforeState, afterState);
             pushToUndoStack(action);
             const assetLabel = describeAsset(asset);
-            recordHistoryEvent(client, {
+            const history = recordHistoryEvent(client, {
                 actionType: action.actionType,
                 description: `Placed ${assetLabel} at ${formatCoords({ x: gx, y: gy })}`,
                 actionId: action.id,
@@ -1295,6 +1395,7 @@ function onMessage(client, data) {
                     to: { levelId: asset.levelId, pos: { ...asset.pos } }
                 }
             });
+            action.historyEvents = action.historyEvents ? [...action.historyEvents, history] : [history];
             broadcast([{ type: "assetPlaced", asset }]);
             persistIfAutosave();
             break;
@@ -2309,7 +2410,16 @@ function snapshot() {
             floorsArr.push({ levelId: lvl, pos: { x: Number(xs), y: Number(ys) }, kind });
         }
     }
-    return { snapshot: { location: deepCopy(state.location), tokens: Array.from(state.tokens.values()).map((tok) => deepCopy(tok)), assets: Array.from(state.assets.values()).map((asset) => deepCopy(asset)), events, floors: floorsArr } };
+    return {
+        snapshot: {
+            location: deepCopy(state.location),
+            tokens: Array.from(state.tokens.values()).map((tok) => deepCopy(tok)),
+            assets: Array.from(state.assets.values()).map((asset) => deepCopy(asset)),
+            events,
+            floors: floorsArr,
+            history: state.history.map(ev => deepCopy(ev))
+        }
+    };
 }
 function onConnection(ws, req) {
     // Check client limit
