@@ -91,6 +91,7 @@ export interface GameSnapshot {
   assets: Asset[];
   floors?: { levelId: ID; pos: Vec2; kind: FloorKind }[];
   events?: Event[];
+  history?: HistoryEvent[];
 }
 
 export interface LocationTreeNode {

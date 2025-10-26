@@ -692,9 +692,51 @@
         border: 1px solid rgba(255, 255, 255, 0.05);
         display: flex;
         flex-direction: column;
-        gap: 14px;
+        gap: 16px;
+        overflow: hidden;
+      }
+
+      .char-tabs {
+        display: flex;
+        gap: 8px;
+        border: 1px solid rgba(255, 255, 255, 0.05);
+        border-radius: 14px;
+        padding: 6px;
+        background: rgba(17, 24, 33, 0.7);
+      }
+
+      .char-tab {
+        flex: 1;
+        border: none;
+        background: transparent;
+        color: #e8eaed;
+        padding: 8px 0;
+        border-radius: 10px;
+        font-size: 13px;
+        cursor: pointer;
+      }
+
+      .char-tab.active {
+        background: rgba(96, 165, 250, 0.25);
+        box-shadow: inset 0 0 0 1px rgba(96, 165, 250, 0.4);
+      }
+
+      .char-tab-content {
+        flex: 1;
         overflow-y: auto;
-        scrollbar-gutter: stable;
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+        padding-right: 8px;
+      }
+
+      .char-tab-content::-webkit-scrollbar {
+        width: 6px;
+      }
+
+      .char-tab-content::-webkit-scrollbar-thumb {
+        background: rgba(255, 255, 255, 0.12);
+        border-radius: 999px;
       }
 
       .char-header {
@@ -704,57 +746,84 @@
         letter-spacing: 0.01em;
       }
 
-      .char-tabs {
+      .char-section {
         display: flex;
-        gap: 8px;
-        padding: 4px;
-        border-radius: 16px;
-        background: rgba(255, 255, 255, 0.03);
-        border: 1px solid rgba(255, 255, 255, 0.04);
+        flex-direction: column;
+        gap: 12px;
       }
 
-      .char-tab-btn {
-        flex: 1;
-        border: none;
-        background: transparent;
-        color: var(--text-muted);
-        font-weight: 600;
-        font-size: 10px;
-        letter-spacing: 0.08em;
-        text-transform: uppercase;
-        padding: 6px 10px;
-        border-radius: 12px;
-        cursor: pointer;
-        transition: background 0.2s ease, color 0.2s ease, transform 0.2s ease;
+      .history-scroll {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
       }
 
-      .char-tab-btn:hover {
-        background: rgba(255, 255, 255, 0.05);
-        color: #e8eaed;
-      }
-
-      .char-tab-btn.active {
-        background: rgba(255, 255, 255, 0.1);
-        color: #e8eaed;
-        transform: translateY(-1px);
-        box-shadow: 0 6px 16px rgba(0, 0, 0, 0.18);
-      }
-
-      .char-tab-content {
+      .history-day {
         display: flex;
         flex-direction: column;
         gap: 10px;
       }
 
-      .char-section {
-        display: flex;
-        flex-direction: column;
-        gap: 12px;
-        margin-bottom: 14px;
+      .history-day-label {
+        font-size: 12px;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--text-muted);
       }
 
-      .char-section:last-of-type {
-        margin-bottom: 0;
+      .history-events {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        padding-left: 6px;
+      }
+
+      .history-event {
+        background: rgba(255, 255, 255, 0.02);
+        border: 1px solid rgba(255, 255, 255, 0.05);
+        border-radius: 12px;
+        padding: 10px 12px;
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+      }
+
+      .history-event-meta {
+        display: flex;
+        justify-content: space-between;
+        font-size: 11px;
+        color: var(--text-muted);
+        letter-spacing: 0.04em;
+      }
+
+      .history-event-description {
+        font-size: 12px;
+        font-weight: 500;
+      }
+
+      .history-event-details {
+        font-size: 11px;
+        color: rgba(232, 234, 237, 0.75);
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+      }
+
+      .history-inline strong {
+        color: #f8fafc;
+      }
+
+      .history-change-grid {
+        display: grid;
+        grid-template-columns: 1fr auto;
+        gap: 4px 12px;
+        font-family: "IBM Plex Mono", Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+        font-size: 10px;
+        color: rgba(148, 163, 184, 0.9);
+      }
+
+      .history-change-grid span:last-child {
+        color: #f8fafc;
       }
 
       .char-section-title {
@@ -797,95 +866,6 @@
         max-width: 100%;
         justify-self: center;
         min-width: 0;
-      }
-
-      .history-scroll {
-        display: flex;
-        flex-direction: column;
-        gap: 10px;
-      }
-
-      .history-list {
-        list-style: none;
-        margin: 0;
-        padding: 0;
-        display: flex;
-        flex-direction: column;
-        gap: 6px;
-      }
-
-      .history-item {
-        display: flex;
-        flex-direction: column;
-        gap: 4px;
-        padding: 10px 12px;
-        border-radius: 14px;
-        background: rgba(255, 255, 255, 0.03);
-        border: 1px solid rgba(255, 255, 255, 0.05);
-      }
-
-      .history-item-header {
-        display: flex;
-        align-items: baseline;
-        justify-content: space-between;
-        gap: 8px;
-      }
-
-      .history-item-actor-group {
-        display: flex;
-        align-items: center;
-        gap: 6px;
-      }
-
-      .history-item-actor {
-        font-weight: 600;
-        font-size: 12px;
-        color: #e8eaed;
-      }
-
-      .history-role {
-        font-size: 9px;
-        letter-spacing: 0.08em;
-        text-transform: uppercase;
-        padding: 2px 6px;
-        border-radius: 999px;
-        background: rgba(255, 255, 255, 0.12);
-        color: rgba(255, 255, 255, 0.9);
-      }
-
-      .history-role--dm {
-        background: rgba(96, 165, 250, 0.18);
-        color: #bfdbfe;
-      }
-
-      .history-role--player {
-        background: rgba(134, 239, 172, 0.18);
-        color: #bbf7d0;
-      }
-
-      .history-item-time {
-        font-size: 10px;
-        color: var(--text-muted);
-      }
-
-      .history-item-description {
-        font-size: 12px;
-        line-height: 1.35;
-        color: #e8eaed;
-      }
-
-      .history-item-meta {
-        font-size: 10px;
-        color: var(--text-muted);
-      }
-
-      .history-empty {
-        padding: 12px;
-        border-radius: 14px;
-        border: 1px dashed rgba(255, 255, 255, 0.08);
-        background: rgba(255, 255, 255, 0.02);
-        color: var(--text-muted);
-        font-size: 12px;
       }
 
       .char-icon {
@@ -1546,6 +1526,49 @@
         border-color: var(--accent);
       }
 
+      .password-field {
+        position: relative;
+        width: 100%;
+      }
+
+      .password-field input {
+        width: 100%;
+        padding-right: 3.75rem;
+      }
+
+      .password-toggle {
+        position: absolute;
+        top: 50%;
+        right: 0.75rem;
+        transform: translateY(-50%);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 2.5rem;
+        height: 2.5rem;
+        border: none;
+        background: transparent;
+        color: var(--text-muted);
+        border-radius: 999px;
+        cursor: pointer;
+        transition: color 0.2s ease, background 0.2s ease, box-shadow 0.2s ease;
+        z-index: 2;
+      }
+
+      .password-toggle:hover,
+      .password-toggle:focus-visible {
+        background: rgba(96, 165, 250, 0.08);
+        color: #e8eaed;
+        outline: none;
+        box-shadow: 0 0 0 2px rgba(96, 165, 250, 0.24);
+      }
+
+      .password-toggle svg {
+        width: 2rem;
+        height: 2rem;
+        pointer-events: none;
+      }
+
       .login-button {
         padding: 0.75rem;
         background: var(--accent);
@@ -2155,7 +2178,7 @@
         margin: 0;
       }
     </style>
-    <script type="module" crossorigin src="/assets/index-Bl_rSpGy.js"></script>
+    <script type="module" crossorigin src="/assets/index-BcfRNw7o.js"></script>
   </head>
   <body>
     <!-- First User Setup Screen -->
@@ -2185,11 +2208,14 @@
         <form id="login-form" class="login-form">
           <div class="form-group">
             <label for="username-email">Username or Email</label>
-            <input type="text" id="username-email" name="usernameOrEmail" required>
+              <input type="text" id="username-email" name="usernameOrEmail" autocomplete="username" autocapitalize="none" spellcheck="false" required>
           </div>
           <div class="form-group">
             <label for="password">Password</label>
-            <input type="password" id="password" name="password" required>
+            <div class="password-field">
+              <input type="password" id="password" name="password" autocomplete="current-password" autocapitalize="none" required>
+              <button type="button" id="toggle-password" class="password-toggle" aria-label="Show password" aria-pressed="false"></button>
+            </div>
           </div>
           <button type="submit" class="login-button">Login</button>
           <div id="login-error" class="error-message" style="display: none;"></div>

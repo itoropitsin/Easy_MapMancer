@@ -836,23 +836,23 @@
 
       .char-fields-grid {
         display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(164px, 1fr));
-        gap: 12px;
+        grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+        gap: 8px;
         align-items: stretch;
       }
 
       .char-fields-grid--two {
-        grid-template-columns: repeat(auto-fit, minmax(164px, 1fr));
+        grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
       }
 
       .char-field {
         display: flex;
         align-items: center;
-        gap: 12px;
+        gap: 10px;
         background: rgba(255, 255, 255, 0.02);
         border: 1px solid rgba(255, 255, 255, 0.04);
-        border-radius: 16px;
-        padding: 10px 14px;
+        border-radius: 14px;
+        padding: 8px 12px;
         min-height: 0;
         min-width: 0;
         flex-wrap: nowrap;
@@ -860,8 +860,8 @@
 
       .char-field--stat {
         justify-content: center;
-        gap: 8px;
-        padding: 8px 14px;
+        gap: 6px;
+        padding: 6px 12px;
         width: max-content;
         max-width: 100%;
         justify-self: center;
@@ -1526,6 +1526,49 @@
         border-color: var(--accent);
       }
 
+      .password-field {
+        position: relative;
+        width: 100%;
+      }
+
+      .password-field input {
+        width: 100%;
+        padding-right: 3.75rem;
+      }
+
+      .password-toggle {
+        position: absolute;
+        top: 50%;
+        right: 0.75rem;
+        transform: translateY(-50%);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 2.5rem;
+        height: 2.5rem;
+        border: none;
+        background: transparent;
+        color: var(--text-muted);
+        border-radius: 999px;
+        cursor: pointer;
+        transition: color 0.2s ease, background 0.2s ease, box-shadow 0.2s ease;
+        z-index: 2;
+      }
+
+      .password-toggle:hover,
+      .password-toggle:focus-visible {
+        background: rgba(96, 165, 250, 0.08);
+        color: #e8eaed;
+        outline: none;
+        box-shadow: 0 0 0 2px rgba(96, 165, 250, 0.24);
+      }
+
+      .password-toggle svg {
+        width: 2rem;
+        height: 2rem;
+        pointer-events: none;
+      }
+
       .login-button {
         padding: 0.75rem;
         background: var(--accent);
@@ -2164,13 +2207,13 @@
         <form id="login-form" class="login-form">
           <div class="form-group">
             <label for="username-email">Username or Email</label>
-            <input type="text" id="username-email" name="usernameOrEmail" required>
+            <input type="text" id="username-email" name="usernameOrEmail" autocomplete="username" autocapitalize="none" spellcheck="false" required>
           </div>
           <div class="form-group">
             <label for="password">Password</label>
-            <div style="position: relative;">
-              <input type="password" id="password" name="password" required>
-              <button type="button" id="toggle-password" style="position: absolute; right: 10px; top: 50%; transform: translateY(-50%); background: none; border: none; color: #9aa0a6; cursor: pointer; padding: 5px;">👁️</button>
+            <div class="password-field">
+              <input type="password" id="password" name="password" autocomplete="current-password" autocapitalize="none" required>
+              <button type="button" id="toggle-password" class="password-toggle" aria-label="Show password" aria-pressed="false"></button>
             </div>
           </div>
           <button type="submit" class="login-button">Login</button>

@@ -52,7 +52,7 @@
       "flags": {},
       "name": "Player",
       "zIndex": 1,
-      "hp": 10
+      "hp": 12
     },
     {
       "id": "t-2247ef30-6092-4824-8fd6-f88aecb514fa",
@@ -69,8 +69,18 @@
       "light": null,
       "flags": {},
       "name": "Player",
-      "icon": "🦆",
-      "hidden": false
+      "icon": "🧝",
+      "hidden": false,
+      "hp": 12,
+      "ac": 5,
+      "stats": {
+        "str": 7,
+        "con": 5,
+        "wis": 4,
+        "dex": 3
+      },
+      "notes": "1234",
+      "dead": false
     },
     {
       "id": "t-49094ac7-0772-4b03-8b15-282bb986520c",
@@ -178,8 +188,8 @@
       "id": "a-c4d848b6-8e57-4cbb-91f6-b44a89875a94",
       "levelId": "L1",
       "pos": {
-        "x": 2,
-        "y": 4
+        "x": 0,
+        "y": 3
       },
       "kind": "rock"
     },
@@ -7875,6 +7885,114 @@
         "y": 10
       },
       "kind": "sand"
+    }
+  ],
+  "history": [
+    {
+      "id": "c0c3af7d-ba7c-413b-847d-fca417be3cee",
+      "timestamp": 1761493401240,
+      "actionType": "moveAsset",
+      "description": "Moved rock from (2, 4) to (3, 3)",
+      "actorId": "c6305950-7048-437f-b7ed-0e47ef2956b5",
+      "actorName": "i.toropitsin@gmail.com",
+      "actorRole": "DM",
+      "actionId": "399baae4-4db3-4e3c-a199-b7dff52e53d0",
+      "details": {
+        "targetType": "asset",
+        "targetId": "a-c4d848b6-8e57-4cbb-91f6-b44a89875a94",
+        "targetName": "rock",
+        "targetKind": "rock",
+        "levelId": "L1",
+        "from": {
+          "levelId": "L1",
+          "pos": {
+            "x": 2,
+            "y": 4
+          }
+        },
+        "to": {
+          "levelId": "L1",
+          "pos": {
+            "x": 3,
+            "y": 3
+          }
+        }
+      }
+    },
+    {
+      "id": "494db24a-a5d1-4550-90cb-a1d1e3a2e6a7",
+      "timestamp": 1761493402388,
+      "actionType": "moveAsset",
+      "description": "Moved rock from (3, 3) to (0, 3)",
+      "actorId": "c6305950-7048-437f-b7ed-0e47ef2956b5",
+      "actorName": "i.toropitsin@gmail.com",
+      "actorRole": "DM",
+      "actionId": "d0a3ae7f-81c0-4410-8593-df0b96a64dcf",
+      "details": {
+        "targetType": "asset",
+        "targetId": "a-c4d848b6-8e57-4cbb-91f6-b44a89875a94",
+        "targetName": "rock",
+        "targetKind": "rock",
+        "levelId": "L1",
+        "from": {
+          "levelId": "L1",
+          "pos": {
+            "x": 3,
+            "y": 3
+          }
+        },
+        "to": {
+          "levelId": "L1",
+          "pos": {
+            "x": 0,
+            "y": 3
+          }
+        }
+      }
+    },
+    {
+      "id": "ee9cab84-8995-45cd-98f0-cab1672aff08",
+      "timestamp": 1761493408877,
+      "actionType": "updateToken",
+      "description": "Updated \"Player\": HP 10 → 11",
+      "actorId": "c6305950-7048-437f-b7ed-0e47ef2956b5",
+      "actorName": "i.toropitsin@gmail.com",
+      "actorRole": "DM",
+      "details": {
+        "targetType": "token",
+        "targetId": "t-0d4ce5ff-323f-4954-9d46-6a4eb86ff724",
+        "targetName": "Player",
+        "levelId": "L1",
+        "changes": [
+          {
+            "field": "hp",
+            "from": 10,
+            "to": 11
+          }
+        ]
+      }
+    },
+    {
+      "id": "1b5bf297-10db-4537-8deb-8a278f69386d",
+      "timestamp": 1761493409281,
+      "actionType": "updateToken",
+      "description": "Updated \"Player\": HP 11 → 12",
+      "actorId": "c6305950-7048-437f-b7ed-0e47ef2956b5",
+      "actorName": "i.toropitsin@gmail.com",
+      "actorRole": "DM",
+      "details": {
+        "targetType": "token",
+        "targetId": "t-0d4ce5ff-323f-4954-9d46-6a4eb86ff724",
+        "targetName": "Player",
+        "levelId": "L1",
+        "changes": [
+          {
+            "field": "hp",
+            "from": 11,
+            "to": 12
+          }
+        ]
+      }
     }
   ]
 }

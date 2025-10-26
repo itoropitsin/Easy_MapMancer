@@ -111,6 +111,15 @@ function applySnapshot(snap: GameSnapshot) {
     }
     (payload as any).floors = merged;
   }
+  const history = Array.isArray(payload.history) ? (payload.history as HistoryEvent[]) : [];
+  state.history = history.map(ev => deepCopy(ev));
+  state.historyByAction.clear();
+  for (const ev of state.history) {
+    if (!ev.actionId) continue;
+    const list = state.historyByAction.get(ev.actionId) ?? [];
+    list.push(ev);
+    state.historyByAction.set(ev.actionId, list);
+  }
   
   // Auto-reveal fog for player tokens after loading
   const isAutomaticMode = !state.location?.fogMode || state.location.fogMode === "automatic";
@@ -639,7 +648,9 @@ function performUndo(): boolean {
     state.historyByAction.delete(action.id);
     for (const client of state.clients.values()) {
       if (client.role === "DM") {
+      if (removedIds.size > 0) {
         send(client.socket, { t: "historyRemoved", eventIds: Array.from(removedIds) });
+      }
       }
     }
   }
@@ -2399,7 +2410,16 @@ function snapshot(): { snapshot: { location: Location; tokens: Token[]; assets: 
       floorsArr.push({ levelId: lvl, pos: { x: Number(xs), y: Number(ys) }, kind });
     }
   }
-  return { snapshot: { location: deepCopy(state.location), tokens: Array.from(state.tokens.values()).map((tok) => deepCopy(tok)), assets: Array.from(state.assets.values()).map((asset) => deepCopy(asset)), events, floors: floorsArr } };
+  return {
+    snapshot: {
+      location: deepCopy(state.location),
+      tokens: Array.from(state.tokens.values()).map((tok) => deepCopy(tok)),
+      assets: Array.from(state.assets.values()).map((asset) => deepCopy(asset)),
+      events,
+      floors: floorsArr,
+      history: state.history.map(ev => deepCopy(ev))
+    }
+  };
 }
 
 function onConnection(ws: import("ws").WebSocket, req: IncomingMessage) {

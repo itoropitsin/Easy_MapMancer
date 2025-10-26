@@ -152,6 +152,12 @@ let rightPanelTab: RightPanelTab = loadStoredRightPanelTab();
 let historyEvents: HistoryEvent[] = [];
 const HISTORY_EVENT_LIMIT = 200;
 
+function rerenderHistoryIfVisible() {
+  if (rightPanelTab === "history") {
+    renderRightPanel();
+  }
+}
+
 // Authentication state
 let authState: AuthState = { isAuthenticated: false };
 let currentUser: User | null = null;
@@ -190,13 +196,23 @@ function setRightPanelTab(tab: RightPanelTab) {
 }
 
 function setHistoryEvents(events: HistoryEvent[]) {
-  historyEvents = events.slice(-HISTORY_EVENT_LIMIT);
-  renderRightPanel();
+  const seen = new Set<string>();
+  const unique: HistoryEvent[] = [];
+  for (let i = events.length - 1; i >= 0 && unique.length < HISTORY_EVENT_LIMIT; i--) {
+    const ev = events[i]!;
+    if (!seen.has(ev.id)) {
+      seen.add(ev.id);
+      unique.push(ev);
+    }
+  }
+  historyEvents = unique.reverse();
+  rerenderHistoryIfVisible();
 }
 
 function appendHistoryEvent(event: HistoryEvent) {
+  if (historyEvents.some(ev => ev.id === event.id)) return;
   historyEvents = [...historyEvents, event].slice(-HISTORY_EVENT_LIMIT);
-  renderRightPanel();
+  rerenderHistoryIfVisible();
 }
 
 function loadSession(): { user: User; token: string } | null {
@@ -244,6 +260,30 @@ function showFirstUserScreen() {
   }
 }
 
+const PASSWORD_TOGGLE_SHOW_ICON = `
+  <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+    <path d="M12 5C7.03 5 2.84 8.11 1.18 12c1.66 3.89 5.85 7 10.82 7s9.16-3.11 10.82-7C21.16 8.11 16.97 5 12 5Z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path>
+    <circle cx="12" cy="12" r="3" fill="currentColor"></circle>
+  </svg>
+`;
+
+const PASSWORD_TOGGLE_HIDE_ICON = `
+  <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+    <path d="M4.53 4.53 19.47 19.47" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path>
+    <path d="M17.66 15.61C16.02 17.25 13.75 18.32 11.3 18.47c-4.27.27-8.11-2.33-10.12-6.47a13.14 13.14 0 0 1 4.03-4.87M15.14 15.07a3 3 0 0 1-4.21-4.21" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path>
+    <path d="M21.82 12a13.45 13.45 0 0 0-4.03-4.87A9.39 9.39 0 0 0 12 5c-.49 0-.98.03-1.45.08" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path>
+  </svg>
+`;
+
+let loginPasswordToggleBound = false;
+
+function updatePasswordToggleUI(passwordInput: HTMLInputElement, toggleBtn: HTMLButtonElement, maskPassword: boolean) {
+  passwordInput.type = maskPassword ? 'password' : 'text';
+  toggleBtn.innerHTML = maskPassword ? PASSWORD_TOGGLE_SHOW_ICON : PASSWORD_TOGGLE_HIDE_ICON;
+  toggleBtn.setAttribute('aria-label', maskPassword ? 'Show password' : 'Hide password');
+  toggleBtn.setAttribute('aria-pressed', maskPassword ? 'false' : 'true');
+}
+
 function resetLoginForm() {
   const loginForm = document.getElementById('login-form') as HTMLFormElement | null;
   if (!loginForm) return;
@@ -252,6 +292,11 @@ function resetLoginForm() {
   if (submitBtn) {
     submitBtn.disabled = false;
     submitBtn.textContent = 'Login';
+  }
+  const passwordInput = document.getElementById('password') as HTMLInputElement | null;
+  const togglePasswordBtn = document.getElementById('toggle-password') as HTMLButtonElement | null;
+  if (passwordInput && togglePasswordBtn) {
+    updatePasswordToggleUI(passwordInput, togglePasswordBtn, true);
   }
 }
 
@@ -313,18 +358,19 @@ function setupLoginForm() {
   if (!loginForm) return;
 
   // Setup password visibility toggle
-  const togglePasswordBtn = document.getElementById('toggle-password');
+  const togglePasswordBtn = document.getElementById('toggle-password') as HTMLButtonElement | null;
   const passwordInput = document.getElementById('password') as HTMLInputElement;
   if (togglePasswordBtn && passwordInput) {
-    togglePasswordBtn.addEventListener('click', () => {
-      if (passwordInput.type === 'password') {
-        passwordInput.type = 'text';
-        togglePasswordBtn.textContent = '🙈';
-      } else {
-        passwordInput.type = 'password';
-        togglePasswordBtn.textContent = '👁️';
-      }
-    });
+    updatePasswordToggleUI(passwordInput, togglePasswordBtn, passwordInput.type === 'password');
+    if (!loginPasswordToggleBound) {
+      togglePasswordBtn.addEventListener('mousedown', (event) => event.preventDefault());
+      togglePasswordBtn.addEventListener('click', () => {
+        const shouldMask = passwordInput.type === 'text';
+        updatePasswordToggleUI(passwordInput, togglePasswordBtn, shouldMask);
+        passwordInput.focus();
+      });
+      loginPasswordToggleBound = true;
+    }
   }
 
   loginForm.addEventListener('submit', async (e) => {
@@ -2505,6 +2551,130 @@ function renderCharacterTabs(contentHtml: string, activeTab: RightPanelTab): str
       ${contentHtml}
     </div>
   `;
+}
+
+function hydrateCharacterPanel(panel: HTMLElement) {
+  const tok = selectedTokenId ? tokens.get(selectedTokenId) : null;
+  if (!tok) return;
+  const anyTok: any = tok as any;
+  const editable = canControl(tok);
+  const q = <T extends Element>(sel: string) => panel.querySelector(sel) as T | null;
+  const setDisabled = (el: HTMLInputElement | HTMLTextAreaElement | null) => { if (el) el.disabled = !editable; };
+
+  [
+    q<HTMLInputElement>("#char-name"),
+    q<HTMLInputElement>("#char-hp"),
+    q<HTMLInputElement>("#char-ac"),
+    q<HTMLInputElement>("#char-str"),
+    q<HTMLInputElement>("#char-dex"),
+    q<HTMLInputElement>("#char-con"),
+    q<HTMLInputElement>("#char-int"),
+    q<HTMLInputElement>("#char-wis"),
+    q<HTMLInputElement>("#char-cha"),
+    q<HTMLInputElement>("#char-vision-radius"),
+    q<HTMLInputElement>("#char-dead"),
+    q<HTMLTextAreaElement>("#char-notes")
+  ].forEach(el => setDisabled(el));
+
+  const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
+  const parseNum = (el: HTMLInputElement, lo?: number, hi?: number) => {
+    const n = Number(el.value);
+    if (!Number.isFinite(n)) return undefined;
+    const value = lo == null || hi == null ? n : clamp(n, lo, hi);
+    el.value = String(value);
+    return value;
+  };
+
+  const nameEl = q<HTMLInputElement>("#char-name");
+  nameEl?.addEventListener("change", () => {
+    if (!editable || !nameEl) return;
+    const next = nameEl.value.trim().slice(0, 64);
+    if (next !== (tok.name ?? "")) sendUpdateToken(tok.id, { name: next });
+  });
+
+  const iconSelector = q<HTMLElement>("#char-icon-selector");
+  if (iconSelector) {
+    iconSelector.addEventListener("click", (event) => {
+      if (!editable) return;
+      const target = event.target as HTMLElement;
+      const icon = target?.dataset?.icon;
+      if (!icon || icon === anyTok.icon) return;
+      iconSelector.querySelectorAll<HTMLButtonElement>(".icon-selector-btn").forEach(btn => btn.classList.toggle("selected", btn.dataset.icon === icon));
+      sendUpdateToken(tok.id, { icon });
+    });
+  }
+
+  const hpEl = q<HTMLInputElement>('#char-hp');
+  hpEl?.addEventListener('change', () => {
+    if (!editable || !hpEl) return;
+    let val = parseNum(hpEl, -999, 999);
+    if (val == null) val = anyTok.hp ?? 0;
+    const next = clamp(val, -999, 999);
+    hpEl.value = String(next);
+    if (next !== (anyTok.hp ?? 0)) sendUpdateToken(tok.id, { hp: next });
+  });
+
+  const acEl = q<HTMLInputElement>('#char-ac');
+  acEl?.addEventListener('change', () => {
+    if (!editable || !acEl) return;
+    let val = parseNum(acEl, 0, 99);
+    if (val == null) val = anyTok.ac ?? 0;
+    const next = clamp(val, 0, 99);
+    acEl.value = String(next);
+    if (next !== (anyTok.ac ?? 0)) sendUpdateToken(tok.id, { ac: next });
+  });
+
+  const statIds: Array<[keyof NonNullable<Token["stats"]>, string, number, number]> = [
+    ["str", "#char-str", -99, 99],
+    ["dex", "#char-dex", -99, 99],
+    ["con", "#char-con", -99, 99],
+    ["int", "#char-int", -99, 99],
+    ["wis", "#char-wis", -99, 99],
+    ["cha", "#char-cha", -99, 99]
+  ];
+  for (const [key, selector, lo, hi] of statIds) {
+    const el = q<HTMLInputElement>(selector);
+    el?.addEventListener("change", () => {
+      if (!editable || !el) return;
+      let val = parseNum(el, lo, hi);
+      if (val == null) val = (anyTok.stats ?? {})[key] ?? 0;
+      const next = clamp(val, lo, hi);
+      el.value = String(next);
+      const current = (anyTok.stats ?? {})[key];
+      if (current !== next) {
+        sendUpdateToken(tok.id, { stats: { [key]: next } });
+      }
+    });
+  }
+
+  const vrEl = q<HTMLInputElement>("#char-vision-radius");
+  vrEl?.addEventListener("change", () => {
+    if (!editable || !vrEl) return;
+    let val = parseNum(vrEl, 0, 20);
+    if (val == null) val = anyTok.vision?.radius ?? 0;
+    const next = clamp(val, 0, 20);
+    vrEl.value = String(next);
+    if (next !== (anyTok.vision?.radius ?? 0)) {
+      sendUpdateToken(tok.id, { vision: { radius: next } });
+      if (myRole === "DM" && socket) {
+        const tmp: any = { ...anyTok, vision: { ...(anyTok.vision || {}), radius: next } };
+        revealByVisionForToken(socket as WebSocket, tmp);
+      }
+    }
+  });
+
+  const notesEl = q<HTMLTextAreaElement>("#char-notes");
+  notesEl?.addEventListener("change", () => {
+    if (!editable || !notesEl) return;
+    const next = notesEl.value.slice(0, 2000);
+    if (next !== (anyTok.notes ?? "")) sendUpdateToken(tok.id, { notes: next });
+  });
+
+  const deadEl = q<HTMLInputElement>("#char-dead");
+  deadEl?.addEventListener("change", () => {
+    if (!editable || !deadEl) return;
+    sendUpdateToken(tok.id, { dead: deadEl.checked });
+  });
 }
 
 function renderRightPanelContent(tab: RightPanelTab): string {
