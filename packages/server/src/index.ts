@@ -1660,7 +1660,7 @@ function onMessage(client: ClientRec, data: any) {
       // Allow both DM and players to toggle doors
       const a = state.assets.get(msg.assetId);
       if (!a) return;
-      if (a.kind !== "door") return;
+      if (a.kind !== "door" && !a.kind.startsWith("door-")) return;
       a.open = !(a.open === true);
       state.assets.set(a.id, a);
       broadcast([{ type: "assetPlaced", asset: a } as any]);

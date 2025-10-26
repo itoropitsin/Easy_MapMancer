@@ -95,6 +95,73 @@ type PendingTokenMove = { pos: Vec2; levelId: ID | null; timeoutId: number };
 const pendingTokenMoves = new Map<ID, PendingTokenMove>();
 const PENDING_TOKEN_MOVE_TTL_MS = 1200;
 
+type StructuralFamily = "wall" | "window" | "door";
+
+interface StructuralStyle {
+  family: StructuralFamily;
+  thickness?: number;
+  fill?: number;
+  stroke?: number;
+  glass?: number;
+  accent?: number;
+}
+
+interface StructuralStyleResolved {
+  family: StructuralFamily;
+  thickness: number;
+  fill: number;
+  stroke: number;
+  glass: number;
+  accent?: number;
+}
+
+const STRUCTURAL_DEFAULTS: Record<StructuralFamily, StructuralStyleResolved> = {
+  wall: { family: "wall", thickness: 0.16, fill: 0x6b7280, stroke: 0x4b5563, glass: 0x60a5fa },
+  window: { family: "window", thickness: 0.14, fill: 0x60a5fa, stroke: 0x1d4ed8, glass: 0x93c5fd },
+  door: { family: "door", thickness: 0.18, fill: 0x8b5a2b, stroke: 0x5a3a1c, glass: 0x8b5a2b }
+};
+
+const STRUCTURAL_VARIANTS: Record<string, StructuralStyle> = {
+  "wall-stone": { family: "wall", fill: 0x4b5563, stroke: 0x1f2937, thickness: 0.2 },
+  "wall-wood": { family: "wall", fill: 0x9a6b3c, stroke: 0x5a3a1c, thickness: 0.18 },
+  "wall-ruined": { family: "wall", fill: 0x7f8c8d, stroke: 0x3f4c4d, thickness: 0.12 },
+  "window-stained": { family: "window", glass: 0xfb7185, stroke: 0x831843 },
+  "window-barred": { family: "window", glass: 0x9ca3af, stroke: 0x1f2937 },
+  "window-observation": { family: "window", glass: 0xbcd7ff, stroke: 0x2563eb, thickness: 0.1 },
+  "door-iron": { family: "door", fill: 0x4b5563, stroke: 0x1f2937 },
+  "door-arched": { family: "door", fill: 0xb45309, stroke: 0x78350f },
+  "door-portcullis": { family: "door", fill: 0x374151, stroke: 0x111827 }
+};
+
+function inferStructuralFamily(kind: string | undefined): StructuralFamily | null {
+  if (!kind) return null;
+  if (kind === "wall" || kind === "window" || kind === "door") return kind;
+  if (kind.startsWith("wall-")) return "wall";
+  if (kind.startsWith("window-")) return "window";
+  if (kind.startsWith("door-")) return "door";
+  return null;
+}
+
+function getStructuralStyle(kind: string): StructuralStyleResolved | null {
+  const preset = STRUCTURAL_VARIANTS[kind];
+  const family = preset?.family ?? inferStructuralFamily(kind);
+  if (!family) return null;
+  const defaults = STRUCTURAL_DEFAULTS[family];
+  return {
+    family,
+    thickness: preset?.thickness ?? defaults.thickness,
+    fill: preset?.fill ?? defaults.fill,
+    stroke: preset?.stroke ?? defaults.stroke,
+    glass: preset?.glass ?? (preset?.fill ?? defaults.glass ?? defaults.fill),
+    accent: preset?.accent ?? defaults.accent
+  };
+}
+
+function hexToCss(value: number): string {
+  const safe = Math.max(0, Math.min(0xffffff, value >>> 0));
+  return `#${safe.toString(16).padStart(6, "0")}`;
+}
+
 function setPendingTokenMove(tokenId: ID, pos: Vec2, level: ID | null) {
   const existing = pendingTokenMoves.get(tokenId);
   if (existing) {
@@ -1324,8 +1391,9 @@ function blockedBetween(a: Vec2, b: Vec2): boolean {
     for (const a of assets.values()) {
       if (a.levelId !== levelId) continue;
       if (a.pos.x === gx && a.pos.y === gy) {
-        if (a.kind === "wall") return true;
-        if (a.kind === "door" && (a as any).open !== true) return true;
+        const family = inferStructuralFamily(a.kind);
+        if (family === "wall") return true;
+        if (family === "door" && (a as any).open !== true) return true;
       }
     }
     return false;
@@ -1768,14 +1836,22 @@ function drawMinimap() {
     if (myRole !== "DM" && revealed && !revealed.has(`${asset.pos.x},${asset.pos.y}`)) continue;
     
     // Показываем только важные ассеты (стены, двери, окна)
-    if (!["wall", "door", "window"].includes(asset.kind)) continue;
+    const family = inferStructuralFamily(asset.kind);
+    if (!family) continue;
+    const style = getStructuralStyle(asset.kind);
     
     const x = offsetX + (asset.pos.x + mapSize / 2) * tileSize;
     const y = offsetY + (asset.pos.y + mapSize / 2) * tileSize;
     
     if (x >= 0 && x < canvasWidth && y >= 0 && y < canvasHeight) {
-      minimapCtx.fillStyle = "#6b7280"; // Серый цвет для структур
-      minimapCtx.fillRect(x + tileSize * 0.2, y + tileSize * 0.2, tileSize * 0.6, tileSize * 0.6);
+      const fillColor = style
+        ? family === "window"
+          ? style.glass
+          : style.fill
+        : 0x6b7280;
+      minimapCtx.fillStyle = hexToCss(fillColor);
+      const inset = family === "wall" ? 0.18 : 0.2;
+      minimapCtx.fillRect(x + tileSize * inset, y + tileSize * inset, tileSize * (1 - inset * 2), tileSize * (1 - inset * 2));
     }
   }
   
@@ -2760,6 +2836,14 @@ function renderHistoryEvent(event: HistoryEvent): string {
 function renderHistoryDetails(event: HistoryEvent): string | null {
   const details = event.details;
   if (!details) return null;
+  // Token updates already include field deltas in the main description,
+  // so repeating them in the detail line adds noise unless additional metadata is present.
+  const hasExtraMetadata = Boolean(details.from || details.to || (details as any).note);
+  if (event.actionType === "updateToken" && !hasExtraMetadata) {
+    if (!details.changes || details.changes.length > 0) {
+      return null;
+    }
+  }
   const pieces: string[] = [];
   const target = details.targetName || details.targetKind;
   if (target) {
@@ -2825,63 +2909,61 @@ function drawAssets() {
   console.log(`[CLIENT] drawAssets: filtered assets for level ${levelId}: ${sortedAssets.length}`);
   
   // Build occupancy map for structural connections (walls/windows/doors)
-  const byKey = new Map<string, { kind: string; open?: boolean }>();
+  const byKey = new Map<string, { kind: string; family: StructuralFamily; open?: boolean; style: StructuralStyleResolved }>();
   for (const a of sortedAssets) {
-    byKey.set(`${a.pos.x},${a.pos.y}`, { kind: a.kind, open: (a as any).open });
+    const style = getStructuralStyle(a.kind);
+    if (!style) continue;
+    byKey.set(`${a.pos.x},${a.pos.y}`, { kind: a.kind, family: style.family, open: (a as any).open, style });
   }
-  const isWallLike = (cell: { kind: string; open?: boolean } | undefined) => {
+  const isWallLike = (cell: { family: StructuralFamily; open?: boolean } | undefined) => {
     if (!cell) return false;
-    if (cell.kind === "door") return !cell.open; // closed door behaves like wall
-    return cell.kind === "wall" || cell.kind === "window";
+    if (cell.family === "door") return !cell.open; // closed door behaves like wall
+    return cell.family === "wall" || cell.family === "window";
   };
   for (const a of sortedAssets) {
     console.log(`[CLIENT] Drawing asset: kind=${a.kind}, id=${a.id}, pos=(${a.pos.x}, ${a.pos.y})`);
     const node = new Container();
     // Linear, connected styles for building structures
-    if (a.kind === "wall" || a.kind === "window" || a.kind === "door") {
+    const structuralStyle = getStructuralStyle(a.kind);
+    const structuralFamily = structuralStyle?.family ?? inferStructuralFamily(a.kind);
+    if (structuralStyle) {
       const g = new Graphics();
-      if (a.kind === "wall") {
-        const t = CELL * 0.16;
-        const L = byKey.get(`${a.pos.x - 1},${a.pos.y}`);
-        const R = byKey.get(`${a.pos.x + 1},${a.pos.y}`);
-        const U = byKey.get(`${a.pos.x},${a.pos.y - 1}`);
-        const D = byKey.get(`${a.pos.x},${a.pos.y + 1}`);
+      const thickness = CELL * structuralStyle.thickness;
+      const fillColor = structuralStyle.fill;
+      const strokeColor = structuralStyle.stroke;
+      const glassColor = structuralStyle.glass;
+      const L = byKey.get(`${a.pos.x - 1},${a.pos.y}`);
+      const R = byKey.get(`${a.pos.x + 1},${a.pos.y}`);
+      const U = byKey.get(`${a.pos.x},${a.pos.y - 1}`);
+      const D = byKey.get(`${a.pos.x},${a.pos.y + 1}`);
+      if (structuralStyle.family === "wall") {
         const hasH = isWallLike(L) || isWallLike(R);
         const hasV = isWallLike(U) || isWallLike(D);
-        const col = 0x6b7280, stroke = 0x4b5563;
-        if (hasH) g.rect(-CELL / 2, -t / 2, CELL, t).fill(col).stroke({ color: stroke, width: 2 });
-        if (hasV) g.rect(-t / 2, -CELL / 2, t, CELL).fill(col).stroke({ color: stroke, width: 2 });
-        if (!hasH && !hasV) g.rect(-t / 2, -t / 2, t, t).fill(col).stroke({ color: stroke, width: 2 });
-      } else if (a.kind === "window") {
-        const t = CELL * 0.14;
-        const L = byKey.get(`${a.pos.x - 1},${a.pos.y}`);
-        const R = byKey.get(`${a.pos.x + 1},${a.pos.y}`);
-        const U = byKey.get(`${a.pos.x},${a.pos.y - 1}`);
-        const D = byKey.get(`${a.pos.x},${a.pos.y + 1}`);
+        if (hasH) g.rect(-CELL / 2, -thickness / 2, CELL, thickness).fill(fillColor).stroke({ color: strokeColor, width: 2 });
+        if (hasV) g.rect(-thickness / 2, -CELL / 2, thickness, CELL).fill(fillColor).stroke({ color: strokeColor, width: 2 });
+        if (!hasH && !hasV) g.rect(-thickness / 2, -thickness / 2, thickness, thickness).fill(fillColor).stroke({ color: strokeColor, width: 2 });
+      } else if (structuralStyle.family === "window") {
         const hasH = isWallLike(L) || isWallLike(R);
         const hasV = isWallLike(U) || isWallLike(D);
-        const fill = { color: 0x66ccff, alpha: 0.9 } as any;
-        const stroke = 0x1d4ed8;
-        if (hasH) g.roundRect(-CELL / 2, -t / 2, CELL, t, 6).fill(fill).stroke({ color: stroke, width: 2 });
-        if (hasV) g.roundRect(-t / 2, -CELL / 2, t, CELL, 6).fill(fill).stroke({ color: stroke, width: 2 });
-        if (!hasH && !hasV) g.roundRect(-CELL * 0.25, -CELL * 0.12, CELL * 0.5, CELL * 0.24, 6).fill(fill).stroke({ color: stroke, width: 2 });
-      } else if (a.kind === "door") {
-        const L = byKey.get(`${a.pos.x - 1},${a.pos.y}`);
-        const R = byKey.get(`${a.pos.x + 1},${a.pos.y}`);
-        const U = byKey.get(`${a.pos.x},${a.pos.y - 1}`);
-        const D = byKey.get(`${a.pos.x},${a.pos.y + 1}`);
+        const drawPanel = (w: number, h: number) =>
+          g.roundRect(-w / 2, -h / 2, w, h, Math.min(12, Math.min(w, h) * 0.25))
+            .fill({ color: glassColor, alpha: 0.9 })
+            .stroke({ color: strokeColor, width: 2 });
+        if (hasH) drawPanel(CELL, thickness);
+        if (hasV) drawPanel(thickness, CELL);
+        if (!hasH && !hasV) drawPanel(CELL * 0.5, CELL * 0.28);
+      } else if (structuralStyle.family === "door") {
         const horiz = isWallLike(L) || isWallLike(R);
         const vert = isWallLike(U) || isWallLike(D);
-        const t = CELL * 0.18;
-        const col = 0x8b5a2b, stroke = 0x5a3a1c;
         const open = (a as any).open === true;
         if (!open) {
-          if (horiz && !vert) g.rect(-CELL / 2, -t / 2, CELL, t).fill(col).stroke({ color: stroke, width: 2 });
-          else if (vert && !horiz) g.rect(-t / 2, -CELL / 2, t, CELL).fill(col).stroke({ color: stroke, width: 2 });
-          else g.rect(-t / 2, -t / 2, t, t).fill(col).stroke({ color: stroke, width: 2 });
+          if (horiz && !vert) g.rect(-CELL / 2, -thickness / 2, CELL, thickness).fill(fillColor).stroke({ color: strokeColor, width: 2 });
+          else if (vert && !horiz) g.rect(-thickness / 2, -CELL / 2, thickness, CELL).fill(fillColor).stroke({ color: strokeColor, width: 2 });
+          else g.rect(-thickness / 2, -thickness / 2, thickness, thickness).fill(fillColor).stroke({ color: strokeColor, width: 2 });
         } else {
-          const w = CELL * 0.7, h = t;
-          g.rect(-w / 2, -h / 2, w, h).fill(col).stroke({ color: stroke, width: 2 });
+          const w = CELL * 0.7;
+          const h = thickness;
+          g.rect(-w / 2, -h / 2, w, h).fill(fillColor).stroke({ color: strokeColor, width: 2 });
           g.rotation = horiz ? Math.PI / 4 : -Math.PI / 4;
         }
       }
@@ -3099,7 +3181,7 @@ function drawAssets() {
       node.on("pointerdown", (e: any) => {
         if (editorMode !== "cursor") return;
         // door toggle takes priority
-        if (a.kind === "door" && socket) {
+        if (structuralFamily === "door" && socket) {
           const msg: ClientToServer = { t: "toggleDoor", assetId: a.id };
           socket.send(JSON.stringify(msg));
           e.stopPropagation?.();
@@ -3117,7 +3199,7 @@ function drawAssets() {
       });
     }
     // Doors should be clickable for players (DM handled above to avoid double toggle)
-    if (a.kind === "door" && myRole !== "DM") {
+    if (structuralFamily === "door" && myRole !== "DM") {
       // @ts-ignore
       node.eventMode = "static";
       node.cursor = editorMode === "cursor" ? "pointer" : node.cursor;
@@ -3130,7 +3212,7 @@ function drawAssets() {
       });
     }
     // Right-click context menu for z-index management (for all assets)
-    if (myRole === "DM" || a.kind === "door") {
+    if (myRole === "DM" || structuralFamily === "door") {
       if (!node.eventMode || node.eventMode === "auto") {
         // @ts-ignore
         node.eventMode = "static";
@@ -4171,6 +4253,7 @@ function connect() {
   const btnAssetBow = document.getElementById("asset-bow") as HTMLButtonElement | null;
   const btnAssetCoins = document.getElementById("asset-coins") as HTMLButtonElement | null;
   const btnAssetOther = document.getElementById("asset-other") as HTMLButtonElement | null;
+  const btnToolStructures = document.getElementById("btn-tool-structures") as HTMLButtonElement | null;
   const btnFloorStone = document.getElementById("floor-stone") as HTMLButtonElement | null;
   const btnFloorWood = document.getElementById("floor-wood") as HTMLButtonElement | null;
   const btnFloorWater = document.getElementById("floor-water") as HTMLButtonElement | null;
@@ -4191,6 +4274,8 @@ function connect() {
   const btnUndo = document.getElementById("btn-undo") as HTMLButtonElement | null;
   const btnRedo = document.getElementById("btn-redo") as HTMLButtonElement | null;
   const locationsTreeEl = document.getElementById("locations-tree") as HTMLDivElement | null;
+  const btnToolBrush = document.getElementById("btn-tool-brush") as HTMLButtonElement | null;
+  const brushSizeIndicator = document.getElementById("brush-size-indicator") as HTMLSpanElement | null;
   const btnBrush1 = document.getElementById("brush-1") as HTMLButtonElement | null;
   const btnBrush2 = document.getElementById("brush-2") as HTMLButtonElement | null;
   const btnBrush3 = document.getElementById("brush-3") as HTMLButtonElement | null;
@@ -4201,6 +4286,7 @@ function connect() {
   const locationsToggleBtn = document.getElementById("locations-toggle") as HTMLButtonElement | null;
   const locationsCloseBtn = document.getElementById("locations-close") as HTMLButtonElement | null;
   const dockButtons = Array.from(document.querySelectorAll<HTMLButtonElement>("#tool-dock .dock-btn"));
+  const structureSelectButtons = Array.from(document.querySelectorAll<HTMLButtonElement>(".structure-select"));
 
   let activeToolPanel: HTMLElement | null = null;
   let activeDockButton: HTMLButtonElement | null = null;
@@ -4374,7 +4460,12 @@ function connect() {
       if (editorMode === "revealFog" || editorMode === "eraseFog") return "fog";
       if (editorMode === "spawnToken" || editorMode === "eraseTokens" || selectedTokenKind) return "characters";
       if (selectedFloorKind || editorMode === "eraseSpace") return "floors";
-      if (selectedAssetKind || editorMode === "eraseObjects") return "assets";
+      if (selectedAssetKind) {
+        const structural = inferStructuralFamily(selectedAssetKind);
+        if (structural) return "structures";
+        return "assets";
+      }
+      if (editorMode === "eraseObjects") return "assets";
       return "cursor";
     };
     const activeGroup = determineGroup();
@@ -4399,6 +4490,29 @@ function connect() {
     }
     if (document.body) {
       document.body.style.paddingBottom = isDM ? "" : "0px";
+      document.body.classList.toggle("mode-dm", isDM);
+      if (!isDM) {
+        document.body.classList.remove("assets-collapsed");
+      }
+    }
+
+    if (brushSizeIndicator) {
+      const nextValue = String(brushSize);
+      if (brushSizeIndicator.textContent !== nextValue) {
+        brushSizeIndicator.textContent = nextValue;
+      }
+      brushSizeIndicator.classList.toggle("hidden", !isDM);
+    }
+    if (btnToolBrush) {
+      const sizeLabel = `${brushSize}\u00D7${brushSize}`;
+      const nextAria = `Brush settings, size ${sizeLabel}`;
+      if (btnToolBrush.getAttribute("aria-label") !== nextAria) {
+        btnToolBrush.setAttribute("aria-label", nextAria);
+      }
+      const nextLabel = `Brush (${sizeLabel})`;
+      if (btnToolBrush.getAttribute("data-label") !== nextLabel) {
+        btnToolBrush.setAttribute("data-label", nextLabel);
+      }
     }
     
     // Force close any open panels first and remove all open classes
@@ -4440,7 +4554,7 @@ function connect() {
       if (group === 'characters') {
         // Characters button is only for DM
         (btn as HTMLElement).style.display = isDM ? 'flex' : 'none';
-      } else if (group === 'brush' || group === 'fog' || group === 'assets' || group === 'floors') {
+      } else if (group === 'brush' || group === 'fog' || group === 'assets' || group === 'floors' || group === 'structures') {
         // These buttons are only for DM
         (btn as HTMLElement).style.display = isDM ? 'flex' : 'none';
       }
@@ -4462,6 +4576,7 @@ function connect() {
     if (btnAssetBow) btnAssetBow.disabled = !isDM;
     if (btnAssetCoins) btnAssetCoins.disabled = !isDM;
     if (btnAssetOther) btnAssetOther.disabled = !isDM;
+    structureSelectButtons.forEach((btn) => { btn.disabled = !isDM; });
     if (btnFloorStone) btnFloorStone.disabled = !isDM;
     if (btnFloorWood) btnFloorWood.disabled = !isDM;
     if (btnFloorWater) btnFloorWater.disabled = !isDM;
@@ -4503,6 +4618,14 @@ function connect() {
     btnAssetBow?.classList.toggle("selected", selectedAssetKind === "bow");
     btnAssetCoins?.classList.toggle("selected", selectedAssetKind === "coins");
     btnAssetOther?.classList.toggle("selected", selectedAssetKind === "other");
+    document.querySelectorAll<HTMLElement>('.asset-item').forEach(item => {
+      const id = item.getAttribute('data-asset-id');
+      item.classList.toggle('selected', !!id && id === selectedAssetKind);
+    });
+    structureSelectButtons.forEach(btn => {
+      const assetId = btn.dataset.assetId;
+      btn.classList.toggle('selected', assetId === selectedAssetKind);
+    });
     btnFloorStone?.classList.toggle("selected", selectedFloorKind === "stone");
     btnFloorWood?.classList.toggle("selected", selectedFloorKind === "wood");
     btnFloorWater?.classList.toggle("selected", selectedFloorKind === "water");
@@ -4585,6 +4708,18 @@ function connect() {
   btnAssetBow?.addEventListener("click", () => { selectedAssetKind = "bow"; selectedFloorKind = null; selectedTokenKind = null; editorMode = "paint"; updateEditorUI(); });
   btnAssetCoins?.addEventListener("click", () => { selectedAssetKind = "coins"; selectedFloorKind = null; selectedTokenKind = null; editorMode = "paint"; updateEditorUI(); });
   btnAssetOther?.addEventListener("click", () => { selectedAssetKind = "other"; selectedFloorKind = null; selectedTokenKind = null; editorMode = "paint"; updateEditorUI(); });
+  structureSelectButtons.forEach(btn => {
+    btn.addEventListener("click", () => {
+      if (myRole !== "DM") return;
+      const assetId = btn.dataset.assetId;
+      if (!assetId) return;
+      selectedAssetKind = assetId;
+      selectedFloorKind = null;
+      selectedTokenKind = null;
+      editorMode = "paint";
+      updateEditorUI();
+    });
+  });
   btnFloorStone?.addEventListener("click", () => { selectedFloorKind = "stone"; selectedAssetKind = null; selectedTokenKind = null; editorMode = "paint"; updateEditorUI(); });
   btnFloorWood?.addEventListener("click", () => { selectedFloorKind = "wood"; selectedAssetKind = null; selectedTokenKind = null; editorMode = "paint"; updateEditorUI(); });
   btnFloorWater?.addEventListener("click", () => { selectedFloorKind = "water"; selectedAssetKind = null; selectedTokenKind = null; editorMode = "paint"; updateEditorUI(); });
@@ -5049,9 +5184,34 @@ connect();
 
 // Bottom Asset Menu Management
 function initializeBottomAssetMenu() {
+  const assetMenu = document.getElementById('bottom-asset-menu');
   const assetContent = document.getElementById('asset-content');
   const assetSearch = document.getElementById('asset-search') as HTMLInputElement;
   const categoryTabs = document.querySelectorAll('.asset-category-tab');
+  const assetCollapseToggle = document.getElementById('asset-collapse-toggle') as HTMLButtonElement | null;
+  const collapseStorageKey = "dnd.assetMenuCollapsed";
+  const applyCollapseState = (collapsed: boolean) => {
+    document.body.classList.toggle('assets-collapsed', collapsed);
+    if (assetCollapseToggle) {
+      assetCollapseToggle.setAttribute('aria-expanded', String(!collapsed));
+      assetCollapseToggle.setAttribute('data-collapsed', collapsed ? 'true' : 'false');
+      assetCollapseToggle.setAttribute('title', collapsed ? 'Expand assets' : 'Collapse assets');
+    }
+  };
+  if (assetCollapseToggle && assetMenu) {
+    let collapsed = false;
+    try {
+      collapsed = localStorage.getItem(collapseStorageKey) === "true";
+    } catch {
+      collapsed = false;
+    }
+    applyCollapseState(collapsed);
+    assetCollapseToggle.addEventListener('click', () => {
+      collapsed = !collapsed;
+      applyCollapseState(collapsed);
+      try { localStorage.setItem(collapseStorageKey, String(collapsed)); } catch {}
+    });
+  }
   
   // Asset data organized by categories
   const assetCategories = {
@@ -5184,10 +5344,19 @@ function initializeBottomAssetMenu() {
       { id: 'bridge', emoji: '🌉', name: 'Bridge' },
       { id: 'stairs', emoji: '🪜', name: 'Stairs' }
     ],
-    buildings: [
-      { id: 'wall', emoji: '🧱', name: 'Wall' },
-      { id: 'window', emoji: '🪟', name: 'Window' },
-      { id: 'door', emoji: '🚪', name: 'Door' }
+    structures: [
+      { id: 'wall', emoji: '🧱', name: 'Stone Wall' },
+      { id: 'wall-stone', emoji: '🏰', name: 'Fortified Wall' },
+      { id: 'wall-wood', emoji: '🪵', name: 'Wooden Palisade' },
+      { id: 'wall-ruined', emoji: '🧱', name: 'Broken Wall' },
+      { id: 'window', emoji: '🪟', name: 'Standard Window' },
+      { id: 'window-stained', emoji: '🌈', name: 'Stained Glass' },
+      { id: 'window-barred', emoji: '🪟', name: 'Barred Window' },
+      { id: 'window-observation', emoji: '🔭', name: 'Observation Slit' },
+      { id: 'door', emoji: '🚪', name: 'Wooden Door' },
+      { id: 'door-iron', emoji: '🚪', name: 'Iron Door' },
+      { id: 'door-arched', emoji: '🚪', name: 'Arched Doorway' },
+      { id: 'door-portcullis', emoji: '🛡️', name: 'Portcullis Gate' }
     ]
   };
 
@@ -5254,6 +5423,9 @@ function initializeBottomAssetMenu() {
         const item = document.createElement('div');
         item.className = 'asset-item';
         item.dataset.assetId = asset.id;
+        if (asset.id === selectedAssetKind) {
+          item.classList.add('selected');
+        }
         
         const emoji = document.createElement('div');
         emoji.className = 'asset-emoji';
@@ -5296,7 +5468,7 @@ function initializeBottomAssetMenu() {
       tools: 'Tools',
       furniture: 'Furniture',
       paths: 'Paths & Trails',
-      buildings: 'Buildings',
+      structures: 'Walls, Doors & Windows',
       other: 'Miscellaneous'
     };
     return names[category] || category;
@@ -5316,10 +5488,13 @@ function initializeBottomAssetMenu() {
     
     // Set the selected asset for placement
     selectedAssetKind = assetId;
+    selectedFloorKind = null;
+    selectedTokenKind = null;
     editorMode = 'paint';
     
     // Update UI to show paint mode
     // UI will be updated by the existing updateEditorUI calls in event handlers
+    updateEditorUI();
   }
 
   // Category tab handlers
