@@ -52,7 +52,8 @@ import type {
   AuthState,
   GameSnapshot,
   FogMode,
-  UserRole
+  UserRole,
+  HistoryEvent
 } from "@dnd/shared";
 
 // Small top-level toast helper for reuse outside connect()
@@ -136,6 +137,21 @@ let selectedAssetKind: string | null = null; // when null, floor tools may be us
 let selectedFloorKind: FloorKind | null = null;
 let selectedTokenKind: "player" | "npc" | null = null;
 
+type RightPanelTab = "character" | "history";
+const RIGHT_PANEL_TAB_KEY = "dnd_right_panel_tab";
+function loadStoredRightPanelTab(): RightPanelTab {
+  if (typeof window === "undefined") return "character";
+  try {
+    const stored = window.localStorage.getItem(RIGHT_PANEL_TAB_KEY);
+    return stored === "history" ? "history" : "character";
+  } catch {
+    return "character";
+  }
+}
+let rightPanelTab: RightPanelTab = loadStoredRightPanelTab();
+let historyEvents: HistoryEvent[] = [];
+const HISTORY_EVENT_LIMIT = 200;
+
 // Authentication state
 let authState: AuthState = { isAuthenticated: false };
 let currentUser: User | null = null;
@@ -161,6 +177,26 @@ function saveSession(user: User, token: string) {
   } catch (error) {
     console.error("[DEBUG] Failed to save session:", error);
   }
+}
+
+function setRightPanelTab(tab: RightPanelTab) {
+  rightPanelTab = tab;
+  if (typeof window !== "undefined") {
+    try {
+      window.localStorage.setItem(RIGHT_PANEL_TAB_KEY, tab);
+    } catch {}
+  }
+  renderRightPanel();
+}
+
+function setHistoryEvents(events: HistoryEvent[]) {
+  historyEvents = events.slice(-HISTORY_EVENT_LIMIT);
+  renderRightPanel();
+}
+
+function appendHistoryEvent(event: HistoryEvent) {
+  historyEvents = [...historyEvents, event].slice(-HISTORY_EVENT_LIMIT);
+  renderRightPanel();
 }
 
 function loadSession(): { user: User; token: string } | null {
@@ -2300,12 +2336,26 @@ function drawTokens() {
 
 // Simple character panel renderer. Expects an element with id "right-panel" to exist.
 function renderCharacterPanel() {
+  renderRightPanel();
+}
+
+function renderRightPanel() {
   const panel = document.getElementById("right-panel");
   if (!panel) return; // panel not present in DOM yet
+  if (myRole !== "DM") {
+    panel.style.display = "none";
+    panel.innerHTML = "";
+    return;
+  }
+  panel.style.display = "flex";
+  panel.innerHTML = renderRightPanelContent(rightPanelTab);
+  hydrateRightPanel(panel);
+}
+
+function renderCharacterPanelContent(): string {
   const tok = selectedTokenId ? tokens.get(selectedTokenId) : null;
   if (!tok) {
-    panel.innerHTML = '<div class="char-header">Character sheet</div><div style="opacity:.7">No selected token</div>';
-    return;
+    return '<div style="opacity:.7">No selected token</div>';
   }
   const anyTok: any = tok as any;
   const stats = anyTok.stats || {};
@@ -2412,7 +2462,7 @@ function renderCharacterPanel() {
     input: renderInput({ id: "char-vision-radius", type: "number", value: String(vr), attrs: 'inputmode="numeric" min="0" max="20"' }),
     hint: "radius (0-20)",
   });
-  panel.innerHTML = `
+  return `
     <div class="char-header">Character sheet</div>
     <div class="char-section">
       <div class="char-section-title">Profile</div>
@@ -2443,83 +2493,120 @@ function renderCharacterPanel() {
       <textarea id="char-notes" placeholder="Free text...">${escapeHtml(notes)}</textarea>
     </div>
   `;
-  // Enable/disable based on permissions
-  const q = (sel: string) => panel.querySelector(sel) as HTMLInputElement | null;
-  const setDisabled = (el: HTMLInputElement | null) => { if (el) el.disabled = !editable; };
-  ["#char-name", "#char-hp", "#char-ac", "#char-str", "#char-dex", "#char-con", "#char-int", "#char-wis", "#char-cha", "#char-vision-radius", "#char-dead"].forEach(id => setDisabled(q(id)));
-  // Helpers
-  const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
-  const parseNum = (el: HTMLInputElement, lo?: number, hi?: number) => {
-    const n = Number(el.value);
-    if (!Number.isFinite(n)) return undefined;
-    const v = (lo == null || hi == null) ? n : clamp(n, lo!, hi!);
-    el.value = String(v);
-    return v;
-  };
-  // Wire updates
-  const nameEl = q("#char-name");
-  nameEl?.addEventListener("change", () => { if (!editable) return; sendUpdateToken(tok.id, { name: nameEl.value.trim() }); });
-  
-  // Icon selector
-  const iconSelector = q("#char-icon-selector");
-  if (iconSelector) {
-    iconSelector.addEventListener("click", (e) => {
-      if (!editable) return;
-      const target = e.target as HTMLElement;
-      if (target.classList.contains("icon-selector-btn")) {
-        const selectedIcon = target.dataset.icon;
-        if (selectedIcon) {
-          // Update visual selection
-          iconSelector.querySelectorAll(".icon-selector-btn").forEach(btn => btn.classList.remove("selected"));
-          target.classList.add("selected");
-          // Send update to server
-          sendUpdateToken(tok.id, { icon: selectedIcon });
-        }
-      }
-    });
+}
+
+function renderCharacterTabs(contentHtml: string, activeTab: RightPanelTab): string {
+  return `
+    <div class="char-tabs">
+      <button class="char-tab ${activeTab === "character" ? "active" : ""}" data-tab="character">Character</button>
+      <button class="char-tab ${activeTab === "history" ? "active" : ""}" data-tab="history">History</button>
+    </div>
+    <div class="char-tab-content">
+      ${contentHtml}
+    </div>
+  `;
+}
+
+function renderRightPanelContent(tab: RightPanelTab): string {
+  if (tab === "history") {
+    const historyContent = renderHistoryPanelContent();
+    return renderCharacterTabs(historyContent, tab);
   }
-  const hpEl = q("#char-hp");
-  hpEl?.addEventListener("change", () => { if (!editable) return; const v = parseNum(hpEl, 0, 999); if (v != null) sendUpdateToken(tok.id, { hp: v }); });
-  const acEl = q("#char-ac");
-  acEl?.addEventListener("change", () => { if (!editable) return; const v = parseNum(acEl, 0, 99); if (v != null) sendUpdateToken(tok.id, { ac: v }); });
-  const statIds: Array<[keyof NonNullable<Token["stats"]>, string]> = [["str", "#char-str"], ["dex", "#char-dex"], ["con", "#char-con"], ["int", "#char-int"], ["wis", "#char-wis"], ["cha", "#char-cha"]];
-  for (const [k, sel] of statIds) {
-    const el = q(sel);
-    el?.addEventListener("change", () => {
-      if (!editable) return;
-      const v = parseNum(el, -99, 99);
-      if (v != null) {
-        const statsPatch: Partial<NonNullable<Token["stats"]>> = { [k]: v };
-        sendUpdateToken(tok.id, { stats: statsPatch });
-      }
-    });
+  const characterContent = renderCharacterPanelContent();
+  return renderCharacterTabs(characterContent, tab);
+}
+
+function renderHistoryPanelContent(): string {
+  if (historyEvents.length === 0) {
+    return '<div style="opacity:.7">No events yet</div>';
   }
-  const vrEl = q("#char-vision-radius");
-  vrEl?.addEventListener("change", () => {
-    if (!editable) return;
-    const v = parseNum(vrEl, 0, 20);
-    if (v != null) {
-      sendUpdateToken(tok.id, { vision: { radius: v } });
-      // provide immediate feedback for DM by revealing with new radius
-      if (myRole === "DM" && socket) {
-        const tmp: any = { ...tok, vision: { ...(anyTok.vision || {}), radius: v } };
-        revealByVisionForToken(socket as WebSocket, tmp);
-      }
+  const grouped = groupHistoryEventsByDay(historyEvents);
+  const items = grouped.map(group => `
+    <div class="history-day">
+      <div class="history-day-label">${escapeHtml(group.label)}</div>
+      <div class="history-events">
+        ${group.events.map(ev => renderHistoryEvent(ev)).join("")}
+      </div>
+    </div>
+  `).join("");
+  return `
+    <div class="history-scroll">
+      ${items}
+    </div>
+  `;
+}
+
+function hydrateRightPanel(panel: HTMLElement) {
+  const tabButtons = panel.querySelectorAll<HTMLButtonElement>(".char-tab");
+  tabButtons.forEach(btn => {
+    btn.addEventListener("click", () => {
+      const tab = btn.dataset.tab === "history" ? "history" : "character";
+      if (tab !== rightPanelTab) setRightPanelTab(tab);
+    });
+  });
+
+  if (rightPanelTab === "character") {
+    hydrateCharacterPanel(panel);
+  }
+}
+
+function groupHistoryEventsByDay(events: HistoryEvent[]) {
+  const formatter = new Intl.DateTimeFormat(undefined, { dateStyle: "medium" });
+  const groups: Array<{ label: string; events: HistoryEvent[] }> = [];
+  for (const event of events) {
+    const label = formatter.format(event.timestamp);
+    const last = groups[groups.length - 1];
+    if (last && last.label === label) {
+      last.events.push(event);
+    } else {
+      groups.push({ label, events: [event] });
     }
-  });
-  const notesEl = panel.querySelector("#char-notes") as HTMLTextAreaElement | null;
-  notesEl?.addEventListener("change", () => {
-    if (!editable) return;
-    const next = (notesEl.value || "").slice(0, 2000);
-    sendUpdateToken(tok.id, { notes: next });
-  });
-  if (notesEl) notesEl.disabled = !editable;
-  
-  const deadEl = q("#char-dead");
-  deadEl?.addEventListener("change", () => {
-    if (!editable) return;
-    sendUpdateToken(tok.id, { dead: deadEl.checked });
-  });
+  }
+  return groups;
+}
+
+function formatHistoryTime(timestamp: number): string {
+  const d = new Date(timestamp);
+  return d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+}
+
+function renderHistoryEvent(event: HistoryEvent): string {
+  const actor = event.actorName || event.actorId || "Unknown";
+  const time = formatHistoryTime(event.timestamp);
+  const summary = escapeHtml(event.description || event.actionType);
+  const details = renderHistoryDetails(event);
+  return `
+    <div class="history-event">
+      <div class="history-event-meta">
+        <span class="history-event-time">${escapeHtml(time)}</span>
+        <span class="history-event-actor">${escapeHtml(actor)}</span>
+      </div>
+      <div class="history-event-description">${summary}</div>
+      ${details ? `<div class="history-event-details">${details}</div>` : ""}
+    </div>
+  `;
+}
+
+function renderHistoryDetails(event: HistoryEvent): string | null {
+  const details = event.details;
+  if (!details) return null;
+  const pieces: string[] = [];
+  const target = details.targetName || details.targetKind;
+  if (target) {
+    pieces.push(`<strong>${escapeHtml(target)}</strong>`);
+  }
+  if (details.changes && details.changes.length) {
+    const changeText = details.changes
+      .map(change => {
+        const from = change.from != null ? escapeHtml(String(change.from)) : "—";
+        const to = change.to != null ? escapeHtml(String(change.to)) : "—";
+        return `${escapeHtml(change.field)} ${from} → ${to}`;
+      })
+      .join(", ");
+    if (changeText) pieces.push(changeText);
+  }
+  if (pieces.length <= 1) return null;
+  return `<span class="history-inline">${pieces.join(" · ")}</span>`;
 }
 
 function drawAssets() {
@@ -3235,6 +3322,9 @@ function connect() {
           tokens.set(t.id, t);
           if (t.owner === playerId) { myTokenId = t.id; levelId = t.levelId; }
         }
+        if (Array.isArray(msg.history)) {
+          setHistoryEvents(msg.history);
+        }
         // receive assets
         assets.clear();
         console.log(`[CLIENT] Receiving snapshot with ${((msg.snapshot as any).assets ?? []).length} assets`);
@@ -3505,6 +3595,24 @@ function connect() {
           currentLocation.name = newName;
           setMapName(newName);
           hudToast(`Map renamed to: ${newName}`);
+        }
+      } else if (msg.t === "historySnapshot") {
+        setHistoryEvents(msg.events);
+      } else if (msg.t === "historyEvent") {
+        appendHistoryEvent(msg.event);
+      } else if ((msg as any).t === "historyRemoved") {
+        const ids = Array.isArray((msg as any).eventIds) ? (msg as any).eventIds as string[] : [];
+        if (ids.length > 0) {
+          historyEvents = historyEvents.filter(ev => !ids.includes(ev.id));
+          renderRightPanel();
+        }
+      } else if ((msg as any).t === "historyAdded") {
+        const events = Array.isArray((msg as any).events) ? (msg as any).events as HistoryEvent[] : [];
+        if (events.length > 0) {
+          const seen = new Set(historyEvents.map(ev => ev.id));
+          const filtered = events.filter(ev => !seen.has(ev.id));
+          historyEvents = [...filtered, ...historyEvents].slice(0, HISTORY_EVENT_LIMIT);
+          renderRightPanel();
         }
       } else if (msg.t === "undoRedoState") {
         console.log(`[CLIENT] Received undoRedoState:`, (msg as any).undoStack.length, (msg as any).redoStack.length);

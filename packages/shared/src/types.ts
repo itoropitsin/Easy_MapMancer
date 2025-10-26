@@ -110,6 +110,7 @@ export interface ActionSnapshot {
   beforeState: Partial<GameSnapshot>;
   afterState: Partial<GameSnapshot>;
   description: string;
+  historyEvents?: HistoryEvent[];
 }
 
 export interface UndoRedoState {

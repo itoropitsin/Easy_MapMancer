@@ -156,6 +156,7 @@ interface GameState {
   undoRedo: UndoRedoState;
   commands: Command[]; // New command-based undo/redo
   history: HistoryEvent[];
+  historyByAction: Map<string, HistoryEvent[]>;
 }
 
 const DEFAULT_FLOOR_KIND: FloorKind = "stone";
@@ -224,7 +225,8 @@ const state: GameState = {
     maxStackSize: 50
   },
   commands: [],
-  history: []
+  history: [],
+  historyByAction: new Map()
 };
 
 ensureDefaultFloorsForAllLevels();
@@ -512,6 +514,18 @@ function recordHistoryEvent(
   if (state.history.length > MAX_HISTORY_EVENTS) {
     state.history.splice(0, state.history.length - MAX_HISTORY_EVENTS);
   }
+  if (info.actionId) {
+    let arr = state.historyByAction.get(info.actionId);
+    if (!arr) {
+      arr = [];
+      state.historyByAction.set(info.actionId, arr);
+    }
+    arr.push(event);
+    const actionRecord = state.undoRedo.undoStack.find(a => a.id === info.actionId) || state.undoRedo.redoStack.find(a => a.id === info.actionId);
+    if (actionRecord) {
+      actionRecord.historyEvents = actionRecord.historyEvents ? [...actionRecord.historyEvents, event] : [event];
+    }
+  }
   broadcastHistoryEvent(event);
   return event;
 }
@@ -600,96 +614,100 @@ function pushToUndoStack(action: ActionSnapshot) {
 
 function performUndo(): boolean {
   const { undoRedo } = state;
-  
+
   console.log(`[SERVER] performUndo called, stack size: ${undoRedo.undoStack.length}`);
-  
+
   if (undoRedo.undoStack.length === 0) {
     console.log(`[SERVER] performUndo: no actions to undo`);
     return false;
   }
-  
+
   const action = undoRedo.undoStack.pop()!;
   console.log(`[SERVER] performUndo: undoing action: ${action.description}`);
-  
+
   // Apply the before state
   applySnapshot(action.beforeState as GameSnapshot);
-  
+
   // Move to redo stack
   undoRedo.redoStack.push(action);
-  
+
+  // Remove associated history events
+  const removedEvents = state.historyByAction.get(action.id) ?? action.historyEvents ?? [];
+  if (removedEvents.length > 0) {
+    const removedIds = new Set(removedEvents.map(ev => ev.id));
+    state.history = state.history.filter(ev => !removedIds.has(ev.id));
+    state.historyByAction.delete(action.id);
+    for (const client of state.clients.values()) {
+      if (client.role === "DM") {
+        send(client.socket, { t: "historyRemoved", eventIds: Array.from(removedIds) });
+      }
+    }
+  }
+
   // Send events for all updated objects
   const events: Event[] = [];
-  
-  // Send asset updates for all assets
   for (const asset of state.assets.values()) {
     events.push({ type: "assetUpdated", asset } as any);
   }
-  
-  // Send token updates for all tokens
   for (const token of state.tokens.values()) {
     events.push({ type: "tokenUpdated", token } as any);
   }
-  
-  // Notify clients
+
   broadcastUndoRedoState();
   broadcast([{ type: "undoPerformed", actionId: action.id } as any]);
   if (events.length > 0) {
     broadcast(events);
   }
-  
-  // Send game state restored event to refresh client display
-  console.log(`[SERVER] Sending gameStateRestored to ${state.clients.size} clients after undo`);
-  for (const client of state.clients.values()) {
-    console.log(`[SERVER] Sending gameStateRestored to client ${client.id}`);
-    send(client.socket, { t: "gameStateRestored" });
-  }
-  
+
   console.log(`[SERVER] performUndo: completed, redo stack size: ${undoRedo.redoStack.length}`);
   return true;
 }
 
 function performRedo(): boolean {
   const { undoRedo } = state;
-  
+
   if (undoRedo.redoStack.length === 0) {
     return false;
   }
-  
+
   const action = undoRedo.redoStack.pop()!;
-  
-  // Apply the after state
+  console.log(`[SERVER] performRedo: redoing action: ${action.description}`);
+
   applySnapshot(action.afterState as GameSnapshot);
-  
-  // Move back to undo stack
   undoRedo.undoStack.push(action);
-  
-  // Send events for all updated objects
+
   const events: Event[] = [];
-  
-  // Send asset updates for all assets
   for (const asset of state.assets.values()) {
     events.push({ type: "assetUpdated", asset } as any);
   }
-  
-  // Send token updates for all tokens
   for (const token of state.tokens.values()) {
     events.push({ type: "tokenUpdated", token } as any);
   }
-  
-  // Notify clients
+
+  const replayEvents = state.historyByAction.get(action.id) ?? action.historyEvents ?? [];
+  let historyAdded: HistoryEvent[] | undefined;
+  if (replayEvents.length > 0) {
+    const existingIds = new Set(state.history.map(ev => ev.id));
+    historyAdded = replayEvents
+      .filter(ev => !existingIds.has(ev.id))
+      .map(ev => ({ ...ev, timestamp: Date.now() }));
+    if (historyAdded.length > 0) {
+      state.history = [...historyAdded, ...state.history].slice(0, MAX_HISTORY_EVENTS);
+      state.historyByAction.set(action.id, historyAdded);
+      for (const client of state.clients.values()) {
+        if (client.role === "DM") {
+          send(client.socket, { t: "historyAdded", events: historyAdded });
+        }
+      }
+    }
+  }
+
   broadcastUndoRedoState();
   broadcast([{ type: "redoPerformed", actionId: action.id } as any]);
   if (events.length > 0) {
     broadcast(events);
   }
-  
-  // Send game state restored event to refresh client display
-  console.log(`[SERVER] Sending gameStateRestored to ${state.clients.size} clients after redo`);
-  for (const client of state.clients.values()) {
-    console.log(`[SERVER] Sending gameStateRestored to client ${client.id}`);
-    send(client.socket, { t: "gameStateRestored" });
-  }
-  
+
   return true;
 }
 
@@ -842,7 +860,7 @@ function onMessage(client: ClientRec, data: any) {
       pushToUndoStack(action);
       const tokenLabel = describeToken(t);
       const tokenDisplay = tokenLabel.startsWith("Token ") ? tokenLabel : `"${tokenLabel}"`;
-      recordHistoryEvent(client, {
+      const history = recordHistoryEvent(client, {
         actionType: action.actionType,
         description: `Created ${kind === "npc" ? "NPC" : "player"} ${tokenDisplay} at ${formatCoords(pos)}`,
         actionId: action.id,
@@ -855,6 +873,7 @@ function onMessage(client: ClientRec, data: any) {
           to: { levelId: t.levelId, pos: { ...t.pos } }
         }
       });
+      action.historyEvents = action.historyEvents ? [...action.historyEvents, history] : [history];
       
       broadcast([{ type: "tokenSpawned", token: t } as any]);
       persistIfAutosave();
@@ -916,7 +935,7 @@ function onMessage(client: ClientRec, data: any) {
         const description = movedBetweenLevels
           ? `Moved ${tokenDisplay} from ${previousLevel} ${formatCoords(previousPos)} to ${tok.levelId} ${formatCoords(pos)}`
           : `Moved ${tokenDisplay} from ${formatCoords(previousPos)} to ${formatCoords(pos)}`;
-        recordHistoryEvent(client, {
+        const history = recordHistoryEvent(client, {
           actionType: "moveToken",
           description,
           actionId: undoActionId,
@@ -930,6 +949,12 @@ function onMessage(client: ClientRec, data: any) {
             to: { levelId: tok.levelId, pos: { ...pos } }
           }
         });
+        if (undoActionId) {
+          const undoAction = state.undoRedo.undoStack.find(a => a.id === undoActionId);
+          if (undoAction) {
+            undoAction.historyEvents = undoAction.historyEvents ? [...undoAction.historyEvents, history] : [history];
+          }
+        }
       }
       
       broadcast(events);
@@ -1377,7 +1402,7 @@ function onMessage(client: ClientRec, data: any) {
       );
       pushToUndoStack(action);
       const assetLabel = describeAsset(asset);
-      recordHistoryEvent(client, {
+      const history = recordHistoryEvent(client, {
         actionType: action.actionType,
         description: `Placed ${assetLabel} at ${formatCoords({ x: gx, y: gy })}`,
         actionId: action.id,
@@ -1390,6 +1415,7 @@ function onMessage(client: ClientRec, data: any) {
           to: { levelId: asset.levelId, pos: { ...asset.pos } }
         }
       });
+      action.historyEvents = action.historyEvents ? [...action.historyEvents, history] : [history];
       
       broadcast([{ type: "assetPlaced", asset } as any]);
       persistIfAutosave();
