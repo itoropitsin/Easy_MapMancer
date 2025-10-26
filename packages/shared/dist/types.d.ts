@@ -151,6 +151,43 @@ export interface UndoRedoState {
     redoStack: ActionSnapshot[];
     maxStackSize: number;
 }
+export interface HistoryEventChange {
+    field: string;
+    from?: number | string | boolean | null;
+    to?: number | string | boolean | null;
+}
+export interface HistoryEventDetails {
+    targetType?: "token" | "asset" | "location";
+    targetId?: ID;
+    targetName?: string;
+    targetKind?: string;
+    targets?: Array<{
+        id: ID;
+        name?: string;
+        kind?: string;
+    }>;
+    levelId?: ID;
+    from?: {
+        pos?: Vec2;
+        levelId?: ID;
+    };
+    to?: {
+        pos?: Vec2;
+        levelId?: ID;
+    };
+    changes?: HistoryEventChange[];
+}
+export interface HistoryEvent {
+    id: string;
+    timestamp: number;
+    actionType: string;
+    description: string;
+    actorId?: ID | null;
+    actorName?: string;
+    actorRole?: Role;
+    actionId?: string;
+    details?: HistoryEventDetails;
+}
 export interface LoginRequest {
     usernameOrEmail: string;
     password: string;

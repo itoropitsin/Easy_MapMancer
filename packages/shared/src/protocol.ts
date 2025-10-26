@@ -1,4 +1,4 @@
-import type { ID, Vec2, Role, GameSnapshot, FloorKind, LocationTreeNode, Token, FogMode, ActionSnapshot, LoginRequest, CreateUserRequest, ChangePasswordRequest } from "./types";
+import type { ID, Vec2, Role, GameSnapshot, FloorKind, LocationTreeNode, Token, FogMode, ActionSnapshot, LoginRequest, CreateUserRequest, ChangePasswordRequest, HistoryEvent } from "./types";
 
 export type ClientToServer =
   | { t: "join"; name?: string; invite?: string; preferredRole?: Role }
@@ -50,7 +50,7 @@ export type ClientToServer =
   | { t: "changeOwnPassword"; data: ChangePasswordRequest };
 
 export type ServerToClient =
-  | { t: "welcome"; playerId: ID; role: Role; snapshot: GameSnapshot }
+  | { t: "welcome"; playerId: ID; role: Role; snapshot: GameSnapshot; history?: HistoryEvent[] }
   | { t: "pong" }
   | { t: "statePatch"; events: any[] }
   | { t: "saveData"; snapshot: GameSnapshot }
@@ -63,6 +63,8 @@ export type ServerToClient =
   | { t: "locationRenamed"; newName: string }
   | { t: "undoRedoState"; undoStack: ActionSnapshot[]; redoStack: ActionSnapshot[] }
   | { t: "gameStateRestored" }
+  | { t: "historySnapshot"; events: HistoryEvent[] }
+  | { t: "historyEvent"; event: HistoryEvent }
   // User authentication responses
   | { t: "loginResponse"; success: boolean; user?: any; token?: string; error?: string }
   | { t: "resumeSessionResponse"; success: boolean; user?: any; token?: string; error?: string }

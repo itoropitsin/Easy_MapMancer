@@ -704,6 +704,48 @@
         letter-spacing: 0.01em;
       }
 
+      .char-tabs {
+        display: flex;
+        gap: 8px;
+        padding: 4px;
+        border-radius: 16px;
+        background: rgba(255, 255, 255, 0.03);
+        border: 1px solid rgba(255, 255, 255, 0.04);
+      }
+
+      .char-tab-btn {
+        flex: 1;
+        border: none;
+        background: transparent;
+        color: var(--text-muted);
+        font-weight: 600;
+        font-size: 10px;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        padding: 6px 10px;
+        border-radius: 12px;
+        cursor: pointer;
+        transition: background 0.2s ease, color 0.2s ease, transform 0.2s ease;
+      }
+
+      .char-tab-btn:hover {
+        background: rgba(255, 255, 255, 0.05);
+        color: #e8eaed;
+      }
+
+      .char-tab-btn.active {
+        background: rgba(255, 255, 255, 0.1);
+        color: #e8eaed;
+        transform: translateY(-1px);
+        box-shadow: 0 6px 16px rgba(0, 0, 0, 0.18);
+      }
+
+      .char-tab-content {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+
       .char-section {
         display: flex;
         flex-direction: column;
@@ -755,6 +797,95 @@
         max-width: 100%;
         justify-self: center;
         min-width: 0;
+      }
+
+      .history-scroll {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+
+      .history-list {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+
+      .history-item {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        padding: 10px 12px;
+        border-radius: 14px;
+        background: rgba(255, 255, 255, 0.03);
+        border: 1px solid rgba(255, 255, 255, 0.05);
+      }
+
+      .history-item-header {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 8px;
+      }
+
+      .history-item-actor-group {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+
+      .history-item-actor {
+        font-weight: 600;
+        font-size: 12px;
+        color: #e8eaed;
+      }
+
+      .history-role {
+        font-size: 9px;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        padding: 2px 6px;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.12);
+        color: rgba(255, 255, 255, 0.9);
+      }
+
+      .history-role--dm {
+        background: rgba(96, 165, 250, 0.18);
+        color: #bfdbfe;
+      }
+
+      .history-role--player {
+        background: rgba(134, 239, 172, 0.18);
+        color: #bbf7d0;
+      }
+
+      .history-item-time {
+        font-size: 10px;
+        color: var(--text-muted);
+      }
+
+      .history-item-description {
+        font-size: 12px;
+        line-height: 1.35;
+        color: #e8eaed;
+      }
+
+      .history-item-meta {
+        font-size: 10px;
+        color: var(--text-muted);
+      }
+
+      .history-empty {
+        padding: 12px;
+        border-radius: 14px;
+        border: 1px dashed rgba(255, 255, 255, 0.08);
+        background: rgba(255, 255, 255, 0.02);
+        color: var(--text-muted);
+        font-size: 12px;
       }
 
       .char-icon {
@@ -2024,7 +2155,7 @@
         margin: 0;
       }
     </style>
-    <script type="module" crossorigin src="/assets/index-DvdwuN6A.js"></script>
+    <script type="module" crossorigin src="/assets/index-Bl_rSpGy.js"></script>
   </head>
   <body>
     <!-- First User Setup Screen -->

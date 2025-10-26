@@ -1,4 +1,4 @@
-import type { ID, Vec2, Role, GameSnapshot, FloorKind, LocationTreeNode, Token, FogMode, ActionSnapshot, LoginRequest, CreateUserRequest, ChangePasswordRequest } from "./types";
+import type { ID, Vec2, Role, GameSnapshot, FloorKind, LocationTreeNode, Token, FogMode, ActionSnapshot, LoginRequest, CreateUserRequest, ChangePasswordRequest, HistoryEvent } from "./types";
 export type ClientToServer = {
     t: "join";
     name?: string;
@@ -153,6 +153,7 @@ export type ServerToClient = {
     playerId: ID;
     role: Role;
     snapshot: GameSnapshot;
+    history?: HistoryEvent[];
 } | {
     t: "pong";
 } | {
@@ -186,6 +187,12 @@ export type ServerToClient = {
     redoStack: ActionSnapshot[];
 } | {
     t: "gameStateRestored";
+} | {
+    t: "historySnapshot";
+    events: HistoryEvent[];
+} | {
+    t: "historyEvent";
+    event: HistoryEvent;
 } | {
     t: "loginResponse";
     success: boolean;

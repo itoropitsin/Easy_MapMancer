@@ -7,7 +7,7 @@ import { WebSocketServer } from "ws";
 import type { Server as HTTPServer } from "node:http";
 import type { IncomingMessage } from "node:http";
 import type { ServerResponse } from "node:http";
-import type { ServerToClient, ClientToServer, Location, Level, Token, Vec2, Role, ID, Event, Asset, FloorKind, LocationTreeNode, GameSnapshot, FogMode, ActionSnapshot, UndoRedoState } from "@dnd/shared";
+import type { ServerToClient, ClientToServer, Location, Level, Token, Vec2, Role, ID, Event, Asset, FloorKind, LocationTreeNode, GameSnapshot, FogMode, ActionSnapshot, UndoRedoState, HistoryEvent, HistoryEventDetails, HistoryEventChange } from "@dnd/shared";
 import { UserManager } from "./user-manager.js";
 
 const PORT = Number(process.env.PORT || 8080);
@@ -54,19 +54,19 @@ function applySnapshot(snap: GameSnapshot) {
   const loc = payload.location;
   // replace state with defensive defaults so legacy saves still load
   state.location = (loc && typeof loc === "object" && Array.isArray((loc as any).levels))
-    ? (loc as Location)
+    ? deepCopy(loc as Location)
     : makeDefaultLocation();
   state.tokens.clear();
   const tokens = Array.isArray(payload.tokens) ? (payload.tokens as Token[]) : [];
   for (const t of tokens) {
     if (!t || !t.id) continue;
-    state.tokens.set(t.id, t);
+    state.tokens.set(t.id, deepCopy(t));
   }
   state.assets.clear();
   const assets = Array.isArray(payload.assets) ? (payload.assets as Asset[]) : [];
   for (const a of assets) {
     if (!a || !a.id) continue;
-    state.assets.set(a.id, a);
+    state.assets.set(a.id, deepCopy(a));
   }
   console.log(`[SERVER] applySnapshot: clearing fog, current fog levels: ${state.fog.size}`);
   state.fog.clear();
@@ -155,6 +155,7 @@ interface GameState {
   floors: Map<ID, Map<string, FloorKind>>; // levelId -> ("x,y" -> kind)
   undoRedo: UndoRedoState;
   commands: Command[]; // New command-based undo/redo
+  history: HistoryEvent[];
 }
 
 const DEFAULT_FLOOR_KIND: FloorKind = "stone";
@@ -205,6 +206,11 @@ function makeDefaultLocation(): Location {
   };
 }
 
+function deepCopy<T>(value: T): T {
+  if (value === null || value === undefined) return value;
+  return JSON.parse(JSON.stringify(value)) as T;
+}
+
 const state: GameState = {
   location: makeDefaultLocation(),
   tokens: new Map(),
@@ -217,7 +223,8 @@ const state: GameState = {
     redoStack: [],
     maxStackSize: 50
   },
-  commands: []
+  commands: [],
+  history: []
 };
 
 ensureDefaultFloorsForAllLevels();
@@ -234,6 +241,7 @@ const MAX_MEMORY_MB = 1000; // Maximum memory usage before cleanup
 const FOG_CELL_LIMIT = 5000; // Maximum fog cells per level
 const MAX_MESSAGE_SIZE = 1024 * 1024; // 1MB max message size
 const MAX_CLIENTS = 50; // Maximum number of concurrent clients
+const MAX_HISTORY_EVENTS = 200; // Maximum number of history events to retain
 
 function checkMemoryAndCleanup() {
   const memUsage = process.memoryUsage();
@@ -444,6 +452,75 @@ function broadcast(events: Event[]) {
   }
 }
 
+function getClientDisplayName(client: ClientRec | null | undefined): string {
+  if (!client) return "System";
+  if (client.user?.username) return client.user.username;
+  return client.role === "DM" ? "DM" : "Player";
+}
+
+function broadcastHistoryEvent(event: HistoryEvent) {
+  for (const c of state.clients.values()) {
+    if (c.role === "DM") {
+      send(c.socket, { t: "historyEvent", event });
+    }
+  }
+}
+
+function recordHistoryEvent(
+  client: ClientRec | null,
+  info: {
+    actionType: string;
+    description: string;
+    details?: HistoryEventDetails;
+    actionId?: string;
+    actorId?: ID | null;
+    actorName?: string;
+    actorRole?: Role;
+  }
+): HistoryEvent {
+  const details = info.details
+    ? {
+        ...info.details,
+        from: info.details.from
+          ? {
+              ...info.details.from,
+              pos: info.details.from.pos ? { ...info.details.from.pos } : undefined
+            }
+          : undefined,
+        to: info.details.to
+          ? {
+              ...info.details.to,
+              pos: info.details.to.pos ? { ...info.details.to.pos } : undefined
+            }
+          : undefined,
+        changes: info.details.changes ? info.details.changes.map(c => ({ ...c })) : undefined,
+        targets: info.details.targets ? info.details.targets.map(t => ({ ...t })) : undefined
+      }
+    : undefined;
+  const event: HistoryEvent = {
+    id: randomUUID(),
+    timestamp: Date.now(),
+    actionType: info.actionType,
+    description: info.description,
+    actorId: info.actorId ?? client?.user?.id ?? client?.id ?? null,
+    actorName: info.actorName ?? getClientDisplayName(client),
+    actorRole: info.actorRole ?? client?.role,
+    actionId: info.actionId,
+    details
+  };
+  state.history.push(event);
+  if (state.history.length > MAX_HISTORY_EVENTS) {
+    state.history.splice(0, state.history.length - MAX_HISTORY_EVENTS);
+  }
+  broadcastHistoryEvent(event);
+  return event;
+}
+
+function sendHistorySnapshot(client: ClientRec) {
+  if (client.role !== "DM") return;
+  send(client.socket, { t: "historySnapshot", events: state.history });
+}
+
 // Undo/Redo system functions
 function createGameSnapshot(): GameSnapshot {
   const floors: { levelId: ID; pos: Vec2; kind: FloorKind }[] = [];
@@ -479,9 +556,9 @@ function createGameSnapshot(): GameSnapshot {
   }
   
   return {
-    location: state.location,
-    tokens: Array.from(state.tokens.values()),
-    assets: Array.from(state.assets.values()),
+    location: deepCopy(state.location),
+    tokens: Array.from(state.tokens.values()).map((tok) => deepCopy(tok)),
+    assets: Array.from(state.assets.values()).map((asset) => deepCopy(asset)),
     floors,
     events
   };
@@ -689,8 +766,12 @@ function onMessage(client: ClientRec, data: any) {
       // Handle role preference from client
       const preferredRole = (msg as any).preferredRole;
       if (preferredRole === "DM" || preferredRole === "PLAYER") {
+        const prevRole = client.role;
         client.role = preferredRole;
         console.log(`[SERVER] Client ${client.id} joined with preferred role: ${preferredRole}`);
+        if (client.role === "DM" && prevRole !== "DM") {
+          sendHistorySnapshot(client);
+        }
       }
       break;
     }
@@ -759,6 +840,21 @@ function onMessage(client: ClientRec, data: any) {
         afterState
       );
       pushToUndoStack(action);
+      const tokenLabel = describeToken(t);
+      const tokenDisplay = tokenLabel.startsWith("Token ") ? tokenLabel : `"${tokenLabel}"`;
+      recordHistoryEvent(client, {
+        actionType: action.actionType,
+        description: `Created ${kind === "npc" ? "NPC" : "player"} ${tokenDisplay} at ${formatCoords(pos)}`,
+        actionId: action.id,
+        details: {
+          targetType: "token",
+          targetId: t.id,
+          targetName: tokenLabel,
+          targetKind: kind,
+          levelId: t.levelId,
+          to: { levelId: t.levelId, pos: { ...t.pos } }
+        }
+      });
       
       broadcast([{ type: "tokenSpawned", token: t } as any]);
       persistIfAutosave();
@@ -768,6 +864,8 @@ function onMessage(client: ClientRec, data: any) {
       const tok = state.tokens.get(msg.tokenId);
       if (!tok) return;
       if (client.role !== "DM" && tok.owner !== client.id) return;
+      const previousPos: Vec2 = { x: tok.pos.x, y: tok.pos.y };
+      const previousLevel = tok.levelId;
       
       // Create snapshot before action (only for DM moves)
       const beforeState = client.role === "DM" ? createGameSnapshot() : null;
@@ -799,6 +897,7 @@ function onMessage(client: ClientRec, data: any) {
       }
       
       // Create snapshot after action and push to undo stack (only for DM moves)
+      let undoActionId: string | undefined;
       if (beforeState && client.role === "DM") {
         const afterState = createGameSnapshot();
         const action = createActionSnapshot(
@@ -808,6 +907,29 @@ function onMessage(client: ClientRec, data: any) {
           afterState
         );
         pushToUndoStack(action);
+        undoActionId = action.id;
+      }
+      if (previousPos.x !== pos.x || previousPos.y !== pos.y || previousLevel !== tok.levelId) {
+        const tokenLabel = describeToken(tok);
+        const tokenDisplay = tokenLabel.startsWith("Token ") ? tokenLabel : `"${tokenLabel}"`;
+        const movedBetweenLevels = previousLevel !== tok.levelId;
+        const description = movedBetweenLevels
+          ? `Moved ${tokenDisplay} from ${previousLevel} ${formatCoords(previousPos)} to ${tok.levelId} ${formatCoords(pos)}`
+          : `Moved ${tokenDisplay} from ${formatCoords(previousPos)} to ${formatCoords(pos)}`;
+        recordHistoryEvent(client, {
+          actionType: "moveToken",
+          description,
+          actionId: undoActionId,
+          details: {
+            targetType: "token",
+            targetId: tok.id,
+            targetName: tokenLabel,
+            targetKind: (tok as any).kind,
+            levelId: tok.levelId,
+            from: { levelId: previousLevel, pos: { ...previousPos } },
+            to: { levelId: tok.levelId, pos: { ...pos } }
+          }
+        });
       }
       
       broadcast(events);
@@ -819,6 +941,10 @@ function onMessage(client: ClientRec, data: any) {
       if (!tok) break;
       // Only DM or token owner can update
       if (client.role !== "DM" && tok.owner !== client.id) break;
+      const prevHp = typeof tok.hp === "number" ? tok.hp : null;
+      const prevAc = typeof tok.ac === "number" ? tok.ac : null;
+      const prevStats = tok.stats ? { ...tok.stats } : undefined;
+      const prevDead = Boolean((tok as any).dead);
       const patch = msg.patch as Partial<Token>;
       // Apply whitelisted fields
       if (typeof patch.name === "string") tok.name = String(patch.name).slice(0, 64);
@@ -851,6 +977,60 @@ function onMessage(client: ClientRec, data: any) {
         (tok as any).icon = (patch as any).icon;
       }
       state.tokens.set(tok.id, tok);
+      const tokenLabel = describeToken(tok);
+      const tokenDisplay = tokenLabel.startsWith("Token ") ? tokenLabel : `"${tokenLabel}"`;
+      const fieldChanges: HistoryEventChange[] = [];
+      const descriptionParts: string[] = [];
+      if (typeof patch.hp === "number" && tok.hp !== prevHp) {
+        fieldChanges.push({ field: "hp", from: prevHp, to: tok.hp });
+        descriptionParts.push(`HP ${prevHp ?? "—"} → ${tok.hp ?? "—"}`);
+      }
+      if (typeof patch.ac === "number" && tok.ac !== prevAc) {
+        fieldChanges.push({ field: "ac", from: prevAc, to: tok.ac });
+        descriptionParts.push(`AC ${prevAc ?? "—"} → ${tok.ac ?? "—"}`);
+      }
+      if (patch.stats && typeof patch.stats === "object") {
+        for (const [key, value] of Object.entries(patch.stats)) {
+          if (typeof value !== "number") continue;
+          const statKey = key as keyof NonNullable<Token["stats"]>;
+          const beforeValue = prevStats ? (prevStats as any)[statKey] : undefined;
+          const afterValue = tok.stats ? (tok.stats as any)[statKey] : undefined;
+          if (beforeValue === afterValue) continue;
+          const label = key.toUpperCase();
+          fieldChanges.push({ field: `stats.${key}`, from: beforeValue ?? null, to: afterValue ?? null });
+          descriptionParts.push(`${label} ${beforeValue ?? "—"} → ${afterValue ?? "—"}`);
+        }
+      }
+      const deadPatched = typeof (patch as any).dead === "boolean";
+      const currentDead = Boolean((tok as any).dead);
+      const deadChanged = deadPatched && currentDead !== prevDead;
+      if (deadChanged) {
+        fieldChanges.push({ field: "dead", from: prevDead, to: currentDead });
+      }
+      if (descriptionParts.length > 0 || deadChanged) {
+        let description: string;
+        if (deadChanged && descriptionParts.length === 0) {
+          description = currentDead ? `Marked ${tokenDisplay} as dead` : `Marked ${tokenDisplay} as alive`;
+        } else {
+          const summary = descriptionParts.join(", ");
+          description = `Updated ${tokenDisplay}: ${summary}`;
+          if (deadChanged) {
+            description += currentDead ? ", marked as dead" : ", marked as alive";
+          }
+        }
+        recordHistoryEvent(client, {
+          actionType: "updateToken",
+          description,
+          details: {
+            targetType: "token",
+            targetId: tok.id,
+            targetName: tokenLabel,
+            targetKind: (tok as any).kind,
+            levelId: tok.levelId,
+            changes: fieldChanges.length > 0 ? fieldChanges : undefined
+          }
+        });
+      }
       broadcast([{ type: "tokenUpdated", token: tok } as any]);
       persistIfAutosave();
       break;
@@ -1196,6 +1376,20 @@ function onMessage(client: ClientRec, data: any) {
         afterState
       );
       pushToUndoStack(action);
+      const assetLabel = describeAsset(asset);
+      recordHistoryEvent(client, {
+        actionType: action.actionType,
+        description: `Placed ${assetLabel} at ${formatCoords({ x: gx, y: gy })}`,
+        actionId: action.id,
+        details: {
+          targetType: "asset",
+          targetId: asset.id,
+          targetName: assetLabel,
+          targetKind: asset.kind,
+          levelId: asset.levelId,
+          to: { levelId: asset.levelId, pos: { ...asset.pos } }
+        }
+      });
       
       broadcast([{ type: "assetPlaced", asset } as any]);
       persistIfAutosave();
@@ -1213,6 +1407,8 @@ function onMessage(client: ClientRec, data: any) {
         console.log(`[SERVER] moveAsset rejected: asset not found`);
         break;
       }
+      const previousPos: Vec2 = { x: asset.pos.x, y: asset.pos.y };
+      const previousLevel = asset.levelId;
       
       // Create snapshot before action
       const beforeState = createGameSnapshot();
@@ -1237,6 +1433,27 @@ function onMessage(client: ClientRec, data: any) {
         afterState
       );
       pushToUndoStack(action);
+      if (previousPos.x !== gx || previousPos.y !== gy || previousLevel !== asset.levelId) {
+        const assetLabel = describeAsset(asset);
+        const movedBetweenLevels = previousLevel !== asset.levelId;
+        const description = movedBetweenLevels
+          ? `Moved ${assetLabel} from ${previousLevel} ${formatCoords(previousPos)} to ${asset.levelId} ${formatCoords({ x: gx, y: gy })}`
+          : `Moved ${assetLabel} from ${formatCoords(previousPos)} to ${formatCoords({ x: gx, y: gy })}`;
+        recordHistoryEvent(client, {
+          actionType: action.actionType,
+          description,
+          actionId: action.id,
+          details: {
+            targetType: "asset",
+            targetId: asset.id,
+            targetName: assetLabel,
+            targetKind: asset.kind,
+            levelId: asset.levelId,
+            from: { levelId: previousLevel, pos: { ...previousPos } },
+            to: { levelId: asset.levelId, pos: { ...asset.pos } }
+          }
+        });
+      }
       
       broadcast([{ type: "assetUpdated", asset } as any]);
       console.log(`[SERVER] Asset ${asset.id} moved to (${gx}, ${gy})`);
@@ -1251,14 +1468,14 @@ function onMessage(client: ClientRec, data: any) {
       // Create snapshot before action
       const beforeState = createGameSnapshot();
       
-      const removed: ID[] = [];
+      const removedAssets: Array<{ id: ID; kind: string; levelId: ID; pos: Vec2 }> = [];
       for (const [id, a] of state.assets.entries()) {
         if (a.levelId === msg.levelId && a.pos.x === gx && a.pos.y === gy) {
           state.assets.delete(id);
-          removed.push(id);
+          removedAssets.push({ id, kind: a.kind, levelId: a.levelId, pos: { x: a.pos.x, y: a.pos.y } });
         }
       }
-      if (removed.length === 0) return;
+      if (removedAssets.length === 0) return;
       
       // Create snapshot after action and push to undo stack
       const afterState = createGameSnapshot();
@@ -1270,7 +1487,26 @@ function onMessage(client: ClientRec, data: any) {
       );
       pushToUndoStack(action);
       
-      broadcast(removed.map((id) => ({ type: "assetRemoved", assetId: id } as any)));
+      const removedIds = removedAssets.map((a) => a.id);
+      broadcast(removedIds.map((id) => ({ type: "assetRemoved", assetId: id } as any)));
+      const firstAssetKind = removedAssets[0].kind || "asset";
+      const description = removedAssets.length === 1
+        ? `Removed ${firstAssetKind} at ${formatCoords({ x: gx, y: gy })}`
+        : `Removed ${removedAssets.length} assets at ${formatCoords({ x: gx, y: gy })}`;
+      recordHistoryEvent(client, {
+        actionType: action.actionType,
+        description,
+        actionId: action.id,
+        details: {
+          targetType: "asset",
+          levelId: msg.levelId,
+          from: { levelId: msg.levelId, pos: { x: gx, y: gy } },
+          targetId: removedAssets.length === 1 ? removedAssets[0].id : undefined,
+          targetKind: removedAssets.length === 1 ? removedAssets[0].kind : undefined,
+          targetName: removedAssets.length === 1 ? firstAssetKind : undefined,
+          targets: removedAssets.map((a) => ({ id: a.id, kind: a.kind, name: a.kind }))
+        }
+      });
       persistIfAutosave();
       break;
     }
@@ -1278,15 +1514,39 @@ function onMessage(client: ClientRec, data: any) {
       if (client.role !== "DM") return;
       const gx = Math.floor((msg as any).pos.x);
       const gy = Math.floor((msg as any).pos.y);
-      const removed: ID[] = [];
+      const removedTokens: Array<{ id: ID; name: string; kind?: string; levelId: ID; pos: Vec2 }> = [];
       for (const [id, t] of state.tokens.entries()) {
         if (t.levelId === (msg as any).levelId && t.pos.x === gx && t.pos.y === gy) {
           state.tokens.delete(id);
-          removed.push(id);
+          removedTokens.push({
+            id,
+            name: describeToken(t),
+            kind: (t as any).kind,
+            levelId: t.levelId,
+            pos: { x: t.pos.x, y: t.pos.y }
+          });
         }
       }
-      if (removed.length === 0) return;
-      broadcast(removed.map((id) => ({ type: "tokenRemoved", tokenId: id } as any)));
+      if (removedTokens.length === 0) return;
+      const removedIds = removedTokens.map((t) => t.id);
+      broadcast(removedIds.map((id) => ({ type: "tokenRemoved", tokenId: id } as any)));
+      const tokenList = removedTokens.map((t) => (t.name.startsWith("Token ") ? t.name : `"${t.name}"`)).join(", ");
+      const description = removedTokens.length === 1
+        ? `Removed ${tokenList} at ${formatCoords({ x: gx, y: gy })}`
+        : `Removed ${removedTokens.length} tokens at ${formatCoords({ x: gx, y: gy })}: ${tokenList}`;
+      recordHistoryEvent(client, {
+        actionType: "removeTokenAt",
+        description,
+        details: {
+          targetType: "token",
+          targetId: removedTokens.length === 1 ? removedTokens[0].id : undefined,
+          targetName: removedTokens.length === 1 ? removedTokens[0].name : undefined,
+          targetKind: removedTokens.length === 1 ? removedTokens[0].kind : undefined,
+          levelId: (msg as any).levelId,
+          from: { levelId: (msg as any).levelId, pos: { x: gx, y: gy } },
+          targets: removedTokens.map((t) => ({ id: t.id, name: t.name, kind: t.kind }))
+        }
+      });
       persistIfAutosave();
       break;
     }
@@ -1788,9 +2048,13 @@ function onMessage(client: ClientRec, data: any) {
       // Allow role switching for any client
       const newRole = (msg as any).role;
       if (newRole === "DM" || newRole === "PLAYER") {
+        const prevRole = client.role;
         client.role = newRole;
         send(client.socket, { t: "roleChanged", role: newRole });
         console.log(`[SERVER] Client ${client.id} switched role to ${newRole}`);
+        if (client.role === "DM" && prevRole !== "DM") {
+          sendHistorySnapshot(client);
+        }
       }
       break;
     }
@@ -1804,6 +2068,9 @@ function onMessage(client: ClientRec, data: any) {
           client.role = result.user.role === 'master' ? 'DM' : 'PLAYER';
           send(client.socket, { t: "loginResponse", success: true, user: result.user, token: result.token });
           console.log(`[SERVER] User ${result.user.username} logged in successfully`);
+          if (client.role === "DM") {
+            sendHistorySnapshot(client);
+          }
         } else {
           send(client.socket, { t: "loginResponse", success: false, error: result.error });
         }
@@ -2072,6 +2339,20 @@ function makeNPCToken(owner: ID, levelId: ID, spawn: Vec2): Token {
   } as any;
 }
 
+function formatCoords(pos: Vec2): string {
+  return `(${Math.round(pos.x)}, ${Math.round(pos.y)})`;
+}
+
+function describeToken(token: Token): string {
+  const name = token.name && token.name.trim().length > 0 ? token.name.trim() : null;
+  return name ? `${name}` : `Token ${token.id}`;
+}
+
+function describeAsset(asset: Asset): string {
+  const kind = asset.kind || "asset";
+  return `${kind}`;
+}
+
 function snapshot(): { snapshot: { location: Location; tokens: Token[]; assets: Asset[]; events: Event[]; floors?: { levelId: ID; pos: Vec2; kind: FloorKind }[] } } {
   ensureDefaultFloorsForAllLevels();
   const events: Event[] = [];
@@ -2092,7 +2373,7 @@ function snapshot(): { snapshot: { location: Location; tokens: Token[]; assets: 
       floorsArr.push({ levelId: lvl, pos: { x: Number(xs), y: Number(ys) }, kind });
     }
   }
-  return { snapshot: { location: state.location, tokens: Array.from(state.tokens.values()), assets: Array.from(state.assets.values()), events, floors: floorsArr } };
+  return { snapshot: { location: deepCopy(state.location), tokens: Array.from(state.tokens.values()).map((tok) => deepCopy(tok)), assets: Array.from(state.assets.values()).map((asset) => deepCopy(asset)), events, floors: floorsArr } };
 }
 
 function onConnection(ws: import("ws").WebSocket, req: IncomingMessage) {
@@ -2122,7 +2403,7 @@ function onConnection(ws: import("ws").WebSocket, req: IncomingMessage) {
   const snap = snapshot();
   console.log(`[SERVER] Sending welcome to ${clientId}, role=${role}, assets count=${snap.snapshot.assets.length}`);
   console.log(`[SERVER] First 5 asset IDs in snapshot:`, snap.snapshot.assets.slice(0, 5).map(a => a.id));
-  send(ws, { t: "welcome", playerId: clientId, role, ...snap });
+  send(ws, { t: "welcome", playerId: clientId, role, ...snap, history: role === "DM" ? state.history : undefined });
   
   // Send initial undo/redo state
   send(ws, { 
