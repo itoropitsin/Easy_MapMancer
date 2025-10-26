@@ -18,7 +18,9 @@ export class UserManager {
   }
 
   needsFirstUser(): boolean {
-    return this.users.size === 0;
+    const result = this.users.size === 0;
+    console.log(`[UserManager] needsFirstUser() called: users.size=${this.users.size}, returning=${result}`);
+    return result;
   }
 
   private normalizeUsername(value: string): string {
@@ -52,31 +54,30 @@ export class UserManager {
 
   private loadUsers(): void {
     try {
-      console.log('Loading users from:', USERS_DB_PATH);
-      console.log('File exists:', fs.existsSync(USERS_DB_PATH));
+      console.log('[UserManager] Loading users from:', USERS_DB_PATH);
+      console.log('[UserManager] File exists:', fs.existsSync(USERS_DB_PATH));
       if (fs.existsSync(USERS_DB_PATH)) {
         const data = fs.readFileSync(USERS_DB_PATH, 'utf8');
-        console.log('Raw file data:', data);
+        console.log('[UserManager] Raw file data:', data);
         const usersArray: User[] = JSON.parse(data);
-        console.log('Parsed users array:', usersArray);
+        console.log('[UserManager] Parsed users array:', usersArray);
         this.users = new Map(usersArray.map(user => [user.id, user]));
-        console.log('Users map size before deduplication:', this.users.size);
+        console.log('[UserManager] Users map size before deduplication:', this.users.size);
         this.deduplicateUsers();
-        console.log('Users map size after deduplication:', this.users.size);
+        console.log('[UserManager] Users map size after deduplication:', this.users.size);
       } else {
-        console.log('Users file does not exist, creating empty database');
+        console.log('[UserManager] Users file does not exist, creating empty database');
         // Create empty users database if it doesn't exist
         this.createEmptyUsersDatabase();
       }
     } catch (error) {
-      console.error('Error loading users:', error);
+      console.error('[UserManager] Error loading users:', error);
       // Create empty database on error
       this.createEmptyUsersDatabase();
     }
   }
 
   private deduplicateUsers(): void {
-    console.log('Starting deduplication with', this.users.size, 'users');
     const byUsername = new Set<string>();
     const byEmail = new Set<string>();
     let changed = false;
@@ -85,9 +86,7 @@ export class UserManager {
       const normalizedEmail = this.normalizeEmail(user.email ?? "");
       const usernameKey = normalizedUsername.toLowerCase();
       const emailKey = normalizedEmail.toLowerCase();
-      console.log(`Checking user ${id}: username="${usernameKey}", email="${emailKey}"`);
       if (byUsername.has(usernameKey) || byEmail.has(emailKey)) {
-        console.log(`Removing duplicate user ${id}`);
         this.users.delete(id);
         changed = true;
         continue;
@@ -97,7 +96,6 @@ export class UserManager {
       byUsername.add(usernameKey);
       byEmail.add(emailKey);
     }
-    console.log('Deduplication complete. Changed:', changed, 'Remaining users:', this.users.size);
     if (changed) {
       this.saveUsers();
     }

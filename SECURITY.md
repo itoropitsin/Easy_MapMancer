@@ -6,6 +6,7 @@ We provide security updates for the following versions:
 
 | Version | Supported          |
 | ------- | ------------------ |
+| 0.2.x   | :white_check_mark: |
 | 0.1.x   | :white_check_mark: |
 | < 0.1   | :x:                |
 
@@ -51,8 +52,8 @@ Send details to: [security@yourdomain.com](mailto:security@yourdomain.com)
 
 ### Data Protection
 
-- **No sensitive data storage**: No passwords or personal information stored
-- **Local data only**: Maps and game data stored locally
+- **Password hashing**: Passwords stored as bcrypt hashes in `packages/server/data/users.json`
+- **Local data**: Maps and user data stored locally on the server
 - **No external services**: No third-party data transmission
 
 ## 🔍 Security Best Practices
@@ -75,15 +76,14 @@ Send details to: [security@yourdomain.com](mailto:security@yourdomain.com)
 
 ### Current Security Limitations
 
-- **No authentication**: Anyone with server access can join games
-- **No encryption**: WebSocket connections are not encrypted by default
-- **File system access**: Server has read/write access to map directory
+- **Optional encryption**: WebSocket connections are not encrypted by default (use reverse proxy + TLS)
+- **File system access**: Server has read/write access to maps and users directories
 - **No rate limiting**: No protection against spam or DoS attacks
 
 ### Planned Security Improvements
 
-- **Authentication system**: User accounts and session management
-- **HTTPS/WSS support**: Encrypted connections
+- **2FA / stronger auth**: Optional two-factor authentication
+- **HTTPS/WSS support**: Built-in TLS or documented reverse proxy
 - **Input rate limiting**: Protection against abuse
 - **Audit logging**: Security event tracking
 

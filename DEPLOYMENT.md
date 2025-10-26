@@ -92,6 +92,15 @@ npm start
    docker run -p 8080:8080 dnd-map-maker
    ```
 
+3. Persist data (maps and users):
+
+```bash
+docker run -p 8080:8080 \
+  -v $(pwd)/data/locations:/app/packages/server/data/locations \
+  -v $(pwd)/data/users.json:/app/packages/server/data/users.json \
+  dnd-map-maker
+```
+
 ### Traditional Server
 
 1. **Install Node.js 18+** on your server
@@ -115,6 +124,8 @@ npm start
    ```bash
    npm start
    ```
+
+7. **Persist data**: Ensure `packages/server/data/locations/` and `packages/server/data/users.json` are on durable storage and backed up.
 
 6. **Configure reverse proxy** (nginx example):
    ```nginx
@@ -140,6 +151,8 @@ npm start
 - `NODE_ENV`: Set to `production` for production builds
 - `PORT`: Server port (default: 8080)
 - `LOCATIONS_DIR`: Directory for map storage (default: `packages/server/data/locations`)
+  
+Note: Users are stored at `packages/server/data/users.json`.
 
 ### Optional Environment Variables
 

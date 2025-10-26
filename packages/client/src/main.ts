@@ -52,8 +52,7 @@ import type {
   AuthState,
   GameSnapshot,
   FogMode,
-  UserRole,
-  HistoryEvent
+  UserRole
 } from "@dnd/shared";
 
 // Small top-level toast helper for reuse outside connect()
@@ -84,17 +83,6 @@ function escapeHtml(value: string | number | null | undefined): string {
       default: return ch;
     }
   });
-}
-
-function formatHistoryTimestamp(value: number): string {
-  const date = new Date(value);
-  try {
-    return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-  } catch {
-    const hh = date.getHours().toString().padStart(2, "0");
-    const mm = date.getMinutes().toString().padStart(2, "0");
-    return `${hh}:${mm}`;
-  }
 }
 
 const CELL = 32;
@@ -134,81 +122,6 @@ function clearPendingTokenMoves() {
   pendingTokenMoves.clear();
 }
 
-function setHistoryEvents(events: HistoryEvent[]) {
-  historyEvents = [...events]
-    .filter((ev): ev is HistoryEvent => !!ev && typeof ev.id === "string")
-    .sort((a, b) => a.timestamp - b.timestamp)
-    .slice(-MAX_HISTORY_EVENTS);
-  if (characterPanelTab === "history" && myRole === "DM") {
-    renderCharacterPanel();
-  }
-}
-
-function pushHistoryEvent(event: HistoryEvent) {
-  if (!event || typeof event.id !== "string") return;
-  const existingIndex = historyEvents.findIndex((ev) => ev.id === event.id);
-  if (existingIndex >= 0) {
-    historyEvents.splice(existingIndex, 1, event);
-  } else {
-    historyEvents.push(event);
-    if (historyEvents.length > MAX_HISTORY_EVENTS) {
-      historyEvents.splice(0, historyEvents.length - MAX_HISTORY_EVENTS);
-    }
-  }
-  historyEvents.sort((a, b) => a.timestamp - b.timestamp);
-  if (characterPanelTab === "history" && myRole === "DM") {
-    renderCharacterPanel();
-  }
-}
-
-function getHistoryActorName(event: HistoryEvent): string {
-  if (event.actorName && event.actorName.trim().length > 0) return event.actorName.trim();
-  if (event.actorRole === "DM") return "DM";
-  if (event.actorRole === "PLAYER") return "Player";
-  return "System";
-}
-
-function buildHistoryPanelMarkup(): string {
-  const header = '<div class="char-header">History</div>';
-  if (historyEvents.length === 0) {
-    return `${header}<div class="history-empty">No activity yet.</div>`;
-  }
-  const items = [...historyEvents].sort((a, b) => b.timestamp - a.timestamp);
-  const list = items.map(renderHistoryEntryMarkup).join("");
-  return `${header}<div class="history-scroll"><ul class="history-list">${list}</ul></div>`;
-}
-
-function renderHistoryEntryMarkup(event: HistoryEvent): string {
-  const actorName = escapeHtml(getHistoryActorName(event));
-  const roleClass = event.actorRole ? ` history-role--${String(event.actorRole).toLowerCase()}` : "";
-  const roleLabel = event.actorRole === "DM" ? "DM" : event.actorRole === "PLAYER" ? "Player" : "";
-  const roleBadge = roleLabel
-    ? `<span class="history-role${roleClass}">${escapeHtml(roleLabel)}</span>`
-    : "";
-  const timestampIso = new Date(event.timestamp).toISOString();
-  const timeLabel = escapeHtml(formatHistoryTimestamp(event.timestamp));
-  const metaParts: string[] = [];
-  if (event.details?.targetName) metaParts.push(event.details.targetName);
-  else if (event.details?.targetKind) metaParts.push(event.details.targetKind);
-  if (event.details?.levelId) metaParts.push(`L${event.details.levelId}`);
-  const meta = metaParts.length > 0
-    ? `<div class="history-item-meta">${metaParts.map((part) => escapeHtml(part)).join(" · ")}</div>`
-    : "";
-  return `
-    <li class="history-item">
-      <div class="history-item-header">
-        <div class="history-item-actor-group">
-          <span class="history-item-actor">${actorName}</span>
-          ${roleBadge}
-        </div>
-        <time class="history-item-time" datetime="${timestampIso}">${timeLabel}</time>
-      </div>
-      <div class="history-item-description">${escapeHtml(event.description)}</div>
-      ${meta}
-    </li>
-  `;
-}
-
 let currentLocation: Location | null = null;
 let currentSeed: string | null = null;
 let myRole: "DM" | "PLAYER" | null = null;
@@ -222,10 +135,6 @@ let selectedTokenId: ID | null = null;
 let selectedAssetKind: string | null = null; // when null, floor tools may be used
 let selectedFloorKind: FloorKind | null = null;
 let selectedTokenKind: "player" | "npc" | null = null;
-let updateEditorUIRef: (() => void) | null = null;
-let historyEvents: HistoryEvent[] = [];
-let characterPanelTab: "sheet" | "history" = "sheet";
-const MAX_HISTORY_EVENTS = 200;
 
 // Authentication state
 let authState: AuthState = { isAuthenticated: false };
@@ -366,6 +275,21 @@ function hideFirstUserError() {
 function setupLoginForm() {
   const loginForm = document.getElementById('login-form') as HTMLFormElement;
   if (!loginForm) return;
+
+  // Setup password visibility toggle
+  const togglePasswordBtn = document.getElementById('toggle-password');
+  const passwordInput = document.getElementById('password') as HTMLInputElement;
+  if (togglePasswordBtn && passwordInput) {
+    togglePasswordBtn.addEventListener('click', () => {
+      if (passwordInput.type === 'password') {
+        passwordInput.type = 'text';
+        togglePasswordBtn.textContent = '🙈';
+      } else {
+        passwordInput.type = 'password';
+        togglePasswordBtn.textContent = '👁️';
+      }
+    });
+  }
 
   loginForm.addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -2377,248 +2301,225 @@ function drawTokens() {
 // Simple character panel renderer. Expects an element with id "right-panel" to exist.
 function renderCharacterPanel() {
   const panel = document.getElementById("right-panel");
-  if (!panel) return;
-  const isDM = myRole === "DM";
+  if (!panel) return; // panel not present in DOM yet
   const tok = selectedTokenId ? tokens.get(selectedTokenId) : null;
-  if (!isDM) {
+  if (!tok) {
     panel.innerHTML = '<div class="char-header">Character sheet</div><div style="opacity:.7">No selected token</div>';
     return;
   }
-  let sheetContent = '<div class="char-header">Character sheet</div><div style="opacity:.7">No selected token</div>';
-  let sheetSetup: ((root: HTMLElement) => void) | null = null;
-  if (tok) {
-    const anyTok: any = tok as any;
-    const stats = anyTok.stats || {};
-    const vr = Math.max(0, Math.min(20, Number(anyTok.vision?.radius ?? 0) || 0));
-    const editable = canControl(tok);
-    const notes = typeof anyTok.notes === "string" ? anyTok.notes : "";
-    const formatNumber = (value: any) => {
-      const n = Number(value);
-      return Number.isFinite(n) ? String(n) : "";
-    };
-    const renderInput = (opts: { id: string; type: string; value: string; placeholder?: string; attrs?: string }) => {
-      const placeholder = opts.placeholder ? ` placeholder="${escapeHtml(opts.placeholder)}"` : "";
-      const extra = opts.attrs ? ` ${opts.attrs}` : "";
-      return `<input id="${opts.id}" class="char-input" type="${opts.type}" value="${escapeHtml(opts.value)}"${placeholder}${extra} />`;
-    };
-    const renderIconSelector = (opts: { id: string; value: string; kind: "player" | "npc" }) => {
-      const icons = CHARACTER_ICONS[opts.kind === "npc" ? "npcs" : "players"];
-      const currentIcon = opts.value || (opts.kind === "npc" ? "🧟" : "🧙");
-      const iconButtons = icons.map(icon =>
-        `<button type="button" class="icon-selector-btn ${icon === currentIcon ? 'selected' : ''}" data-icon="${icon}" title="${icon}">${icon}</button>`
-      ).join("");
-      return `<div class="icon-selector" id="${opts.id}">${iconButtons}</div>`;
-    };
-    const iconMarkup = (kind: string): string => {
-      if (kind.startsWith("stat-")) {
-        const code = kind.slice(5).toUpperCase();
-        return `<span class="char-icon char-icon--abbr">${escapeHtml(code)}</span>`;
-      }
-      switch (kind) {
-        case "name":
-          return `<span class="char-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 12a4 4 0 1 0-4-4 4 4 0 0 0 4 4Z" fill="currentColor" opacity="0.9"/><path d="M6.2 19c.6-2.5 2.8-4.5 5.8-4.5s5.2 2 5.8 4.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/></svg></span>`;
-        case "icon":
-          return `<span class="char-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" fill="currentColor"/></svg></span>`;
-        case "hp":
-          return `<span class="char-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19.5 6.2 13.7a4 4 0 0 1 0-5.6 4 4 0 0 1 5.6 0l.2.3.2-.3a4 4 0 0 1 5.6 0 4 4 0 0 1 0 5.6L12 19.5Z" fill="currentColor"/></svg></span>`;
-        case "ac":
-          return `<span class="char-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21c-4.4-1.9-7.5-5.1-7.5-9.3V6.4L12 3l7.5 3.4v5.3c0 4.2-3.1 7.4-7.5 9.3Z" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/><path d="M12 11.2v4.3" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg></span>`;
-        case "vision":
-          return `<span class="char-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Z" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="12" r="2.4" fill="none" stroke="currentColor" stroke-width="1.2"/><circle cx="12" cy="12" r="1.1" fill="currentColor"/></svg></span>`;
-        default:
-          return `<span class="char-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3" fill="currentColor"/></svg></span>`;
-      }
-    };
-    type FieldVariant = "stat";
-    type FieldConfig = { icon: string; label: string; input: string; hint?: string; variant?: FieldVariant; hideLabel?: boolean };
-    const renderField = (cfg: FieldConfig) => {
-      const classes = ["char-field"];
-      if (cfg.variant === "stat") classes.push("char-field--stat");
-      const hintHtml = cfg.hint ? `<span class="char-hint">${escapeHtml(cfg.hint)}</span>` : "";
-      const labelHtml = cfg.hideLabel ? "" : `<div class="char-label">${escapeHtml(cfg.label)}</div>`;
-      return `<div class="${classes.join(" ")}">${iconMarkup(cfg.icon)}${labelHtml}<div class="char-control">${cfg.input}${hintHtml}</div></div>`;
-    };
-    const profileFields: FieldConfig[] = [
-      {
-        icon: "name",
-        label: "Name",
-        input: renderInput({ id: "char-name", type: "text", value: tok.name ?? "", placeholder: "Name" }),
-      },
-      {
-        icon: "icon",
-        label: "Icon",
-        input: renderIconSelector({ id: "char-icon-selector", value: anyTok.icon || "", kind: anyTok.kind || "player" }),
-      },
-    ];
-    const combatFields: FieldConfig[] = [
-      {
-        icon: "hp",
-        label: "HP",
-        input: renderInput({ id: "char-hp", type: "number", value: formatNumber(anyTok.hp), placeholder: "0", attrs: 'inputmode="numeric"' }),
-      },
-      {
-        icon: "ac",
-        label: "AC",
-        input: renderInput({ id: "char-ac", type: "number", value: formatNumber(anyTok.ac), placeholder: "0", attrs: 'inputmode="numeric"' }),
-      },
-      {
-        icon: "dead",
-        label: "Dead",
-        input: `<label class="char-checkbox-label">
-          <input id="char-dead" type="checkbox" ${anyTok.dead ? 'checked' : ''} />
-          <span class="char-checkbox-text">Dead</span>
-        </label>`,
-      },
-    ];
-    const statKeys: Array<{ key: keyof NonNullable<Token["stats"]>; label: string }> = [
-      { key: "str", label: "STR" },
-      { key: "dex", label: "DEX" },
-      { key: "con", label: "CON" },
-      { key: "int", label: "INT" },
-      { key: "wis", label: "WIS" },
-      { key: "cha", label: "CHA" },
-    ];
-    const statsFields = statKeys.map(({ key, label }) => renderField({
-      icon: `stat-${key}`,
-      label,
-      input: renderInput({ id: `char-${key}`, type: "number", value: formatNumber((stats as any)[key]), placeholder: "-", attrs: `inputmode="numeric" aria-label="${label}"` }),
-      variant: "stat",
-      hideLabel: true,
-    }));
-    const visionField = renderField({
-      icon: "vision",
-      label: "Vision",
-      input: renderInput({ id: "char-vision-radius", type: "number", value: String(vr), attrs: 'inputmode="numeric" min="0" max="20"' }),
-      hint: "radius (0-20)",
-    });
-    sheetContent = `
-      <div class="char-header">Character sheet</div>
-      <div class="char-section">
-        <div class="char-section-title">Profile</div>
-        <div class="char-fields-grid char-fields-grid--two">
-          ${profileFields.map(renderField).join("")}
-        </div>
-      </div>
-      <div class="char-section">
-        <div class="char-section-title">Combat stats</div>
-        <div class="char-fields-grid char-fields-grid--two">
-          ${combatFields.map(renderField).join("")}
-        </div>
-      </div>
-      <div class="char-section">
-        <div class="char-section-title">Attributes</div>
-        <div class="char-stats-grid">
-          ${statsFields.join("")}
-        </div>
-      </div>
-      <div class="char-section">
-        <div class="char-section-title">Vision</div>
-        <div class="char-fields-grid">
-          ${visionField}
-        </div>
-      </div>
-      <div class="char-section char-notes-wrapper">
-        <label for="char-notes">Notes</label>
-        <textarea id="char-notes" placeholder="Free text...">${escapeHtml(notes)}</textarea>
-      </div>
-    `;
-    sheetSetup = (root) => {
-      const q = (sel: string) => root.querySelector(sel) as HTMLInputElement | null;
-      const setDisabled = (el: HTMLInputElement | null) => { if (el) el.disabled = !editable; };
-      ["#char-name", "#char-hp", "#char-ac", "#char-str", "#char-dex", "#char-con", "#char-int", "#char-wis", "#char-cha", "#char-vision-radius", "#char-dead"].forEach(id => setDisabled(q(id)));
-      const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
-      const parseNum = (el: HTMLInputElement, lo?: number, hi?: number) => {
-        const n = Number(el.value);
-        if (!Number.isFinite(n)) return undefined;
-        const v = (lo == null || hi == null) ? n : clamp(n, lo!, hi!);
-        el.value = String(v);
-        return v;
-      };
-      const nameEl = q("#char-name");
-      nameEl?.addEventListener("change", () => { if (!editable) return; sendUpdateToken(tok.id, { name: nameEl.value.trim() }); });
-      const iconSelector = root.querySelector("#char-icon-selector");
-      if (iconSelector) {
-        iconSelector.addEventListener("click", (e) => {
-          if (!editable) return;
-          const target = e.target as HTMLElement;
-          if (target.classList.contains("icon-selector-btn")) {
-            const selectedIcon = target.dataset.icon;
-            if (selectedIcon) {
-              iconSelector.querySelectorAll(".icon-selector-btn").forEach(btn => btn.classList.remove("selected"));
-              target.classList.add("selected");
-              sendUpdateToken(tok.id, { icon: selectedIcon });
-            }
-          }
-        });
-      }
-      const hpEl = q("#char-hp");
-      hpEl?.addEventListener("change", () => { if (!editable) return; const v = parseNum(hpEl, 0, 999); if (v != null) sendUpdateToken(tok.id, { hp: v }); });
-      const acEl = q("#char-ac");
-      acEl?.addEventListener("change", () => { if (!editable) return; const v = parseNum(acEl, 0, 99); if (v != null) sendUpdateToken(tok.id, { ac: v }); });
-      const statIds: Array<[keyof NonNullable<Token["stats"]>, string]> = [["str", "#char-str"], ["dex", "#char-dex"], ["con", "#char-con"], ["int", "#char-int"], ["wis", "#char-wis"], ["cha", "#char-cha"]];
-      for (const [k, sel] of statIds) {
-        const el = q(sel);
-        el?.addEventListener("change", () => {
-          if (!editable) return;
-          const v = parseNum(el, -99, 99);
-          if (v != null) {
-            const statsPatch: Partial<NonNullable<Token["stats"]>> = { [k]: v };
-            sendUpdateToken(tok.id, { stats: statsPatch });
-          }
-        });
-      }
-      const vrEl = q("#char-vision-radius");
-      vrEl?.addEventListener("change", () => {
-        if (!editable) return;
-        const v = parseNum(vrEl, 0, 20);
-        if (v != null) {
-          sendUpdateToken(tok.id, { vision: { radius: v } });
-          if (myRole === "DM" && socket) {
-            const tmp: any = { ...tok, vision: { ...(anyTok.vision || {}), radius: v } };
-            revealByVisionForToken(socket as WebSocket, tmp);
-          }
-        }
-      });
-      const notesEl = root.querySelector("#char-notes") as HTMLTextAreaElement | null;
-      notesEl?.addEventListener("change", () => {
-        if (!editable) return;
-        const next = (notesEl.value || "").slice(0, 2000);
-        sendUpdateToken(tok.id, { notes: next });
-      });
-      if (notesEl) notesEl.disabled = !editable;
-      const deadEl = q("#char-dead");
-      deadEl?.addEventListener("change", () => {
-        if (!editable) return;
-        sendUpdateToken(tok.id, { dead: deadEl.checked });
-      });
-    };
-  }
-  const historyContent = buildHistoryPanelMarkup();
+  const anyTok: any = tok as any;
+  const stats = anyTok.stats || {};
+  const vr = Math.max(0, Math.min(20, Number(anyTok.vision?.radius ?? 0) || 0));
+  const editable = canControl(tok);
+  const notes = typeof anyTok.notes === "string" ? anyTok.notes : "";
+  const formatNumber = (value: any) => {
+    const n = Number(value);
+    return Number.isFinite(n) ? String(n) : "";
+  };
+  const renderInput = (opts: { id: string; type: string; value: string; placeholder?: string; attrs?: string }) => {
+    const placeholder = opts.placeholder ? ` placeholder="${escapeHtml(opts.placeholder)}"` : "";
+    const extra = opts.attrs ? ` ${opts.attrs}` : "";
+    return `<input id="${opts.id}" class="char-input" type="${opts.type}" value="${escapeHtml(opts.value)}"${placeholder}${extra} />`;
+  };
+  
+  const renderIconSelector = (opts: { id: string; value: string; kind: "player" | "npc" }) => {
+    const icons = CHARACTER_ICONS[opts.kind === "npc" ? "npcs" : "players"];
+    const currentIcon = opts.value || (opts.kind === "npc" ? "🧟" : "🧙");
+    const iconButtons = icons.map(icon => 
+      `<button type="button" class="icon-selector-btn ${icon === currentIcon ? 'selected' : ''}" data-icon="${icon}" title="${icon}">${icon}</button>`
+    ).join("");
+    return `<div class="icon-selector" id="${opts.id}">${iconButtons}</div>`;
+  };
+  const iconMarkup = (kind: string): string => {
+    if (kind.startsWith("stat-")) {
+      const code = kind.slice(5).toUpperCase();
+      return `<span class="char-icon char-icon--abbr">${escapeHtml(code)}</span>`;
+    }
+    switch (kind) {
+      case "name":
+        return `<span class="char-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 12a4 4 0 1 0-4-4 4 4 0 0 0 4 4Z" fill="currentColor" opacity="0.9"/><path d="M6.2 19c.6-2.5 2.8-4.5 5.8-4.5s5.2 2 5.8 4.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/></svg></span>`;
+      case "icon":
+        return `<span class="char-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" fill="currentColor"/></svg></span>`;
+      case "hp":
+        return `<span class="char-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19.5 6.2 13.7a4 4 0 0 1 0-5.6 4 4 0 0 1 5.6 0l.2.3.2-.3a4 4 0 0 1 5.6 0 4 4 0 0 1 0 5.6L12 19.5Z" fill="currentColor"/></svg></span>`;
+      case "ac":
+        return `<span class="char-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21c-4.4-1.9-7.5-5.1-7.5-9.3V6.4L12 3l7.5 3.4v5.3c0 4.2-3.1 7.4-7.5 9.3Z" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/><path d="M12 11.2v4.3" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg></span>`;
+      case "vision":
+        return `<span class="char-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Z" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="12" r="2.4" fill="none" stroke="currentColor" stroke-width="1.2"/><circle cx="12" cy="12" r="1.1" fill="currentColor"/></svg></span>`;
+      default:
+        return `<span class="char-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3" fill="currentColor"/></svg></span>`;
+    }
+  };
+  type FieldVariant = "stat";
+  type FieldConfig = { icon: string; label: string; input: string; hint?: string; variant?: FieldVariant; hideLabel?: boolean };
+  const renderField = (cfg: FieldConfig) => {
+    const classes = ["char-field"];
+    if (cfg.variant === "stat") classes.push("char-field--stat");
+    const hintHtml = cfg.hint ? `<span class="char-hint">${escapeHtml(cfg.hint)}</span>` : "";
+    const labelHtml = cfg.hideLabel ? "" : `<div class="char-label">${escapeHtml(cfg.label)}</div>`;
+    return `<div class="${classes.join(" ")}">${iconMarkup(cfg.icon)}${labelHtml}<div class="char-control">${cfg.input}${hintHtml}</div></div>`;
+  };
+  const profileFields: FieldConfig[] = [
+    {
+      icon: "name",
+      label: "Name",
+      input: renderInput({ id: "char-name", type: "text", value: tok.name ?? "", placeholder: "Name" }),
+    },
+    {
+      icon: "icon",
+      label: "Icon",
+      input: renderIconSelector({ id: "char-icon-selector", value: anyTok.icon || "", kind: anyTok.kind || "player" }),
+    },
+  ];
+  const combatFields: FieldConfig[] = [
+    {
+      icon: "hp",
+      label: "HP",
+      input: renderInput({ id: "char-hp", type: "number", value: formatNumber(anyTok.hp), placeholder: "0", attrs: 'inputmode="numeric"' }),
+    },
+    {
+      icon: "ac",
+      label: "AC",
+      input: renderInput({ id: "char-ac", type: "number", value: formatNumber(anyTok.ac), placeholder: "0", attrs: 'inputmode="numeric"' }),
+    },
+    {
+      icon: "dead",
+      label: "Dead",
+      input: `<label class="char-checkbox-label">
+        <input id="char-dead" type="checkbox" ${anyTok.dead ? 'checked' : ''} />
+        <span class="char-checkbox-text">Dead</span>
+      </label>`,
+    },
+  ];
+  const statKeys: Array<{ key: keyof NonNullable<Token["stats"]>; label: string }> = [
+    { key: "str", label: "STR" },
+    { key: "dex", label: "DEX" },
+    { key: "con", label: "CON" },
+    { key: "int", label: "INT" },
+    { key: "wis", label: "WIS" },
+    { key: "cha", label: "CHA" },
+  ];
+  const statsFields = statKeys.map(({ key, label }) => renderField({
+    icon: `stat-${key}`,
+    label,
+    input: renderInput({ id: `char-${key}`, type: "number", value: formatNumber((stats as any)[key]), placeholder: "-", attrs: `inputmode="numeric" aria-label="${label}"` }),
+    variant: "stat",
+    hideLabel: true,
+  }));
+  const visionField = renderField({
+    icon: "vision",
+    label: "Vision",
+    input: renderInput({ id: "char-vision-radius", type: "number", value: String(vr), attrs: 'inputmode="numeric" min="0" max="20"' }),
+    hint: "radius (0-20)",
+  });
   panel.innerHTML = `
-    <div class="char-tabs">
-      <button type="button" class="char-tab-btn ${characterPanelTab === "sheet" ? "active" : ""}" data-tab="sheet">Character Sheet</button>
-      <button type="button" class="char-tab-btn ${characterPanelTab === "history" ? "active" : ""}" data-tab="history">History</button>
+    <div class="char-header">Character sheet</div>
+    <div class="char-section">
+      <div class="char-section-title">Profile</div>
+      <div class="char-fields-grid char-fields-grid--two">
+        ${profileFields.map(renderField).join("")}
+      </div>
     </div>
-    <div class="char-tab-content">
-      ${characterPanelTab === "history" ? historyContent : sheetContent}
+    <div class="char-section">
+      <div class="char-section-title">Combat stats</div>
+      <div class="char-fields-grid char-fields-grid--two">
+        ${combatFields.map(renderField).join("")}
+      </div>
+    </div>
+    <div class="char-section">
+      <div class="char-section-title">Attributes</div>
+      <div class="char-stats-grid">
+        ${statsFields.join("")}
+      </div>
+    </div>
+    <div class="char-section">
+      <div class="char-section-title">Vision</div>
+      <div class="char-fields-grid">
+        ${visionField}
+      </div>
+    </div>
+    <div class="char-section char-notes-wrapper">
+      <label for="char-notes">Notes</label>
+      <textarea id="char-notes" placeholder="Free text...">${escapeHtml(notes)}</textarea>
     </div>
   `;
-  const tabButtons = panel.querySelectorAll<HTMLButtonElement>(".char-tab-btn");
-  tabButtons.forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const tab = btn.getAttribute("data-tab");
-      if (tab !== "sheet" && tab !== "history") return;
-      if (tab === characterPanelTab) return;
-      characterPanelTab = tab;
-      renderCharacterPanel();
+  // Enable/disable based on permissions
+  const q = (sel: string) => panel.querySelector(sel) as HTMLInputElement | null;
+  const setDisabled = (el: HTMLInputElement | null) => { if (el) el.disabled = !editable; };
+  ["#char-name", "#char-hp", "#char-ac", "#char-str", "#char-dex", "#char-con", "#char-int", "#char-wis", "#char-cha", "#char-vision-radius", "#char-dead"].forEach(id => setDisabled(q(id)));
+  // Helpers
+  const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
+  const parseNum = (el: HTMLInputElement, lo?: number, hi?: number) => {
+    const n = Number(el.value);
+    if (!Number.isFinite(n)) return undefined;
+    const v = (lo == null || hi == null) ? n : clamp(n, lo!, hi!);
+    el.value = String(v);
+    return v;
+  };
+  // Wire updates
+  const nameEl = q("#char-name");
+  nameEl?.addEventListener("change", () => { if (!editable) return; sendUpdateToken(tok.id, { name: nameEl.value.trim() }); });
+  
+  // Icon selector
+  const iconSelector = q("#char-icon-selector");
+  if (iconSelector) {
+    iconSelector.addEventListener("click", (e) => {
+      if (!editable) return;
+      const target = e.target as HTMLElement;
+      if (target.classList.contains("icon-selector-btn")) {
+        const selectedIcon = target.dataset.icon;
+        if (selectedIcon) {
+          // Update visual selection
+          iconSelector.querySelectorAll(".icon-selector-btn").forEach(btn => btn.classList.remove("selected"));
+          target.classList.add("selected");
+          // Send update to server
+          sendUpdateToken(tok.id, { icon: selectedIcon });
+        }
+      }
     });
-  });
-  if (characterPanelTab === "sheet" && sheetSetup) {
-    const content = panel.querySelector(".char-tab-content") as HTMLElement | null;
-    if (content) {
-      sheetSetup(content);
-    }
   }
+  const hpEl = q("#char-hp");
+  hpEl?.addEventListener("change", () => { if (!editable) return; const v = parseNum(hpEl, 0, 999); if (v != null) sendUpdateToken(tok.id, { hp: v }); });
+  const acEl = q("#char-ac");
+  acEl?.addEventListener("change", () => { if (!editable) return; const v = parseNum(acEl, 0, 99); if (v != null) sendUpdateToken(tok.id, { ac: v }); });
+  const statIds: Array<[keyof NonNullable<Token["stats"]>, string]> = [["str", "#char-str"], ["dex", "#char-dex"], ["con", "#char-con"], ["int", "#char-int"], ["wis", "#char-wis"], ["cha", "#char-cha"]];
+  for (const [k, sel] of statIds) {
+    const el = q(sel);
+    el?.addEventListener("change", () => {
+      if (!editable) return;
+      const v = parseNum(el, -99, 99);
+      if (v != null) {
+        const statsPatch: Partial<NonNullable<Token["stats"]>> = { [k]: v };
+        sendUpdateToken(tok.id, { stats: statsPatch });
+      }
+    });
+  }
+  const vrEl = q("#char-vision-radius");
+  vrEl?.addEventListener("change", () => {
+    if (!editable) return;
+    const v = parseNum(vrEl, 0, 20);
+    if (v != null) {
+      sendUpdateToken(tok.id, { vision: { radius: v } });
+      // provide immediate feedback for DM by revealing with new radius
+      if (myRole === "DM" && socket) {
+        const tmp: any = { ...tok, vision: { ...(anyTok.vision || {}), radius: v } };
+        revealByVisionForToken(socket as WebSocket, tmp);
+      }
+    }
+  });
+  const notesEl = panel.querySelector("#char-notes") as HTMLTextAreaElement | null;
+  notesEl?.addEventListener("change", () => {
+    if (!editable) return;
+    const next = (notesEl.value || "").slice(0, 2000);
+    sendUpdateToken(tok.id, { notes: next });
+  });
+  if (notesEl) notesEl.disabled = !editable;
+  
+  const deadEl = q("#char-dead");
+  deadEl?.addEventListener("change", () => {
+    if (!editable) return;
+    sendUpdateToken(tok.id, { dead: deadEl.checked });
+  });
 }
 
 function drawAssets() {
@@ -2874,7 +2775,6 @@ function drawAssets() {
           case "rope": return "🪢";
           case "key": return "🗝️";
           case "lock": return "🔒";
-          case "asset-eraser": return "🧽";
           
           // Furniture
           case "chair": return "🪑";
@@ -3315,14 +3215,9 @@ function connect() {
         lastConnectedPort = port;
         setStatus(`WS: checking connection (:${port})...`, "connecting");
         startHeartbeat(ws, attemptId);
-      playerId = msg.playerId;
-      myRole = msg.role;
-      if (msg.role === "DM" && Array.isArray((msg as any).history)) {
-        setHistoryEvents((msg as any).history as HistoryEvent[]);
-      } else {
-        historyEvents = [];
-      }
-      // store location/seed
+        playerId = msg.playerId;
+        myRole = msg.role;
+        // store location/seed
         currentLocation = msg.snapshot.location;
         fogMode = currentLocation?.fogMode ?? "automatic";
         // Update HUD map name and URL with location ID
@@ -3602,14 +3497,7 @@ function connect() {
         try { requestLocationsList(); } catch {}
       } else if (msg.t === "roleChanged") {
         myRole = (msg as any).role;
-        if (myRole !== "DM") {
-          historyEvents = [];
-          if (characterPanelTab === "history") {
-            characterPanelTab = "sheet";
-          }
-        }
         try { (updateEditorUI as any)(); } catch {}
-        renderCharacterPanel();
         hudToast(`Role changed to: ${myRole === "DM" ? "Administrator" : "Player"}`);
       } else if (msg.t === "locationRenamed") {
         const newName = (msg as any).newName;
@@ -3621,14 +3509,6 @@ function connect() {
       } else if (msg.t === "undoRedoState") {
         console.log(`[CLIENT] Received undoRedoState:`, (msg as any).undoStack.length, (msg as any).redoStack.length);
         updateUndoRedoButtons((msg as any).undoStack, (msg as any).redoStack);
-      } else if (msg.t === "historySnapshot") {
-        if (myRole === "DM") {
-          setHistoryEvents((msg as any).events ?? []);
-        }
-      } else if (msg.t === "historyEvent") {
-        if (myRole === "DM") {
-          pushHistoryEvent((msg as any).event);
-        }
       } else if (msg.t === "gameStateRestored") {
         console.log(`[CLIENT] Received gameStateRestored, refreshing display`);
         console.log(`[CLIENT] Current assets count: ${assets.size}`);
@@ -4393,7 +4273,6 @@ function connect() {
     }
   }
 
-  updateEditorUIRef = updateEditorUI;
   updateEditorUI();
   updateFogModeUI();
   // Editor tool buttons
@@ -5013,8 +4892,7 @@ function initializeBottomAssetMenu() {
       { id: 'shovel', emoji: '🪣', name: 'Shovel' },
       { id: 'rope', emoji: '🪢', name: 'Rope' },
       { id: 'key', emoji: '🗝️', name: 'Key' },
-      { id: 'lock', emoji: '🔒', name: 'Lock' },
-      { id: 'asset-eraser', emoji: '🧽', name: 'Asset Eraser' }
+      { id: 'lock', emoji: '🔒', name: 'Lock' }
     ],
     furniture: [
       { id: 'chair', emoji: '🪑', name: 'Chair' },
@@ -5157,14 +5035,7 @@ function initializeBottomAssetMenu() {
     if (selectedItem) {
       selectedItem.classList.add('selected');
     }
-
-    if (assetId === 'asset-eraser') {
-      selectedAssetKind = null;
-      editorMode = 'eraseObjects';
-      updateEditorUIRef?.();
-      return;
-    }
-
+    
     // Set the selected asset for placement
     selectedAssetKind = assetId;
     editorMode = 'paint';

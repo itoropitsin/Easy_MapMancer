@@ -2,7 +2,6 @@
 # Easy MapMancer 🗺️
 
 A modern web application for creating and managing interactive maps for tabletop role-playing games with real-time multiplayer support. Built with TypeScript, PixiJS, and WebSockets.
->>>>>>> 446329b (WIP)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Node.js](https://img.shields.io/badge/Node.js-18%2B-green.svg)](https://nodejs.org/)
@@ -266,3 +265,29 @@ We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) f
 ## 📄 License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## 🔐 Authentication (since v0.2.0)
+
+- First run: server requires creating the first master user (admin). The client will show a First User screen if no users exist.
+- Login: use username or email + password. Successful login sets your role automatically: master → DM, user → Player.
+- Session: sessions persist in localStorage and can be resumed on reconnect.
+- Admin: masters can list users, create users, change roles, and reset passwords from the UI.
+
+### Data storage
+
+- Users are stored at `packages/server/data/users.json`. Persist this file in production and back it up regularly.
+
+## 🧪 Testing
+
+- Integration test: `tests/integration/user-database.test.js`
+- Run all tests:
+
+```bash
+npm run test
+```
+
+Run the user DB test directly:
+
+```bash
+node tests/integration/user-database.test.js
+```

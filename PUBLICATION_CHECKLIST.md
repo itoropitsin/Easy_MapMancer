@@ -93,13 +93,13 @@ git push -u origin main
    - Enable Dependabot security updates
    - Enable secret scanning
 
-### 5. Create Initial Release
+### 5. Create Release
 
 1. **Go to Releases** tab
 2. **Create a new release**:
-   - Tag: `v0.1.0`
-   - Title: `Initial Release`
-   - Description: Copy from CHANGELOG.md
+   - Tag: `v0.2.0`
+   - Title: `User authentication, admin tools, and tests`
+   - Description: Copy the 0.2.0 section from CHANGELOG.md
    - Attach build artifacts if needed
 
 ### 6. Set Up Branch Protection

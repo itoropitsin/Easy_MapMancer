@@ -48,9 +48,21 @@
 ## Testing Guidelines
 
 ### Current State
-- **Automated tests**: None, manual testing is used
+- **Automated tests**: Basic integration test exists for user database
 - **Validation**: Run `npm run build` + `npm run dev` to verify changes
 - **Scenarios**: Reproduce specific use cases in dev mode
+
+### Running Tests
+
+```
+npm run test
+```
+
+Run specific integration test:
+
+```
+node tests/integration/user-database.test.js
+```
 
 ### Adding Tests
 - **Client**: Use Vitest, place in `packages/client/__tests__/`

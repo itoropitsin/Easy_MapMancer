@@ -119,7 +119,7 @@ docs: update README with new features
 
 ### Manual Testing
 
-Currently, we rely on manual testing. Please test:
+Manual and automated tests are both used. Please test:
 
 - **Multiplayer functionality** with multiple browser tabs
 - **All tools and features** in both DM and Player modes
@@ -136,6 +136,18 @@ Currently, we rely on manual testing. Please test:
 - [ ] Performance is acceptable
 - [ ] UI is responsive
 
+### Running Tests
+
+```
+npm run test
+```
+
+- Run specific integration test:
+
+```
+node tests/integration/user-database.test.js
+```
+
 ## 🏗️ Architecture Guidelines
 
 ### Client-Server Communication
@@ -144,6 +156,12 @@ Currently, we rely on manual testing. Please test:
 - Use WebSocket messages defined in `packages/shared/src/protocol.ts`
 - Validate all client input on the server
 - Maintain authoritative server state
+
+### Authentication (since v0.2.0)
+
+- First run requires creating a master user; the client presents a first-user screen.
+- Masters can create users, change roles, and reset passwords.
+- Users authenticate with username/email and password; sessions can be resumed.
 
 ### Adding New Features
 
