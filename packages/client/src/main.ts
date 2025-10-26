@@ -90,6 +90,38 @@ let playerId: ID | null = null;
 let myTokenId: ID | null = null;
 let levelId: ID | null = null;
 const tokens = new Map<ID, Token>();
+type PendingTokenMove = { pos: Vec2; levelId: ID | null; timeoutId: number };
+const pendingTokenMoves = new Map<ID, PendingTokenMove>();
+const PENDING_TOKEN_MOVE_TTL_MS = 1200;
+
+function setPendingTokenMove(tokenId: ID, pos: Vec2, level: ID | null) {
+  const existing = pendingTokenMoves.get(tokenId);
+  if (existing) {
+    window.clearTimeout(existing.timeoutId);
+  }
+  const timeoutId = window.setTimeout(() => {
+    const pending = pendingTokenMoves.get(tokenId);
+    if (!pending || pending.timeoutId !== timeoutId) return;
+    pendingTokenMoves.delete(tokenId);
+    drawTokens();
+  }, PENDING_TOKEN_MOVE_TTL_MS);
+  pendingTokenMoves.set(tokenId, { pos, levelId: level, timeoutId });
+}
+
+function resolvePendingTokenMove(tokenId: ID) {
+  const pending = pendingTokenMoves.get(tokenId);
+  if (!pending) return;
+  window.clearTimeout(pending.timeoutId);
+  pendingTokenMoves.delete(tokenId);
+}
+
+function clearPendingTokenMoves() {
+  for (const pending of pendingTokenMoves.values()) {
+    window.clearTimeout(pending.timeoutId);
+  }
+  pendingTokenMoves.clear();
+}
+
 let currentLocation: Location | null = null;
 let currentSeed: string | null = null;
 let myRole: "DM" | "PLAYER" | null = null;
@@ -1808,10 +1840,10 @@ function onDragEnd(e: any) {
   sprite.alpha = 1;
   // Snap and send move
   const snapped = snapToGrid(sprite.x, sprite.y);
+  const existingToken = tokens.get(tokenId);
   // Prevent placing on non-land (space) for players; DM is allowed anywhere
   if (myRole !== "DM" && !isGround(snapped.x, snapped.y)) {
-    const tok = tokens.get(tokenId);
-    if (tok) sprite.position.set(tok.pos.x * CELL + CELL / 2, tok.pos.y * CELL + CELL / 2);
+    if (existingToken) sprite.position.set(existingToken.pos.x * CELL + CELL / 2, existingToken.pos.y * CELL + CELL / 2);
     try { hudToast("Cannot move outside floor/ground"); } catch {}
     dragging = null;
     app.stage.off("pointermove", onDragMove);
@@ -1819,16 +1851,23 @@ function onDragEnd(e: any) {
     app.stage.off("pointerupoutside", onDragEnd);
     return;
   }
+  let appliedOptimistic = false;
+  if (existingToken && levelId) {
+    if (existingToken.pos.x !== snapped.x || existingToken.pos.y !== snapped.y || existingToken.levelId !== levelId) {
+      setPendingTokenMove(tokenId, snapped, levelId);
+      appliedOptimistic = true;
+    }
+  }
+  if (appliedOptimistic) {
+    drawTokens();
+  }
   sendMove(tokenId, snapped);
   // Auto-reveal around the new position using token vision
-  if (socket) {
-    const tok = tokens.get(tokenId);
-    if (tok) {
-      const movedTok = { ...(tok as any), pos: snapped };
-      const isNPC = (tok as any).kind === "npc";
-      if (!isNPC && (myRole === "DM" || tokenId === myTokenId)) {
-        revealByVisionForToken(socket as WebSocket, movedTok);
-      }
+  if (socket && existingToken) {
+    const movedTok = { ...(existingToken as any), pos: snapped };
+    const isNPC = (existingToken as any).kind === "npc";
+    if (!isNPC && (myRole === "DM" || tokenId === myTokenId)) {
+      revealByVisionForToken(socket as WebSocket, movedTok);
     }
   }
   dragging = null;
@@ -2031,12 +2070,14 @@ function drawTokens() {
   console.log(`Sorted tokens count: ${sortedTokens.length}`);
   
   for (const tok of sortedTokens) {
+    const pending = pendingTokenMoves.get(tok.id);
+    const displayPos = pending?.pos ?? tok.pos;
     // Check if token is hidden and user is not DM
     if ((tok as any).hidden && myRole !== "DM") {
       continue; // Hide token from non-DM users
     }
-    
-    if (myRole !== "DM" && revealed && tok.id !== myTokenId && !revealed.has(`${tok.pos.x},${tok.pos.y}`)) {
+
+    if (myRole !== "DM" && revealed && tok.id !== myTokenId && !revealed.has(`${displayPos.x},${displayPos.y}`)) {
       // hide non-owned tokens in unrevealed cells for player
       continue;
     }
@@ -2141,17 +2182,17 @@ function drawTokens() {
       eyeIcon.position.set(CELL * 0.3, -CELL * 0.3);
       // @ts-ignore
       node.addChild(eyeIcon);
-      
+
       // Make token semi-transparent but keep eye icon fully visible
       node.alpha = 0.5;
       eyeIcon.alpha = 1.0;
     }
-    node.position.set(tok.pos.x * CELL + CELL / 2, tok.pos.y * CELL + CELL / 2);
+    node.position.set(displayPos.x * CELL + CELL / 2, displayPos.y * CELL + CELL / 2);
     // Mark as token for cleanup
     (node as any).userData = { type: "token" };
     // Enlarge hit area to make grabbing easier
     try { (node as any).hitArea = new Circle(0, 0, CELL * 0.55); } catch {}
-    
+
     // Set zIndex for proper layering (tokens use range 0-99)
     node.zIndex = (tok as any).zIndex ?? 0;
     
@@ -2198,14 +2239,14 @@ function drawTokens() {
         e.stopPropagation?.();
         showContextMenu(e.global.x, e.global.y, { type: "token", id: tok.id });
       });
-      
+
       // Add to appropriate layer
       if (shouldBeAboveFog) {
         myTokensLayer.addChild(node);
-        console.log(`Token ${tok.name || 'unnamed'} (controllable) at (${tok.pos.x}, ${tok.pos.y}) with zIndex=${node.zIndex} → myTokensLayer`);
+        console.log(`Token ${tok.name || 'unnamed'} (controllable) at (${displayPos.x}, ${displayPos.y}) with zIndex=${node.zIndex} → myTokensLayer`);
       } else {
         gameObjectsLayer.addChild(node);
-        console.log(`Token ${tok.name || 'unnamed'} (controllable) at (${tok.pos.x}, ${tok.pos.y}) with zIndex=${node.zIndex} → gameObjectsLayer`);
+        console.log(`Token ${tok.name || 'unnamed'} (controllable) at (${displayPos.x}, ${displayPos.y}) with zIndex=${node.zIndex} → gameObjectsLayer`);
       }
     } else {
       // Non-controllable tokens
@@ -2226,14 +2267,14 @@ function drawTokens() {
         e.stopPropagation?.();
         showContextMenu(e.global.x, e.global.y, { type: "token", id: tok.id });
       });
-      
+
       // Add to appropriate layer
       if (shouldBeAboveFog) {
         myTokensLayer.addChild(node);
-        console.log(`Token ${tok.name || 'unnamed'} at (${tok.pos.x}, ${tok.pos.y}) with zIndex=${node.zIndex} → myTokensLayer`);
+        console.log(`Token ${tok.name || 'unnamed'} at (${displayPos.x}, ${displayPos.y}) with zIndex=${node.zIndex} → myTokensLayer`);
       } else {
         gameObjectsLayer.addChild(node);
-        console.log(`Token ${tok.name || 'unnamed'} at (${tok.pos.x}, ${tok.pos.y}) with zIndex=${node.zIndex} → gameObjectsLayer`);
+        console.log(`Token ${tok.name || 'unnamed'} at (${displayPos.x}, ${displayPos.y}) with zIndex=${node.zIndex} → gameObjectsLayer`);
       }
     }
   }
@@ -3174,6 +3215,7 @@ function connect() {
         } catch {}
         // pick first token owned by me
         tokens.clear();
+        clearPendingTokenMoves();
         for (const t of msg.snapshot.tokens) {
           tokens.set(t.id, t);
           if (t.owner === playerId) { myTokenId = t.id; levelId = t.levelId; }
@@ -3274,6 +3316,7 @@ function connect() {
         }
         } catch {}
         tokens.clear();
+        clearPendingTokenMoves();
         for (const t of snap.tokens) {
           tokens.set(t.id, t);
         }
@@ -3331,12 +3374,21 @@ function connect() {
             }
           } else if (e.type === "tokenRemoved") {
             tokens.delete(e.tokenId);
+            resolvePendingTokenMove(e.tokenId);
             if (selectedTokenId === e.tokenId) {
               selectedTokenId = null;
               renderCharacterPanel();
             }
           } else if (e.type === "tokenMoved") {
-            const tok = tokens.get(e.tokenId); if (tok) { tok.pos = e.pos; tok.levelId = e.levelId; if (myRole === "DM") { revealByVisionForToken(ws, tok as any); } }
+            const tok = tokens.get(e.tokenId);
+            if (tok) {
+              tok.pos = e.pos;
+              tok.levelId = e.levelId;
+              if (myRole === "DM") {
+                revealByVisionForToken(ws, tok as any);
+              }
+            }
+            resolvePendingTokenMove(e.tokenId);
           } else if (e.type === "fogRevealed") {
             const set = getRevealed(e.levelId as ID);
             for (const c of e.cells) set.add(cellKey(c));
@@ -3377,6 +3429,7 @@ function connect() {
             if (anyE.token) {
               const full: any = anyE.token;
               tokens.set(full.id, full);
+              resolvePendingTokenMove(full.id);
               drawTokens(); // Redraw to reflect zIndex changes
               drawMinimap();
               if (myRole === "DM") revealByVisionForToken(ws, full as any);
@@ -3385,6 +3438,9 @@ function connect() {
               const t = tokens.get(ev.tokenId);
               if (t) {
                 Object.assign(t, ev.patch || {});
+                if (ev.patch && (Object.prototype.hasOwnProperty.call(ev.patch, "pos") || Object.prototype.hasOwnProperty.call(ev.patch, "levelId"))) {
+                  resolvePendingTokenMove(ev.tokenId);
+                }
                 drawTokens(); // Redraw in case zIndex changed
                 drawMinimap();
                 if (myRole === "DM") revealByVisionForToken(ws, t as any);
@@ -3443,6 +3499,7 @@ function connect() {
         console.log(`[CLIENT] Current assets count: ${assets.size}`);
         console.log(`[CLIENT] Current tokens count: ${tokens.size}`);
         console.log(`[CLIENT] Current floors count: ${levelId ? getFloors(levelId).size : 0}`);
+        clearPendingTokenMoves();
         // Refresh all visual elements after state restoration
         drawFloor();
         drawGrid();

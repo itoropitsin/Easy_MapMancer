@@ -1,4 +1,4 @@
-import type { ID, Vec2, Role, GameSnapshot, FloorKind, LocationTreeNode, Token, FogMode, ActionSnapshot, LoginRequest, CreateUserRequest } from "./types";
+import type { ID, Vec2, Role, GameSnapshot, FloorKind, LocationTreeNode, Token, FogMode, ActionSnapshot, LoginRequest, CreateUserRequest, ChangePasswordRequest } from "./types";
 export type ClientToServer = {
     t: "join";
     name?: string;
@@ -144,6 +144,9 @@ export type ClientToServer = {
     t: "resetUserPassword";
     userId: ID;
     password?: string;
+} | {
+    t: "changeOwnPassword";
+    data: ChangePasswordRequest;
 };
 export type ServerToClient = {
     t: "welcome";
@@ -230,4 +233,10 @@ export type ServerToClient = {
     userId?: ID;
     generatedPassword?: string;
     error?: string;
+} | {
+    t: "changePasswordResponse";
+    success: boolean;
+    error?: string;
+    message?: string;
+    forceLogout?: boolean;
 };

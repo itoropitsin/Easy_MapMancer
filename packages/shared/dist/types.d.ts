@@ -166,6 +166,16 @@ export interface CreateUserRequest {
     email: string;
     role?: UserRole;
 }
+export interface ChangePasswordRequest {
+    currentPassword: string;
+    newPassword: string;
+}
+export interface ChangePasswordResponse {
+    success: boolean;
+    error?: string;
+    message?: string;
+    forceLogout?: boolean;
+}
 export interface CreateUserResponse {
     success: boolean;
     user?: User;

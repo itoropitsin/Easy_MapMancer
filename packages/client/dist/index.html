@@ -1814,6 +1814,52 @@
         gap: 18px;
       }
 
+      #profile-modal .modal-content {
+        max-width: 420px;
+        padding: 24px;
+        display: flex;
+        flex-direction: column;
+        gap: 20px;
+      }
+
+      .profile-summary {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+
+      .profile-field-label {
+        font-size: 0.75rem;
+        font-weight: 600;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--text-muted);
+      }
+
+      .profile-field-value {
+        font-size: 1.05rem;
+        font-weight: 600;
+        color: #e8eaed;
+      }
+
+      .profile-divider {
+        width: 100%;
+        height: 1px;
+        background: var(--border-subtle);
+      }
+
+      .profile-password-form {
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+      }
+
+      .profile-actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 12px;
+      }
+
       .reset-password-form {
         display: flex;
         flex-direction: column;
@@ -1978,7 +2024,7 @@
         margin: 0;
       }
     </style>
-    <script type="module" crossorigin src="/assets/index-Cci3mvU7.js"></script>
+    <script type="module" crossorigin src="/assets/index-DvdwuN6A.js"></script>
   </head>
   <body>
     <!-- First User Setup Screen -->
@@ -2050,6 +2096,12 @@
             <div id="user-email" class="user-email">user@example.com</div>
           </div>
           <div class="user-actions">
+            <button id="profile-action" class="user-action">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M12 12.5a4.25 4.25 0 1 0-3.5-6.7A4.25 4.25 0 0 0 12 12.5ZM7 13.8A4 4 0 0 0 3 17.8v2.2a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-2.2a4 4 0 0 0-4-4h-10Z" />
+              </svg>
+              <span>Profile</span>
+            </button>
             <button id="admin-panel" class="user-action" style="display: none;">
               <svg viewBox="0 0 24 24" aria-hidden="true">
                 <path d="M16 7a4 4 0 1 1-8 0 4 4 0 0 1 8 0ZM12 14a7 7 0 0 0-7 7h14a7 7 0 0 0-7-7Z" />
@@ -2311,6 +2363,54 @@
             <button type="submit" class="create-button">Create User</button>
           </div>
           <div id="create-user-error" class="error-message" style="display: none;"></div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Profile Modal -->
+    <div id="profile-modal" class="modal" style="display: none;">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h2>Your Profile</h2>
+          <button id="profile-close" class="icon-button small" title="Close">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="m8.22 8.22a.75.75 0 0 1 1.06 0L12 10.94l2.72-2.72a.75.75 0 1 1 1.06 1.06L13.06 12l2.72 2.72a.75.75 0 1 1-1.06 1.06L12 13.06l-2.72 2.72a.75.75 0 0 1-1.06-1.06L10.94 12 8.22 9.28a.75.75 0 0 1 0-1.06Z" />
+            </svg>
+          </button>
+        </div>
+        <div class="profile-summary">
+          <div>
+            <div class="profile-field-label">Username</div>
+            <div id="profile-display-username" class="profile-field-value">—</div>
+          </div>
+          <div>
+            <div class="profile-field-label">Email</div>
+            <div id="profile-display-email" class="profile-field-value">—</div>
+          </div>
+          <div>
+            <div class="profile-field-label">Role</div>
+            <div id="profile-display-role" class="profile-field-value">—</div>
+          </div>
+        </div>
+        <div class="profile-divider"></div>
+        <form id="profile-form" class="profile-password-form">
+          <div class="form-group">
+            <label for="profile-current-password">Current password</label>
+            <input type="password" id="profile-current-password" autocomplete="current-password" required>
+          </div>
+          <div class="form-group">
+            <label for="profile-new-password">New password</label>
+            <input type="password" id="profile-new-password" autocomplete="new-password" required>
+          </div>
+          <div class="form-group">
+            <label for="profile-confirm-password">Confirm new password</label>
+            <input type="password" id="profile-confirm-password" autocomplete="new-password" required>
+          </div>
+          <div id="profile-error" class="error-message" style="display: none;"></div>
+          <div class="profile-actions">
+            <button type="button" id="profile-cancel" class="cancel-button">Cancel</button>
+            <button type="submit" id="profile-password-submit" class="create-button">Update Password</button>
+          </div>
         </form>
       </div>
     </div>

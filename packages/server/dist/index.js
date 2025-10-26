@@ -1887,6 +1887,39 @@ function onMessage(client, data) {
             });
             break;
         }
+        case "changeOwnPassword": {
+            if (!client.user) {
+                send(client.socket, { t: "changePasswordResponse", success: false, error: "Not authenticated" });
+                break;
+            }
+            const payload = msg.data ?? {};
+            const currentPassword = typeof payload.currentPassword === "string" ? payload.currentPassword : "";
+            const newPassword = typeof payload.newPassword === "string" ? payload.newPassword : "";
+            userManager.changePassword(client.user.id, currentPassword, newPassword)
+                .then((result) => {
+                if (!result.success) {
+                    send(client.socket, { t: "changePasswordResponse", success: false, error: result.error ?? "Failed to change password" });
+                    return;
+                }
+                if (client.token) {
+                    userManager.logout(client.token);
+                }
+                client.user = undefined;
+                client.token = undefined;
+                client.role = "PLAYER";
+                send(client.socket, {
+                    t: "changePasswordResponse",
+                    success: true,
+                    forceLogout: true,
+                    message: "Password updated. Please log in again."
+                });
+            })
+                .catch((error) => {
+                console.error("[SERVER] changeOwnPassword failed:", error);
+                send(client.socket, { t: "changePasswordResponse", success: false, error: "Failed to change password" });
+            });
+            break;
+        }
     }
 }
 function cellKey(v) { return `${v.x},${v.y}`; }
