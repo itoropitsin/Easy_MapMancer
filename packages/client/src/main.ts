@@ -135,6 +135,7 @@ let selectedTokenId: ID | null = null;
 let selectedAssetKind: string | null = null; // when null, floor tools may be used
 let selectedFloorKind: FloorKind | null = null;
 let selectedTokenKind: "player" | "npc" | null = null;
+let updateEditorUIRef: (() => void) | null = null;
 
 // Authentication state
 let authState: AuthState = { isAuthenticated: false };
@@ -2760,6 +2761,7 @@ function drawAssets() {
           case "rope": return "🪢";
           case "key": return "🗝️";
           case "lock": return "🔒";
+          case "asset-eraser": return "🧽";
           
           // Furniture
           case "chair": return "🪑";
@@ -4258,6 +4260,7 @@ function connect() {
     }
   }
 
+  updateEditorUIRef = updateEditorUI;
   updateEditorUI();
   updateFogModeUI();
   // Editor tool buttons
@@ -4877,7 +4880,8 @@ function initializeBottomAssetMenu() {
       { id: 'shovel', emoji: '🪣', name: 'Shovel' },
       { id: 'rope', emoji: '🪢', name: 'Rope' },
       { id: 'key', emoji: '🗝️', name: 'Key' },
-      { id: 'lock', emoji: '🔒', name: 'Lock' }
+      { id: 'lock', emoji: '🔒', name: 'Lock' },
+      { id: 'asset-eraser', emoji: '🧽', name: 'Asset Eraser' }
     ],
     furniture: [
       { id: 'chair', emoji: '🪑', name: 'Chair' },
@@ -5020,7 +5024,14 @@ function initializeBottomAssetMenu() {
     if (selectedItem) {
       selectedItem.classList.add('selected');
     }
-    
+
+    if (assetId === 'asset-eraser') {
+      selectedAssetKind = null;
+      editorMode = 'eraseObjects';
+      updateEditorUIRef?.();
+      return;
+    }
+
     // Set the selected asset for placement
     selectedAssetKind = assetId;
     editorMode = 'paint';

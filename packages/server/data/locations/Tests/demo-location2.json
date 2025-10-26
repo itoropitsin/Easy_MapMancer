@@ -58,8 +58,8 @@
       "owner": "p-2ec2b1c9-cb39-450c-8c90-1be57c57f689",
       "levelId": "L1",
       "pos": {
-        "x": -2,
-        "y": 1
+        "x": -1,
+        "y": -1
       },
       "vision": {
         "radius": 8,
@@ -177,8 +177,8 @@
       "id": "a-c4d848b6-8e57-4cbb-91f6-b44a89875a94",
       "levelId": "L1",
       "pos": {
-        "x": 1,
-        "y": 5
+        "x": 2,
+        "y": 4
       },
       "kind": "rock"
     },
@@ -339,19 +339,10 @@
       "id": "a-13c281f7-2d90-4ad7-860c-36654e4e9b0b",
       "levelId": "L1",
       "pos": {
-        "x": 3,
+        "x": 2,
         "y": 1
       },
       "kind": "sword"
-    },
-    {
-      "id": "a-6c077807-609b-42c1-b4d6-46aae8f2e6f9",
-      "levelId": "L1",
-      "pos": {
-        "x": -2,
-        "y": 5
-      },
-      "kind": "bush"
     },
     {
       "id": "a-fb25a6dd-b9e9-4122-be40-67e92164b718",
@@ -428,15 +419,6 @@
       "kind": "lantern"
     },
     {
-      "id": "a-aaf437ef-29ad-4502-bc67-dab2fb5c79f1",
-      "levelId": "L1",
-      "pos": {
-        "x": -4,
-        "y": 4
-      },
-      "kind": "campfire"
-    },
-    {
       "id": "a-ce5a3bce-7233-46f7-814e-96877e44f202",
       "levelId": "L1",
       "pos": {
@@ -458,8 +440,8 @@
       "id": "a-0db34eb0-3f73-480e-8fbc-4b9261b03c11",
       "levelId": "L1",
       "pos": {
-        "x": -4,
-        "y": 5
+        "x": -2,
+        "y": 4
       },
       "kind": "mushroom"
     },
